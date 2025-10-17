@@ -207,3 +207,4 @@ marimo/_lsp/
 __marimo__/
 copy_latest_game_logic.zsh
 .gitignore
+log.txt
