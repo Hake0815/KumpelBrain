@@ -41,6 +41,7 @@ class GamePlayer:
     def _on_general_update(self, interactions: list[InteractionWrapper]) -> None:
         interaction = interactions[0]
         if interaction.is_game_over():
+            # interaction.perform_action()
             self.callback_on_game_end(interaction.get_game_over_message())
             return
 

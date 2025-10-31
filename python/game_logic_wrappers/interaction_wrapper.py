@@ -2,7 +2,12 @@ import csharp_runtime
 import clr
 
 from card_wrapper import CardWrapper
-from gamecore.game import GameInteraction, ConditionalTargetData, TargetData, WinnerData
+from gamecore.game.interaction import (
+    GameInteraction,
+    ConditionalTargetData,
+    TargetData,
+    WinnerData,
+)
 from gamecore.card import ICard
 from System.Collections.Generic import List
 
@@ -46,11 +51,11 @@ class InteractionWrapper:
     def is_target_condition_fulfilled(self, targets: list[CardWrapper]) -> bool:
         condition = ConditionalTargetData(
             self.interaction.Data[ConditionalTargetData.NAME]
-        ).ConditionOnSelection
+        ).ConditionalTargetQuery
         card_list = List[ICard]()
         for card_wrapper in targets:
             card_list.Add(card_wrapper.card)
-        return condition.Invoke(card_list)
+        return condition.IsMet(card_list)
 
     def get_number_of_targets(self) -> int:
         return TargetData(self.interaction.Data[TargetData.NAME]).NumberOfTargets
