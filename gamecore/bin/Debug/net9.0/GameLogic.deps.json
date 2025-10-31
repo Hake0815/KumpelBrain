@@ -6,13 +6,13 @@
   "compilationOptions": {},
   "targets": {
     ".NETCoreApp,Version=v9.0": {
-      "GameLogicTraining/1.0.0": {
+      "GameLogic/1.0.0": {
         "dependencies": {
           "Newtonsoft.Json": "13.0.3",
           "pythonnet": "3.0.4"
         },
         "runtime": {
-          "GameLogicTraining.dll": {}
+          "GameLogic.dll": {}
         }
       },
       "Microsoft.CSharp/4.7.0": {},
@@ -102,7 +102,7 @@
     }
   },
   "libraries": {
-    "GameLogicTraining/1.0.0": {
+    "GameLogic/1.0.0": {
       "type": "project",
       "serviceable": false,
       "sha512": ""

@@ -1,6 +1,6 @@
 from typing import Callable
 import csharp_runtime
-from gamecore.game import IGameController, GameInteraction
+from gamecore.game import IGameController
 from System.Collections.Generic import Dictionary
 
 from interaction_wrapper import InteractionWrapper
@@ -53,7 +53,7 @@ class GameControllerWrapper:
     def _delegate_callback(
         self, callback_wrapper: Callable[[list[InteractionWrapper]], None]
     ):
-        return lambda sender, interactions: callback_wrapper(
+        return lambda interactions: callback_wrapper(
             [InteractionWrapper(interaction) for interaction in interactions]
         )
 

@@ -13,9 +13,9 @@ bin_folder = os.path.join(
 if bin_folder not in sys.path:
     sys.path.insert(0, bin_folder)
 
-runtime_config_path = os.path.join(bin_folder, "GameLogicTraining.runtimeconfig.json")
+runtime_config_path = os.path.join(bin_folder, "GameLogic.runtimeconfig.json")
 pythonnet.load(runtime="coreclr", runtime_config=runtime_config_path)
 
 import clr
 
-clr.AddReference("GameLogicTraining")
+clr.AddReference("GameLogic")
