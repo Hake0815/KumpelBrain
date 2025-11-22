@@ -1,6 +1,7 @@
 from typing import Callable
 import csharp_runtime
 from gamecore.game import IGameController
+from gamecore.common import GlobalLogger, LogLevel
 from System.Collections.Generic import Dictionary
 
 from interaction_wrapper import InteractionWrapper
@@ -62,3 +63,25 @@ class GameControllerWrapper:
         for key, value in deck_list.items():
             cs_deck_list[key] = value
         return cs_deck_list
+
+    def export_game_state_as_json_string(self, player_name: str):
+        return self.game_controller.ExportGameStateAsJsonString(player_name)
+
+    def export_game_state(self, player_name: str):
+        return self.game_controller.ExportGameState(player_name)
+
+    def set_application_log_file_path(self, application_log_file_path: str):
+        GlobalLogger.Instance.SetLogFilePath(application_log_file_path)
+
+    def set_application_log_log_level(self, log_level: str):
+        match log_level:
+            case "DEBUG":
+                GlobalLogger.Instance.SetLogLevel(LogLevel.Debug)
+            case "INFO":
+                GlobalLogger.Instance.SetLogLevel(LogLevel.Info)
+            case "WARNING":
+                GlobalLogger.Instance.SetLogLevel(LogLevel.Warning)
+            case "ERROR":
+                GlobalLogger.Instance.SetLogLevel(LogLevel.Error)
+            case _:
+                GlobalLogger.Instance.SetLogLevel(LogLevel.Error)

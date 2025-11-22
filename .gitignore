@@ -208,3 +208,7 @@ __marimo__/
 copy_latest_game_logic.zsh
 .gitignore
 log.txt
+game_action_logs/*
+game_application_logs/*
+game_state_logs/*
+clear_log_dirs.zsh
