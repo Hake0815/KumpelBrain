@@ -1,7 +1,7 @@
 from sympy.polys.polyconfig import query
 import torch.nn as nn
 import torch
-from mulit_head_attention import MultiHeadAttention
+from multi_head_attention import MultiHeadAttention
 import nesting
 
 
@@ -25,6 +25,11 @@ class SharedEmbeddingHolder(nn.Module):
         self.card_type_embedding = nn.Embedding(4, dimension_out, **factory_kwargs)
         self.card_subtype_embedding = nn.Embedding(10, dimension_out, **factory_kwargs)
         self.hp_embedding = NormalizedLinear(1, dimension_out, **factory_kwargs)
+        self.card_amount_range_embedding = NormalizedLinear(
+            2, dimension_out, **factory_kwargs
+        )
+        self.card_position_embedding = nn.Embedding(11, dimension_out, **factory_kwargs)
+        self.player_target_embedding = nn.Embedding(2, dimension_out, **factory_kwargs)
 
 
 class FilterConditionEmbedding(nn.Module):
@@ -48,7 +53,7 @@ class FilterConditionEmbedding(nn.Module):
             dimension_out,
             dimension_out,
             dimension_out,
-            dimension_out // 16,
+            max(dimension_out // 16, 1),
             2,
             bias=False,
             **factory_kwargs,
@@ -200,7 +205,7 @@ class FilterEmbedding(nn.Module):
             dimension_out,
             dimension_out,
             dimension_out,
-            dimension_out // 16,
+            max(dimension_out // 16, 1),
             2,
             bias=False,
             **factory_kwargs,
@@ -295,3 +300,101 @@ class FilterEmbedding(nn.Module):
             self.multi_head_attention(query, query, query) + query
         ).squeeze(0)
         return updated_query.sum(dim=0)
+
+
+class AttackDataEmbedding(nn.Module):
+    def __init__(self, dimension_out: int, device=None, dtype=None):
+        factory_kwargs = {"device": device, "dtype": dtype}
+        super().__init__()
+        self.dimension_out = dimension_out
+        self.device = device
+        self.dtype = dtype
+        self.attack_target_embedding = nn.Embedding(1, dimension_out, **factory_kwargs)
+        self.self_damage_embedding = NormalizedLinear(
+            1, dimension_out, **factory_kwargs
+        )
+
+    def forward(self, attack_data: torch.Tensor) -> torch.Tensor:
+        attack_target = attack_data[:, 0]
+        damage = attack_data[:, 1].unsqueeze(1)
+        return self.attack_target_embedding(attack_target) + self.self_damage_embedding(
+            damage
+        )
+
+
+class DiscardDataEmbedding(nn.Module):
+    def __init__(self, dimension_out: int, device=None, dtype=None):
+        factory_kwargs = {"device": device, "dtype": dtype}
+        super().__init__()
+        self.dimension_out = dimension_out
+        self.device = device
+        self.dtype = dtype
+        self.target_source_embedding = nn.Embedding(3, dimension_out, **factory_kwargs)
+
+    def forward(self, discard_data: torch.Tensor) -> torch.Tensor:
+        return self.target_source_embedding(discard_data)
+
+
+class CardAmountDataEmbedding(nn.Module):
+    def __init__(
+        self,
+        shared_embedding_holder: SharedEmbeddingHolder,
+        dimension_out: int,
+        device=None,
+        dtype=None,
+    ):
+        super().__init__()
+        self.dimension_out = dimension_out
+        self.device = device
+        self.dtype = dtype
+        self.card_amount_range_embedding = (
+            shared_embedding_holder.card_amount_range_embedding
+        )
+        self.card_position_embedding = shared_embedding_holder.card_position_embedding
+
+    def forward(self, card_amount_data: torch.Tensor) -> torch.Tensor:
+        return self.card_amount_range_embedding(
+            card_amount_data[:, 0:2]
+        ) + self.card_position_embedding(card_amount_data[:, 2])
+
+
+class ReturnToDeckTypeDataEmbedding(nn.Module):
+    def __init__(
+        self,
+        shared_embedding_holder: SharedEmbeddingHolder,
+        dimension_out: int,
+        device=None,
+        dtype=None,
+    ):
+        factory_kwargs = {"device": device, "dtype": dtype}
+        super().__init__()
+        self.dimension_out = dimension_out
+        self.device = device
+        self.dtype = dtype
+        self.card_position_embedding = shared_embedding_holder.card_position_embedding
+        self.return_to_deck_type_embedding = nn.Embedding(
+            2, dimension_out, **factory_kwargs
+        )
+
+    def forward(self, return_to_deck_type_data: torch.Tensor) -> torch.Tensor:
+        return self.return_to_deck_type_embedding(
+            return_to_deck_type_data[:, 0]
+        ) + self.card_position_embedding(return_to_deck_type_data[:, 1])
+
+
+class PlayerTargetDataEmbedding(nn.Module):
+    def __init__(
+        self,
+        shared_embedding_holder: SharedEmbeddingHolder,
+        dimension_out: int,
+        device=None,
+        dtype=None,
+    ):
+        super().__init__()
+        self.dimension_out = dimension_out
+        self.device = device
+        self.dtype = dtype
+        self.player_target_embedding = shared_embedding_holder.player_target_embedding
+
+    def forward(self, player_target_data: torch.Tensor) -> torch.Tensor:
+        return self.player_target_embedding(player_target_data)

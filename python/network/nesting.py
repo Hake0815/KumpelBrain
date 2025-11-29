@@ -218,3 +218,134 @@ def reduce_v2(
     if not current_combination:
         return []
     return current_combination.pop()
+
+
+def vectorize_amount_data(
+    amount_data: dict, device: torch.device = None, dtype: torch.dtype = None
+) -> torch.Tensor:
+    factory_kwargs = {"device": device, "dtype": dtype}
+    return torch.tensor(
+        [
+            amount_data["Amount"]["Min"],
+            amount_data["Amount"]["Max"],
+            amount_data["FromPosition"],
+        ],
+        **factory_kwargs,
+    )
+
+
+def vectorize_attack_data(
+    attack_data: dict, device: torch.device = None, dtype: torch.dtype = None
+) -> torch.Tensor:
+    factory_kwargs = {"device": device, "dtype": dtype}
+    return torch.tensor(
+        [attack_data["AttackTarget"], attack_data["Damage"]], **factory_kwargs
+    )
+
+
+def vectorize_discard_data(
+    discard_data: dict, device: torch.device = None, dtype: torch.dtype = None
+) -> torch.Tensor:
+    factory_kwargs = {"device": device, "dtype": dtype}
+    return torch.tensor([discard_data["TargetSource"]], **factory_kwargs)
+
+
+def vectorize_return_to_deck_type_data(
+    return_to_deck_type_data: dict,
+    device: torch.device = None,
+    dtype: torch.dtype = None,
+) -> torch.Tensor:
+    factory_kwargs = {"device": device, "dtype": dtype}
+    return torch.tensor(
+        [
+            return_to_deck_type_data["ReturnToDeckType"],
+            return_to_deck_type_data["FromPosition"],
+        ],
+        **factory_kwargs,
+    )
+
+
+def vectorize_player_target_data(
+    player_target_data: dict, device: torch.device = None, dtype: torch.dtype = None
+) -> torch.Tensor:
+    factory_kwargs = {"device": device, "dtype": dtype}
+    return torch.tensor([player_target_data["PlayerTarget"]], **factory_kwargs)
+
+
+def flatten_instructions(
+    instructions: list[list[dict]],
+    device: torch.device = None,
+    dtype: torch.dtype = None,
+) -> tuple[
+    torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, list[dict], torch.Tensor
+]:
+    """
+    Flatten the instructions
+    Args:
+        instructions: batch of instructions lists (batch_size, num_instructions*)
+    Returns:
+        tuple of
+            tensor of instruction types dim (total number of instructions)
+            tensor of instruction indices (batch_index, instruction_index) dim  (total number of instructions, 2)
+            tensor of instruction data type except filter data dim (total number of instruction data)
+            tensor of instruction data type indices (batch_index, instruction_index, data_index) dim (total number of instruction data, 3)
+            tuple of instruction data tensor lists. One tuple entry for each instruction data type.
+            tuple of tensor instruction data indices lists.
+    """
+    factory_kwargs = {"device": device, "dtype": dtype}
+    instruction_types = []
+    instruction_indices = []
+    instruction_data_types = []
+    instruction_data_type_indices = []
+    instruction_data = ([], [], [], [], [], [])
+    instruction_data_indices = ([], [], [], [], [], [])
+    for batch_index, batch_instructions in enumerate(instructions):
+        for instruction_index, instruction in enumerate(batch_instructions):
+            instruction_types.append(instruction["InstructionType"])
+            instruction_indices.append((batch_index, instruction_index))
+            for data_index, data in enumerate(instruction["Data"]):
+                data_type = data["InstructionDataType"]
+                instruction_data_types.append(data_type)
+                instruction_data_type_indices.append(
+                    (batch_index, instruction_index, data_index)
+                )
+                if data_type == 4:
+                    instruction_data[data_type].append(data["Payload"]["Filter"])
+                else:
+                    instruction_data[data_type].append(
+                        vectorize_payload(data["Payload"], data_type, **factory_kwargs)
+                    )
+                instruction_data_indices[data_type].append(
+                    (batch_index, instruction_index, data_index)
+                )
+
+    return (
+        torch.tensor(instruction_types, **factory_kwargs),
+        torch.tensor(instruction_indices, **factory_kwargs),
+        torch.tensor(instruction_data_types, **factory_kwargs),
+        torch.tensor(instruction_data_type_indices, **factory_kwargs),
+        instruction_data,
+        instruction_data_indices,
+    )
+
+
+def vectorize_payload(
+    payload: dict,
+    data_type: int,
+    device: torch.device = None,
+    dtype: torch.dtype = None,
+) -> torch.Tensor:
+    factory_kwargs = {"device": device, "dtype": dtype}
+    match data_type:
+        case 0:
+            return vectorize_attack_data(payload, **factory_kwargs)
+        case 1:
+            return vectorize_discard_data(payload, **factory_kwargs)
+        case 2:
+            return vectorize_amount_data(payload, **factory_kwargs)
+        case 3:
+            return vectorize_return_to_deck_type_data(payload, **factory_kwargs)
+        case 5:
+            return vectorize_player_target_data(payload, **factory_kwargs)
+        case _:
+            raise ValueError(f"Unknown data type: {data_type}")
