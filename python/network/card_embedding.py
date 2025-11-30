@@ -3,6 +3,8 @@ import torch.nn as nn
 import torch
 from multi_head_attention import MultiHeadAttention
 import nesting
+import positional_embedding
+from itertools import chain
 
 
 class NormalizedLinear(nn.Module):
@@ -30,6 +32,9 @@ class SharedEmbeddingHolder(nn.Module):
         )
         self.card_position_embedding = nn.Embedding(11, dimension_out, **factory_kwargs)
         self.player_target_embedding = nn.Embedding(2, dimension_out, **factory_kwargs)
+        self.position_embedding = positional_embedding.PositionalEmbedding(
+            dimension_out, **factory_kwargs
+        )
 
 
 class FilterConditionEmbedding(nn.Module):
@@ -398,3 +403,167 @@ class PlayerTargetDataEmbedding(nn.Module):
 
     def forward(self, player_target_data: torch.Tensor) -> torch.Tensor:
         return self.player_target_embedding(player_target_data)
+
+
+class InstructionEmbedding(nn.Module):
+    def __init__(
+        self,
+        shared_embedding_holder: SharedEmbeddingHolder,
+        dimension_out: int,
+        device=None,
+        dtype=None,
+    ):
+        self.factory_kwargs = {"device": device, "dtype": dtype}
+        super().__init__()
+        self.dimension_out = dimension_out
+        self.attack_data_embedding = AttackDataEmbedding(
+            dimension_out, **self.factory_kwargs
+        )
+        self.discard_data_embedding = DiscardDataEmbedding(
+            dimension_out, **self.factory_kwargs
+        )
+        self.card_amount_data_embedding = CardAmountDataEmbedding(
+            shared_embedding_holder, dimension_out, **self.factory_kwargs
+        )
+        self.return_to_deck_type_data_embedding = ReturnToDeckTypeDataEmbedding(
+            shared_embedding_holder, dimension_out, **self.factory_kwargs
+        )
+        self.filter_embedding = FilterEmbedding(
+            shared_embedding_holder, dimension_out, **self.factory_kwargs
+        )
+        self.player_target_data_embedding = PlayerTargetDataEmbedding(
+            shared_embedding_holder, dimension_out, **self.factory_kwargs
+        )
+        self.instruction_type_embedding = nn.Embedding(
+            8, dimension_out, padding_idx=0, **self.factory_kwargs
+        )
+        self.instruction_data_type_embedding = nn.Embedding(
+            6, dimension_out, padding_idx=0, **self.factory_kwargs
+        )
+        self.data_multi_head_attention = MultiHeadAttention(
+            dimension_out,
+            dimension_out,
+            dimension_out,
+            max(dimension_out // 16, 4),
+            4,
+            **self.factory_kwargs,
+        )
+        self.position_embedding = shared_embedding_holder.position_embedding
+        self.instructions_multi_head_attention = MultiHeadAttention(
+            dimension_out,
+            dimension_out,
+            dimension_out,
+            max(dimension_out // 16, 4),
+            4,
+            **self.factory_kwargs,
+        )
+
+    def forward(self, instructions_batch: list[list[dict]]) -> torch.Tensor:
+        batch_size = len(instructions_batch)
+        (
+            instruction_types,
+            instruction_indices,
+            instruction_data_types,
+            instruction_data_type_indices,
+            instruction_data,
+            instruction_data_indices,
+        ) = nesting.flatten_instructions(instructions_batch, **self.factory_kwargs)
+        instruction_type_embeddings = self.instruction_type_embedding(instruction_types)
+        instruction_data_type_embeddings = self.instruction_data_type_embedding(
+            instruction_data_types
+        )
+        attack_data_embeddings = self.attack_data_embedding(
+            torch.stack(instruction_data[0])
+        )
+        discard_data_embeddings = self.discard_data_embedding(
+            torch.tensor(instruction_data[1], **self.factory_kwargs)
+        )
+        card_amount_data_embeddings = self.card_amount_data_embedding(
+            torch.stack(instruction_data[2])
+        )
+        return_to_deck_type_data_embeddings = self.return_to_deck_type_data_embedding(
+            torch.stack(instruction_data[3])
+        )
+        filter_embeddings = self.filter_embedding(instruction_data[4])
+        player_target_data_embeddings = self.player_target_data_embedding(
+            torch.tensor(instruction_data[5], **self.factory_kwargs)
+        )
+
+        sorted_data = self.sort_tensors_with_respect_to_index(
+            (
+                attack_data_embeddings,
+                discard_data_embeddings,
+                card_amount_data_embeddings,
+                return_to_deck_type_data_embeddings,
+                filter_embeddings,
+                player_target_data_embeddings,
+            ),
+            instruction_data_indices,
+        )
+        data_tensors = sorted_data + instruction_data_type_embeddings
+
+        instruction_embeddings = self.embed_instruction_data(
+            instruction_indices,
+            instruction_data_type_indices,
+            instruction_type_embeddings,
+            data_tensors,
+        )
+
+        batched_instructions = torch.nested.nested_tensor(
+            [
+                self.position_embedding(
+                    (
+                        instruction_embeddings[instruction_indices[:, 0] == batch_index]
+                    ).unsqueeze(0)
+                ).squeeze(0)
+                for batch_index in range(batch_size)
+            ],
+            layout=torch.jagged,
+        )
+        return (
+            batched_instructions
+            + self.instructions_multi_head_attention(
+                batched_instructions, batched_instructions, batched_instructions
+            )
+        ).sum(1)
+
+    def sort_tensors_with_respect_to_index(self, tensors, indices):
+        return torch.stack(
+            [
+                tensor
+                for _, tensor in sorted(
+                    zip(
+                        chain.from_iterable(indices),
+                        chain.from_iterable(tensors),
+                    ),
+                    key=lambda pair: pair[0],
+                )
+            ]
+        )
+
+    def embed_instruction_data(
+        self,
+        instruction_indices: torch.Tensor,
+        instruction_data_type_indices: torch.Tensor,
+        instruction_type_embeddings: torch.Tensor,
+        data_tensors: torch.Tensor,
+    ) -> torch.Tensor:
+        query_list = []
+        for i, instruction_index in enumerate(instruction_indices):
+            unbatched_query = torch.cat(
+                [
+                    instruction_type_embeddings[i].unsqueeze(0),
+                    data_tensors[
+                        (
+                            instruction_data_type_indices[:, 0:2] == instruction_index
+                        ).sum(1)
+                        == 2
+                    ],
+                ]
+            )
+            query_list.append(unbatched_query)
+        query_tensor = torch.nested.nested_tensor(query_list, layout=torch.jagged)
+        return (
+            query_tensor
+            + self.data_multi_head_attention(query_tensor, query_tensor, query_tensor)
+        ).sum(1)
