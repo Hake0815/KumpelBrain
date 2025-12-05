@@ -273,6 +273,7 @@ def vectorize_player_target_data(
 
 
 def flatten_instructions(
+    type_key: str,
     instructions: list[list[dict]],
     device: torch.device = None,
     dtype: torch.dtype = None,
@@ -301,7 +302,7 @@ def flatten_instructions(
     instruction_data_indices = ([], [], [], [], [], [])
     for batch_index, batch_instructions in enumerate(instructions):
         for instruction_index, instruction in enumerate(batch_instructions):
-            instruction_types.append(instruction["InstructionType"])
+            instruction_types.append(instruction[type_key])
             instruction_indices.append((batch_index, instruction_index))
             for data_index, data in enumerate(instruction["Data"]):
                 data_type = data["InstructionDataType"]

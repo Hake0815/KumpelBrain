@@ -184,3 +184,55 @@ instructions_batch = [
     dragon_headbutt_instructions,
     recon_directive_instructions,
 ]
+
+research_conditions = [
+    {
+        "ConditionType": 1,
+        "Data": [
+            {
+                "InstructionDataType": 2,
+                "Payload": {"Amount": {"Min": 1, "Max": 60}, "FromPosition": 7},
+            }
+        ],
+    }
+]
+
+recon_directive_conditions = [
+    {
+        "ConditionType": 1,
+        "Data": [
+            {
+                "InstructionDataType": 2,
+                "Payload": {"Amount": {"Min": 1, "Max": 60}, "FromPosition": 7},
+            }
+        ],
+    },
+    {"ConditionType": 0, "Data": []},
+]
+
+ultra_ball_conditions = [
+    {
+        "ConditionType": 1,
+        "Data": [
+            {
+                "InstructionDataType": 2,
+                "Payload": {"Amount": {"Min": 3, "Max": 60}, "FromPosition": 8},
+            }
+        ],
+    },
+    {
+        "ConditionType": 1,
+        "Data": [
+            {
+                "InstructionDataType": 2,
+                "Payload": {"Amount": {"Min": 1, "Max": 60}, "FromPosition": 7},
+            }
+        ],
+    },
+]
+
+conditions_batch = [
+    research_conditions,
+    recon_directive_conditions,
+    ultra_ball_conditions,
+]
