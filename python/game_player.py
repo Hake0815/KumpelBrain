@@ -23,23 +23,18 @@ class GamePlayer:
         self.game_uuid = game_uuid
         self.enable_file_logging = enable_file_logging
 
+        log_file_path = f"game_action_logs/log_{game_uuid}.txt"
+        self.game_controller = GameControllerWrapper(log_file_path)
         if enable_file_logging:
             try:
                 os.remove(f"game_action_logs/log_{game_uuid}.txt")
                 os.remove(f"game_state_logs/game_state_{game_uuid}.txt")
             except OSError:
                 pass
-            log_file_path = f"game_action_logs/log_{game_uuid}.txt"
-            self.game_controller = GameControllerWrapper(log_file_path)
             self.game_controller.set_application_log_file_path(
                 f"game_application_logs/application_log_{game_uuid}.txt"
             )
-        else:
-            # Use a minimal log path even when logging is disabled (C# might require it)
-            log_file_path = f"game_action_logs/log_{game_uuid}.txt"
-            self.game_controller = GameControllerWrapper(log_file_path)
 
-        # Use ERROR level instead of DEBUG for better performance
         self.game_controller.set_application_log_log_level("ERROR")
         self.deck_list1 = deck_list1
         self.deck_list2 = deck_list2
@@ -59,26 +54,25 @@ class GamePlayer:
     def _on_general_update(self, interactions: list[InteractionWrapper]) -> None:
         interaction = interactions[0]
         if interaction.is_game_over():
-            # interaction.perform_action()
             self.callback_on_game_end(interaction.get_game_over_message())
             return
 
         self._perform_interaction(interaction)
 
     def _on_player_1_update(self, interactions: list[InteractionWrapper]) -> None:
-        game_state = self.game_controller.export_game_state_as_json_string(
-            self.player1_name
-        )
         if self.enable_file_logging:
+            game_state = self.game_controller.export_game_state_as_json_string(
+                self.player1_name
+            )
             with open(f"game_state_logs/game_state_{self.game_uuid}.txt", "a") as f:
                 f.writelines([game_state, "\n"])
         self._on_player_update(interactions)
 
     def _on_player_2_update(self, interactions: list[InteractionWrapper]) -> None:
-        game_state = self.game_controller.export_game_state_as_json_string(
-            self.player2_name
-        )
         if self.enable_file_logging:
+            game_state = self.game_controller.export_game_state_as_json_string(
+                self.player2_name
+            )
             with open(f"game_state_logs/game_state_{self.game_uuid}.txt", "a") as f:
                 f.write(game_state)
         self._on_player_update(interactions)

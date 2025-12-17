@@ -33,7 +33,6 @@ def create_deck_list():
 
 
 def callback_on_game_end(message: str, event: Event, uuid: str):
-    # print(f"Game {uuid} ended with message: {message}")
     event.set()
 
 
@@ -51,7 +50,7 @@ def run_single_game(game_num: int):
         callback_on_game_end=functools.partial(
             callback_on_game_end, event=event, uuid=game_uuid
         ),
-        enable_file_logging=True,  # Disable file logging for performance
+        enable_file_logging=False,  # Disable file logging for performance
     )
 
     game_player.play_game()
@@ -60,8 +59,8 @@ def run_single_game(game_num: int):
 
 
 start_time = time.time()
-num_games = 1
-max_workers = min(1, num_games)  # Use up to 8 parallel workers
+num_games = 1000
+max_workers = min(1, num_games)  # More workers are slower
 
 # Use ThreadPoolExecutor for parallel execution
 with ThreadPoolExecutor(max_workers=max_workers) as executor:
