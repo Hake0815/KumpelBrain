@@ -8,7 +8,7 @@ bin_folder = os.path.join(
     "gamecore",
     "bin",
     "Debug",
-    "net9.0",
+    "net10.0",
 )
 if bin_folder not in sys.path:
     sys.path.insert(0, bin_folder)
