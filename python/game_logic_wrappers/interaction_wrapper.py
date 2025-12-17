@@ -7,6 +7,7 @@ from gamecore.game.interaction import (
     ConditionalTargetData,
     TargetData,
     WinnerData,
+    GameInteractionDataType
 )
 from gamecore.card import ICard
 from System.Collections.Generic import List
@@ -26,7 +27,7 @@ class InteractionWrapper:
 
     def is_with_condition_target(self) -> bool:
         return self.is_with_target() and self.interaction.Data.ContainsKey(
-            ConditionalTargetData.NAME
+            GameInteractionDataType.ConditionalTargetData
         )
 
     def get_targets(self) -> list[CardWrapper]:
@@ -37,20 +38,20 @@ class InteractionWrapper:
             return [
                 CardWrapper(card)
                 for card in ConditionalTargetData(
-                    self.interaction.Data[ConditionalTargetData.NAME]
+                    self.interaction.Data[GameInteractionDataType.ConditionalTargetData]
                 ).PossibleTargets
             ]
 
         return [
             CardWrapper(card)
             for card in TargetData(
-                self.interaction.Data[TargetData.NAME]
+                self.interaction.Data[GameInteractionDataType.TargetData]
             ).PossibleTargets
         ]
 
     def is_target_condition_fulfilled(self, targets: list[CardWrapper]) -> bool:
         condition = ConditionalTargetData(
-            self.interaction.Data[ConditionalTargetData.NAME]
+            self.interaction.Data[GameInteractionDataType.ConditionalTargetData]
         ).ConditionalTargetQuery
         card_list = List[ICard]()
         for card_wrapper in targets:
@@ -58,7 +59,7 @@ class InteractionWrapper:
         return condition.IsMet(card_list)
 
     def get_number_of_targets(self) -> int:
-        return TargetData(self.interaction.Data[TargetData.NAME]).NumberOfTargets
+        return TargetData(self.interaction.Data[GameInteractionDataType.TargetData]).NumberOfTargets
 
     def perform_action(self) -> None:
         self.interaction.GameControllerMethod.Invoke()
@@ -71,10 +72,10 @@ class InteractionWrapper:
         self.interaction.GameControllerMethodWithTargets.Invoke(card_list)
 
     def is_game_over(self) -> bool:
-        return self.interaction.Data.ContainsKey(WinnerData.NAME)
+        return self.interaction.Data.ContainsKey(GameInteractionDataType.WinnerData)
 
     def get_game_over_message(self) -> str:
-        return WinnerData(self.interaction.Data[WinnerData.NAME]).Message
+        return WinnerData(self.interaction.Data[GameInteractionDataType.WinnerData]).Message
 
     def try_cast(self, T, obj):
         return T(obj) if clr.GetClrType(T).IsInstanceOfType(obj) else None

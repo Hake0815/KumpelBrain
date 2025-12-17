@@ -1,9 +1,10 @@
-import asyncio
 import functools
 import os, sys
 from threading import Event
-import threading
 import time
+import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from tqdm import tqdm
 
 file_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)))
 if file_folder not in sys.path:
@@ -31,26 +32,46 @@ def create_deck_list():
     }
 
 
-def callback_on_game_end(message: str, event: Event):
-    print(message)
+def callback_on_game_end(message: str, event: Event, uuid: str):
     event.set()
 
 
-event = Event()
+def run_single_game(game_num: int):
+    """Run a single game and return the result"""
+    game_uuid = uuid.uuid4()
+    event = Event()
+
+    game_player = GamePlayer(
+        deck_list1=create_deck_list(),
+        deck_list2=create_deck_list(),
+        player1_name="player1",
+        player2_name="player2",
+        game_uuid=game_uuid,
+        callback_on_game_end=functools.partial(
+            callback_on_game_end, event=event, uuid=game_uuid
+        ),
+        enable_file_logging=False,  # Disable file logging for performance
+    )
+
+    game_player.play_game()
+    event.wait()
+    return game_num
+
 
 start_time = time.time()
-gamePlayer = GamePlayer(
-    log_file_path="log.txt",
-    deck_list1=create_deck_list(),
-    deck_list2=create_deck_list(),
-    player1_name="player1",
-    player2_name="player2",
-    callback_on_game_end=functools.partial(callback_on_game_end, event=event),
-)
-t = threading.Thread(target=gamePlayer.play_game)
+num_games = 1000
+max_workers = min(1, num_games)  # More workers are slower
 
-t.start()
+# Use ThreadPoolExecutor for parallel execution
+with ThreadPoolExecutor(max_workers=max_workers) as executor:
+    futures = [executor.submit(run_single_game, i) for i in range(num_games)]
+    completed = 0
+    for future in tqdm(as_completed(futures), total=num_games):
+        completed += 1
+        if completed % 100 == 0:
+            print(f"Completed {completed}/{num_games} games")
 
-event.wait()
 end_time = time.time()
-print(f"Time taken: {end_time - start_time} seconds")
+elapsed = end_time - start_time
+print(f"Time taken: {elapsed:.2f} seconds")
+print(f"Games per second: {num_games / elapsed:.2f}")
