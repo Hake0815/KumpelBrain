@@ -60,21 +60,35 @@ class GamePlayer:
         self._perform_interaction(interaction)
 
     def _on_player_1_update(self, interactions: list[InteractionWrapper]) -> None:
+        game_state = self.game_controller.export_game_state_as_byte_array(
+            self.player1_name
+        )
         if self.enable_file_logging:
-            game_state = self.game_controller.export_game_state_as_json_string(
-                self.player1_name
-            )
             with open(f"game_state_logs/game_state_{self.game_uuid}.txt", "a") as f:
-                f.writelines([game_state, "\n"])
+                f.writelines(
+                    [
+                        self.game_controller.export_game_state_as_json(
+                            self.player1_name
+                        ),
+                        "\n",
+                    ]
+                )
         self._on_player_update(interactions)
 
     def _on_player_2_update(self, interactions: list[InteractionWrapper]) -> None:
+        game_state = self.game_controller.export_game_state_as_byte_array(
+            self.player2_name
+        )
         if self.enable_file_logging:
-            game_state = self.game_controller.export_game_state_as_json_string(
-                self.player2_name
-            )
             with open(f"game_state_logs/game_state_{self.game_uuid}.txt", "a") as f:
-                f.write(game_state)
+                f.writelines(
+                    [
+                        self.game_controller.export_game_state_as_json(
+                            self.player2_name
+                        ),
+                        "\n",
+                    ]
+                )
         self._on_player_update(interactions)
 
     def _on_player_update(self, interactions: list[InteractionWrapper]) -> None:

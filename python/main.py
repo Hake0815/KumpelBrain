@@ -50,7 +50,7 @@ def run_single_game(game_num: int):
         callback_on_game_end=functools.partial(
             callback_on_game_end, event=event, uuid=game_uuid
         ),
-        enable_file_logging=False,  # Disable file logging for performance
+        enable_file_logging=True,  # Disable file logging for performance
     )
 
     game_player.play_game()
@@ -58,17 +58,27 @@ def run_single_game(game_num: int):
     return game_num
 
 
+def run_game_batch(batch_size, first_game_num: int):
+    """Run a single game and return the result"""
+    return [run_single_game(i + first_game_num) for i in range(batch_size)]
+
+
 start_time = time.time()
-num_games = 1000
-max_workers = min(1, num_games)  # More workers are slower
+num_game_batches = 1
+num_games_per_batch = 1
+num_games = num_game_batches * num_games_per_batch
+max_workers = min(8, num_game_batches)  # More workers are slower
 
 # Use ThreadPoolExecutor for parallel execution
 with ThreadPoolExecutor(max_workers=max_workers) as executor:
-    futures = [executor.submit(run_single_game, i) for i in range(num_games)]
+    futures = [
+        executor.submit(run_game_batch, num_games_per_batch, i * num_games_per_batch)
+        for i in range(num_game_batches)
+    ]
     completed = 0
-    for future in tqdm(as_completed(futures), total=num_games):
+    for future in tqdm(as_completed(futures), total=num_game_batches):
         completed += 1
-        if completed % 100 == 0:
+        if completed % 8 == 0:
             print(f"Completed {completed}/{num_games} games")
 
 end_time = time.time()
