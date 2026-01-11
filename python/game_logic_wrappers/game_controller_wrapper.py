@@ -64,8 +64,11 @@ class GameControllerWrapper:
             cs_deck_list[key] = value
         return cs_deck_list
 
-    def export_game_state_as_json_string(self, player_name: str):
-        return self.game_controller.ExportGameStateAsJsonString(player_name)
+    def export_game_state_as_byte_array(self, player_name: str):
+        return self.game_controller.ExportGameStateAsByteArray(player_name)
+
+    def export_game_state_as_json(self, player_name: str):
+        return self.game_controller.ExportGameStateAsJson(player_name)
 
     def export_game_state(self, player_name: str):
         return self.game_controller.ExportGameState(player_name)
