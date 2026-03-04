@@ -1,9 +1,10 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from save_load_mixin import SaveLoadMixin
 
 
-class MultiHeadAttention(nn.Module):
+class MultiHeadAttention(nn.Module, SaveLoadMixin):
     """
     Computes multi-head attention. Supports nested or padded tensors.
     see: https://docs.pytorch.org/tutorials/intermediate/transformer_building_blocks.html
@@ -110,7 +111,12 @@ class MultiHeadAttention(nn.Module):
         # Step 3. Run SDPA
         # (N, nheads, L_t, E_head)
         attn_output = F.scaled_dot_product_attention(
-            query, key, value, dropout_p=self.dropout, is_causal=is_causal
+            query,
+            key,
+            value,
+            attn_mask=attn_mask,
+            dropout_p=self.dropout,
+            is_causal=is_causal,
         )
         # (N, nheads, L_t, E_head) -> (N, L_t, nheads, E_head) -> (N, L_t, E_total)
         attn_output = attn_output.transpose(1, 2).flatten(-2)
