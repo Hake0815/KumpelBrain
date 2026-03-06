@@ -5,9 +5,10 @@ from multi_head_attention import MultiHeadAttention
 import nesting
 import positional_embedding
 from itertools import chain
+from save_load_mixin import SaveLoadMixin
 
 
-class NormalizedLinear(nn.Module):
+class NormalizedLinear(nn.Module, SaveLoadMixin):
     def __init__(
         self, d_in: int, d_out: int, divisor: float = 400.0, device=None, dtype=None
     ):
@@ -20,7 +21,7 @@ class NormalizedLinear(nn.Module):
         return self.linear(x / self.divisor)
 
 
-class SharedEmbeddingHolder(nn.Module):
+class SharedEmbeddingHolder(nn.Module, SaveLoadMixin):
     def __init__(self, dimension_out: int, device=None, dtype=None):
         factory_kwargs = {"device": device, "dtype": dtype}
         super().__init__()
@@ -40,7 +41,7 @@ class SharedEmbeddingHolder(nn.Module):
         )
 
 
-class FilterConditionEmbedding(nn.Module):
+class FilterConditionEmbedding(nn.Module, SaveLoadMixin):
     def __init__(
         self,
         shared_embedding_holder: SharedEmbeddingHolder,
@@ -192,7 +193,7 @@ class FilterConditionEmbedding(nn.Module):
         return torch.sum(updated_query, dim=1)
 
 
-class FilterEmbedding(nn.Module):
+class FilterEmbedding(nn.Module, SaveLoadMixin):
     def __init__(
         self,
         shared_embedding_holder: SharedEmbeddingHolder,
@@ -310,7 +311,7 @@ class FilterEmbedding(nn.Module):
         return updated_query.sum(dim=0)
 
 
-class AttackDataEmbedding(nn.Module):
+class AttackDataEmbedding(nn.Module, SaveLoadMixin):
     def __init__(self, dimension_out: int, device=None, dtype=None):
         factory_kwargs = {"device": device, "dtype": dtype}
         super().__init__()
@@ -330,7 +331,7 @@ class AttackDataEmbedding(nn.Module):
         )
 
 
-class DiscardDataEmbedding(nn.Module):
+class DiscardDataEmbedding(nn.Module, SaveLoadMixin):
     def __init__(self, dimension_out: int, device=None, dtype=None):
         factory_kwargs = {"device": device, "dtype": dtype}
         super().__init__()
@@ -343,7 +344,7 @@ class DiscardDataEmbedding(nn.Module):
         return self.target_source_embedding(discard_data)
 
 
-class CardAmountDataEmbedding(nn.Module):
+class CardAmountDataEmbedding(nn.Module, SaveLoadMixin):
     def __init__(
         self,
         shared_embedding_holder: SharedEmbeddingHolder,
@@ -366,7 +367,7 @@ class CardAmountDataEmbedding(nn.Module):
         ) + self.card_position_embedding(card_amount_data[:, 2])
 
 
-class ReturnToDeckTypeDataEmbedding(nn.Module):
+class ReturnToDeckTypeDataEmbedding(nn.Module, SaveLoadMixin):
     def __init__(
         self,
         shared_embedding_holder: SharedEmbeddingHolder,
@@ -390,7 +391,7 @@ class ReturnToDeckTypeDataEmbedding(nn.Module):
         ) + self.card_position_embedding(return_to_deck_type_data[:, 1])
 
 
-class PlayerTargetDataEmbedding(nn.Module):
+class PlayerTargetDataEmbedding(nn.Module, SaveLoadMixin):
     def __init__(
         self,
         shared_embedding_holder: SharedEmbeddingHolder,
@@ -408,7 +409,7 @@ class PlayerTargetDataEmbedding(nn.Module):
         return self.player_target_embedding(player_target_data)
 
 
-class InstructionEmbedding(nn.Module):
+class InstructionEmbedding(nn.Module, SaveLoadMixin):
     def __init__(
         self,
         shared_embedding_holder: SharedEmbeddingHolder,
@@ -487,7 +488,7 @@ class InstructionEmbedding(nn.Module):
         ).sum(1)
 
 
-class InstructionDataEmbedding(nn.Module):
+class InstructionDataEmbedding(nn.Module, SaveLoadMixin):
     def __init__(
         self,
         shared_embedding_holder: SharedEmbeddingHolder,
@@ -599,7 +600,7 @@ class InstructionDataEmbedding(nn.Module):
         )
 
 
-class ConditionEmbedding(nn.Module):
+class ConditionEmbedding(nn.Module, SaveLoadMixin):
     def __init__(
         self,
         shared_embedding_holder: SharedEmbeddingHolder,
