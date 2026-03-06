@@ -1,6 +1,7 @@
 #include "../include/MultiHeadAttention.h"
 #include "../include/NormalizedLinear.h"
 #include "../include/PositionalEmbedding.h"
+#include "../include/SharedEmbeddingHolder.h"
 #include <torch/extension.h>
 
 // Expose class to Python
@@ -19,8 +20,8 @@ PYBIND11_MODULE(kumpel_embedding, m) {
   pybind11::class_<MultiHeadAttentionImpl, torch::nn::Module,
                    std::shared_ptr<MultiHeadAttentionImpl>>(
       m, "MultiHeadAttention")
-      .def(py::init<int64_t, int64_t, int64_t, int64_t, int64_t, double, bool,
-                    torch::Device, torch::Dtype>(),
+      .def(pybind11::init<int64_t, int64_t, int64_t, int64_t, int64_t, double,
+                          bool, torch::Device, torch::Dtype>(),
            pybind11::arg("d_q"), pybind11::arg("d_k"), pybind11::arg("d_v"),
            pybind11::arg("d_head"), pybind11::arg("nheads"),
            pybind11::arg("dropout") = 0.0, pybind11::arg("bias") = true,
@@ -40,4 +41,13 @@ PYBIND11_MODULE(kumpel_embedding, m) {
       .def("forward", &NormalizedLinearImpl::forward)
       .def("save_weights", &NormalizedLinearImpl::save_weights)
       .def("load_weights", &NormalizedLinearImpl::load_weights);
+  pybind11::class_<SharedEmbeddingHolderImpl, torch::nn::Module,
+                   std::shared_ptr<SharedEmbeddingHolderImpl>>(
+      m, "SharedEmbeddingHolder")
+      .def(pybind11::init<int64_t, torch::Device, torch::Dtype>(),
+           pybind11::arg("dimension_out"),
+           pybind11::arg("device") = torch::Device(torch::kCPU),
+           pybind11::arg("dtype") = torch::Dtype(torch::kFloat))
+      .def("save_weights", &SharedEmbeddingHolderImpl::save_weights)
+      .def("load_weights", &SharedEmbeddingHolderImpl::load_weights);
 }

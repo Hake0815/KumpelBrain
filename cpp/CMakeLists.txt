@@ -24,6 +24,7 @@ pybind11_add_module(kumpel_embedding
     network/src/PositionalEmbedding.cpp
     network/src/MultiHeadAttention.cpp
     network/src/NormalizedLinear.cpp
+    network/src/SharedEmbeddingHolder.cpp
     network/src/bindings.cpp
 )
 
