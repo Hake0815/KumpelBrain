@@ -22,8 +22,11 @@ find_package(pybind11 CONFIG REQUIRED)
 
 pybind11_add_module(kumpel_embedding
     network/src/AttackDataEmbedding.cpp
+    network/src/CardAmountDataEmbedding.cpp
     network/src/DiscardDataEmbedding.cpp
     network/src/PositionalEmbedding.cpp
+    network/src/PlayerTargetDataEmbedding.cpp
+    network/src/ReturnToDeckTypeDataEmbedding.cpp
     network/src/MultiHeadAttention.cpp
     network/src/NormalizedLinear.cpp
     network/src/SharedEmbeddingHolder.cpp

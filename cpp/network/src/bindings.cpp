@@ -1,8 +1,11 @@
 #include "../include/AttackDataEmbedding.h"
+#include "../include/CardAmountDataEmbedding.h"
 #include "../include/DiscardDataEmbedding.h"
 #include "../include/MultiHeadAttention.h"
 #include "../include/NormalizedLinear.h"
+#include "../include/PlayerTargetDataEmbedding.h"
 #include "../include/PositionalEmbedding.h"
+#include "../include/ReturnToDeckTypeDataEmbedding.h"
 #include "../include/SharedEmbeddingHolder.h"
 #include <torch/extension.h>
 
@@ -72,4 +75,40 @@ PYBIND11_MODULE(kumpel_embedding, m) {
       .def("forward", &DiscardDataEmbeddingImpl::forward)
       .def("save_weights", &DiscardDataEmbeddingImpl::save_weights)
       .def("load_weights", &DiscardDataEmbeddingImpl::load_weights);
+  pybind11::class_<CardAmountDataEmbeddingImpl, torch::nn::Module,
+                   std::shared_ptr<CardAmountDataEmbeddingImpl>>(
+      m, "CardAmountDataEmbedding")
+      .def(pybind11::init<SharedEmbeddingHolder, int64_t, torch::Device,
+                          torch::Dtype>(),
+           pybind11::arg("shared_embedding_holder"),
+           pybind11::arg("dimension_out"),
+           pybind11::arg("device") = torch::Device(torch::kCPU),
+           pybind11::arg("dtype") = torch::Dtype(torch::kFloat))
+      .def("forward", &CardAmountDataEmbeddingImpl::forward)
+      .def("save_weights", &CardAmountDataEmbeddingImpl::save_weights)
+      .def("load_weights", &CardAmountDataEmbeddingImpl::load_weights);
+  pybind11::class_<ReturnToDeckTypeDataEmbeddingImpl, torch::nn::Module,
+                   std::shared_ptr<ReturnToDeckTypeDataEmbeddingImpl>>(
+      m, "ReturnToDeckTypeDataEmbedding")
+      .def(pybind11::init<SharedEmbeddingHolder, int64_t, torch::Device,
+                          torch::Dtype>(),
+           pybind11::arg("shared_embedding_holder"),
+           pybind11::arg("dimension_out"),
+           pybind11::arg("device") = torch::Device(torch::kCPU),
+           pybind11::arg("dtype") = torch::Dtype(torch::kFloat))
+      .def("forward", &ReturnToDeckTypeDataEmbeddingImpl::forward)
+      .def("save_weights", &ReturnToDeckTypeDataEmbeddingImpl::save_weights)
+      .def("load_weights", &ReturnToDeckTypeDataEmbeddingImpl::load_weights);
+  pybind11::class_<PlayerTargetDataEmbeddingImpl, torch::nn::Module,
+                   std::shared_ptr<PlayerTargetDataEmbeddingImpl>>(
+      m, "PlayerTargetDataEmbedding")
+      .def(pybind11::init<SharedEmbeddingHolder, int64_t, torch::Device,
+                          torch::Dtype>(),
+           pybind11::arg("shared_embedding_holder"),
+           pybind11::arg("dimension_out"),
+           pybind11::arg("device") = torch::Device(torch::kCPU),
+           pybind11::arg("dtype") = torch::Dtype(torch::kFloat))
+      .def("forward", &PlayerTargetDataEmbeddingImpl::forward)
+      .def("save_weights", &PlayerTargetDataEmbeddingImpl::save_weights)
+      .def("load_weights", &PlayerTargetDataEmbeddingImpl::load_weights);
 }
