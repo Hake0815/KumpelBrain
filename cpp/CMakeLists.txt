@@ -2,8 +2,9 @@ cmake_minimum_required(VERSION 4.2.3)
 
 project(kumpel_embedding)
 
-set(Torch_DIR "$ENV{HOME}/.lib/libtorch/share/cmake/Torch")
-set(CMAKE_PREFIX_PATH "$ENV{HOME}/.lib/libtorch")
+set(Torch_DIR "/home/felix/ai/KumpelBrain/.venv/lib/python3.13/site-packages/torch/share/cmake/Torch")
+# set(Torch_DIR "$ENV{HOME}/.lib/libtorch/share/cmake/Torch")
+# set(CMAKE_PREFIX_PATH "$ENV{HOME}/.lib/libtorch")
 set(Python_FIND_VIRTUALENV ONLY)
 
 find_package(Torch REQUIRED)

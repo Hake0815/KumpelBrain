@@ -5,6 +5,7 @@
 
 // Expose class to Python
 PYBIND11_MODULE(kumpel_embedding, m) {
+  pybind11::module_::import("torch");
   pybind11::class_<PositionalEmbeddingImpl, torch::nn::Module,
                    std::shared_ptr<PositionalEmbeddingImpl>>(
       m, "PositionalEmbedding")
