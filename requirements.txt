@@ -3,4 +3,5 @@ pythonnet
 torch
 setuptools
 numpy
+pybind11
 # sympy

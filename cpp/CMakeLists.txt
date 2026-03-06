@@ -2,28 +2,34 @@ cmake_minimum_required(VERSION 4.2.3)
 
 project(kumpel_embedding)
 
-set(CMAKE_PREFIX_PATH "$ENV{HOME}/.lib/libtorch")
 set(Torch_DIR "$ENV{HOME}/.lib/libtorch/share/cmake/Torch")
+set(CMAKE_PREFIX_PATH "$ENV{HOME}/.lib/libtorch")
+set(Python_FIND_VIRTUALENV ONLY)
 
 find_package(Torch REQUIRED)
-# find_package(PythonLibs REQUIRED)
-find_package(Python3 COMPONENTS Development REQUIRED)
-
-include_directories(${PYTHON3_INCLUDE_DIRS})
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
-
-add_library(${PROJECT_NAME} STATIC
-  network/src/PositionalEmbedding.cpp
-  network/src/MultiHeadAttention.cpp
-  network/src/bindings.cpp
+find_library(TORCH_PYTHON_LIBRARY torch_python PATH "${TORCH_INSTALL_PREFIX}/lib")
+find_package(Python COMPONENTS Interpreter Development.Module REQUIRED)
+execute_process(
+  COMMAND ${Python_EXECUTABLE} -m pybind11 --cmakedir
+  OUTPUT_VARIABLE pybind11_DIR
+  OUTPUT_STRIP_TRAILING_WHITESPACE
 )
 
-target_include_directories(${PROJECT_NAME} PUBLIC
-  ${CMAKE_CURRENT_SOURCE_DIR}
-  ${TORCH_INCLUDE_DIRS}
-  ${PYTHON3_LIBRARIES}
-  PRIVATE /usr/include/python3.14
-)
-target_link_libraries(${PROJECT_NAME} "${TORCH_LIBRARIES}")
+list(APPEND CMAKE_PREFIX_PATH ${pybind11_DIR})
 
-set_property(TARGET ${PROJECT_NAME} PROPERTY CXX_STANDARD 17)
+find_package(pybind11 CONFIG REQUIRED)
+
+pybind11_add_module(kumpel_embedding
+    network/src/PositionalEmbedding.cpp
+    network/src/MultiHeadAttention.cpp
+    network/src/NormalizedLinear.cpp
+    network/src/bindings.cpp
+)
+
+target_include_directories(kumpel_embedding PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+target_link_libraries(kumpel_embedding PRIVATE ${TORCH_LIBRARIES} ${TORCH_PYTHON_LIBRARY})
+
+set_property(TARGET kumpel_embedding PROPERTY CXX_STANDARD 17)

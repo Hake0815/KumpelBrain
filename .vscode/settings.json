@@ -1,3 +1,7 @@
 {
-    "cmake.sourceDirectory": "/home/felix/ai/KumpelBrain/cpp"
+    "cmake.sourceDirectory": "/home/felix/ai/KumpelBrain/cpp",
+    "cmake.buildDirectory": "/home/felix/ai/KumpelBrain/cpp/build",
+    "cmake.configureSettings": {
+        "Python_EXECUTABLE": "/home/felix/ai/KumpelBrain/.venv/bin/python"
+    }
 }
