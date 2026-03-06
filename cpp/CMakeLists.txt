@@ -21,6 +21,7 @@ list(APPEND CMAKE_PREFIX_PATH ${pybind11_DIR})
 find_package(pybind11 CONFIG REQUIRED)
 
 pybind11_add_module(kumpel_embedding
+    network/src/AttackDataEmbedding.cpp
     network/src/PositionalEmbedding.cpp
     network/src/MultiHeadAttention.cpp
     network/src/NormalizedLinear.cpp

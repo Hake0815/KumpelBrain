@@ -1,3 +1,4 @@
+#include "../include/AttackDataEmbedding.h"
 #include "../include/MultiHeadAttention.h"
 #include "../include/NormalizedLinear.h"
 #include "../include/PositionalEmbedding.h"
@@ -50,4 +51,14 @@ PYBIND11_MODULE(kumpel_embedding, m) {
            pybind11::arg("dtype") = torch::Dtype(torch::kFloat))
       .def("save_weights", &SharedEmbeddingHolderImpl::save_weights)
       .def("load_weights", &SharedEmbeddingHolderImpl::load_weights);
+  pybind11::class_<AttackDataEmbeddingImpl, torch::nn::Module,
+                   std::shared_ptr<AttackDataEmbeddingImpl>>(
+      m, "AttackDataEmbedding")
+      .def(pybind11::init<int64_t, torch::Device, torch::Dtype>(),
+           pybind11::arg("dimension_out"),
+           pybind11::arg("device") = torch::Device(torch::kCPU),
+           pybind11::arg("dtype") = torch::Dtype(torch::kFloat))
+      .def("forward", &AttackDataEmbeddingImpl::forward)
+      .def("save_weights", &AttackDataEmbeddingImpl::save_weights)
+      .def("load_weights", &AttackDataEmbeddingImpl::load_weights);
 }
