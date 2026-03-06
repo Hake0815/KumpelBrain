@@ -7,7 +7,9 @@ import card_embedding
 import embedding_cpp
 
 
-def _assert_close(name: str, a: torch.Tensor, b: torch.Tensor, atol: float = 1e-5) -> None:
+def _assert_close(
+    name: str, a: torch.Tensor, b: torch.Tensor, atol: float = 1e-5
+) -> None:
     if not torch.allclose(a, b, atol=atol):
         raise AssertionError(f"{name} mismatch:\npython={a}\ncpp={b}")
 
@@ -52,7 +54,11 @@ def main() -> None:
     cmp = torch.randint(0, 5, (n,), dtype=torch.int64)
     value = torch.randint(0, 10, (n,), dtype=torch.int64)
 
-    _assert_close("FilterConditionEmbedding", py_fc.forward_v2(field, cmp, value), cpp_fc.forward_v2(field, cmp, value))
+    _assert_close(
+        "FilterConditionEmbedding",
+        py_fc.forward_v2(field, cmp, value),
+        cpp_fc.forward_v2(field, cmp, value),
+    )
 
     py_filter = card_embedding.FilterEmbedding(py_shared, dim)
     cpp_filter = embedding_cpp.FilterEmbedding(cpp_shared, dim)
@@ -74,7 +80,11 @@ def main() -> None:
         ],
     ]
 
-    _assert_close("FilterEmbedding", py_filter.forward_v2(filter_batch), cpp_filter.forward(filter_batch))
+    _assert_close(
+        "FilterEmbedding",
+        py_filter.forward(filter_batch),
+        cpp_filter.forward(filter_batch),
+    )
     print("Phase 2 parity passed.")
 
 

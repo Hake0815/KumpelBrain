@@ -10,7 +10,12 @@ from save_load_mixin import SaveLoadMixin
 
 class NormalizedLinear(nn.Module, SaveLoadMixin):
     def __init__(
-        self, d_in: int, d_out: int, divisor: float = 400.0, device=None, dtype=None
+        self,
+        d_in: int,
+        d_out: int,
+        divisor: float = 400.0,
+        device: torch.device | None = None,
+        dtype: torch.dtype | None = None,
     ):
         factory_kwargs = {"device": device, "dtype": dtype}
         super().__init__()
@@ -22,7 +27,12 @@ class NormalizedLinear(nn.Module, SaveLoadMixin):
 
 
 class SharedEmbeddingHolder(nn.Module, SaveLoadMixin):
-    def __init__(self, dimension_out: int, device=None, dtype=None):
+    def __init__(
+        self,
+        dimension_out: int,
+        device: torch.device | None = None,
+        dtype: torch.dtype | None = None,
+    ):
         factory_kwargs = {"device": device, "dtype": dtype}
         super().__init__()
         self.card_type_embedding = nn.Embedding(4, dimension_out, **factory_kwargs)
@@ -46,8 +56,8 @@ class FilterConditionEmbedding(nn.Module, SaveLoadMixin):
         self,
         shared_embedding_holder: SharedEmbeddingHolder,
         dimension_out: int,
-        device=None,
-        dtype=None,
+        device: torch.device | None = None,
+        dtype: torch.dtype | None = None,
     ):
         factory_kwargs = {"device": device, "dtype": dtype}
         super().__init__()
@@ -198,8 +208,8 @@ class FilterEmbedding(nn.Module, SaveLoadMixin):
         self,
         shared_embedding_holder: SharedEmbeddingHolder,
         dimension_out: int,
-        device=None,
-        dtype=None,
+        device: torch.device | None = None,
+        dtype: torch.dtype | None = None,
     ):
         factory_kwargs = {"device": device, "dtype": dtype}
         super().__init__()
@@ -232,7 +242,7 @@ class FilterEmbedding(nn.Module, SaveLoadMixin):
         (field_type, comparison_operator, value), groups_indices, operators = (
             self._to_filter_condition_tensors(filter)
         )
-        embedded_conditions = self.filter_condition_embedding.forward(
+        embedded_conditions = self.filter_condition_embedding.forward_v2(
             field_type, comparison_operator, value
         )
         result = nesting.reduce(
@@ -248,45 +258,6 @@ class FilterEmbedding(nn.Module, SaveLoadMixin):
         return torch.unbind(tensors, dim=1), group_indices, operators
 
     def _combine_condition(
-        self, filter_conditions: list[torch.Tensor], operator: int
-    ) -> torch.Tensor:
-        if len(filter_conditions) == 1:
-            return filter_conditions[0]
-        embedded_operator = self.logical_operator_embedding.forward(
-            torch.tensor(operator, dtype=torch.int32, device=self.device)
-        ).unsqueeze(0)
-        filter_conditions_stacked = torch.stack(filter_conditions, dim=0)
-        query = torch.cat((filter_conditions_stacked, embedded_operator), 0).unsqueeze(
-            0
-        )
-        updated_query = (
-            self.multi_head_attention(query, query, query) + query
-        ).squeeze(0)
-        return updated_query.sum(dim=0)
-
-    def forward_v2(self, filter) -> torch.Tensor:
-        if not filter:
-            return torch.zeros(self.dimension_out, device=self.device, dtype=self.dtype)
-
-        (field_type, comparison_operator, value), groups_indices, operators = (
-            self._to_filter_condition_tensors_v2(filter)
-        )
-        embedded_conditions = self.filter_condition_embedding.forward_v2(
-            field_type, comparison_operator, value
-        )
-        result = nesting.reduce_v2(
-            embedded_conditions, groups_indices, operators, self._combine_condition_v2
-        )
-        return torch.stack(result, dim=0)
-
-    def _to_filter_condition_tensors_v2(self, filter_condition_batch: list[dict]):
-        flattened, group_indices, operators = nesting.flatten(
-            filter_condition_batch, nesting.traverse_filter_v2
-        )
-        tensors = torch.tensor(flattened, dtype=torch.int32, device=self.device)
-        return torch.unbind(tensors, dim=1), group_indices, operators
-
-    def _combine_condition_v2(
         self, filter_conditions: list[torch.Tensor], operator: int
     ) -> torch.Tensor:
         if len(filter_conditions) == 1:
@@ -312,7 +283,12 @@ class FilterEmbedding(nn.Module, SaveLoadMixin):
 
 
 class AttackDataEmbedding(nn.Module, SaveLoadMixin):
-    def __init__(self, dimension_out: int, device=None, dtype=None):
+    def __init__(
+        self,
+        dimension_out: int,
+        device: torch.device | None = None,
+        dtype: torch.dtype | None = None,
+    ):
         factory_kwargs = {"device": device, "dtype": dtype}
         super().__init__()
         self.dimension_out = dimension_out
@@ -332,7 +308,12 @@ class AttackDataEmbedding(nn.Module, SaveLoadMixin):
 
 
 class DiscardDataEmbedding(nn.Module, SaveLoadMixin):
-    def __init__(self, dimension_out: int, device=None, dtype=None):
+    def __init__(
+        self,
+        dimension_out: int,
+        device: torch.device | None = None,
+        dtype: torch.dtype | None = None,
+    ):
         factory_kwargs = {"device": device, "dtype": dtype}
         super().__init__()
         self.dimension_out = dimension_out
@@ -349,8 +330,8 @@ class CardAmountDataEmbedding(nn.Module, SaveLoadMixin):
         self,
         shared_embedding_holder: SharedEmbeddingHolder,
         dimension_out: int,
-        device=None,
-        dtype=None,
+        device: torch.device | None = None,
+        dtype: torch.dtype | None = None,
     ):
         super().__init__()
         self.dimension_out = dimension_out
@@ -372,8 +353,8 @@ class ReturnToDeckTypeDataEmbedding(nn.Module, SaveLoadMixin):
         self,
         shared_embedding_holder: SharedEmbeddingHolder,
         dimension_out: int,
-        device=None,
-        dtype=None,
+        device: torch.device | None = None,
+        dtype: torch.dtype | None = None,
     ):
         factory_kwargs = {"device": device, "dtype": dtype}
         super().__init__()
@@ -396,8 +377,8 @@ class PlayerTargetDataEmbedding(nn.Module, SaveLoadMixin):
         self,
         shared_embedding_holder: SharedEmbeddingHolder,
         dimension_out: int,
-        device=None,
-        dtype=None,
+        device: torch.device | None = None,
+        dtype: torch.dtype | None = None,
     ):
         super().__init__()
         self.dimension_out = dimension_out
@@ -414,8 +395,8 @@ class InstructionEmbedding(nn.Module, SaveLoadMixin):
         self,
         shared_embedding_holder: SharedEmbeddingHolder,
         dimension_out: int,
-        device=None,
-        dtype=None,
+        device: torch.device | None = None,
+        dtype: torch.dtype | None = None,
     ):
         self.factory_kwargs = {"device": device, "dtype": dtype}
         super().__init__()
@@ -493,8 +474,8 @@ class InstructionDataEmbedding(nn.Module, SaveLoadMixin):
         self,
         shared_embedding_holder: SharedEmbeddingHolder,
         dimension_out: int,
-        device=None,
-        dtype=None,
+        device: torch.device | None = None,
+        dtype: torch.dtype | None = None,
     ):
         self.factory_kwargs = {"device": device, "dtype": dtype}
         super().__init__()
@@ -601,12 +582,13 @@ class InstructionDataEmbedding(nn.Module, SaveLoadMixin):
 
 
 class ConditionEmbedding(nn.Module, SaveLoadMixin):
+
     def __init__(
         self,
         shared_embedding_holder: SharedEmbeddingHolder,
         dimension_out: int,
-        device=None,
-        dtype=None,
+        device: torch.device | None = None,
+        dtype: torch.dtype | None = None,
     ):
         self.factory_kwargs = {"device": device, "dtype": dtype}
         super().__init__()
