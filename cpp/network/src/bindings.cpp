@@ -1,4 +1,5 @@
 #include "../include/AttackDataEmbedding.h"
+#include "../include/DiscardDataEmbedding.h"
 #include "../include/MultiHeadAttention.h"
 #include "../include/NormalizedLinear.h"
 #include "../include/PositionalEmbedding.h"
@@ -61,4 +62,14 @@ PYBIND11_MODULE(kumpel_embedding, m) {
       .def("forward", &AttackDataEmbeddingImpl::forward)
       .def("save_weights", &AttackDataEmbeddingImpl::save_weights)
       .def("load_weights", &AttackDataEmbeddingImpl::load_weights);
+  pybind11::class_<DiscardDataEmbeddingImpl, torch::nn::Module,
+                   std::shared_ptr<DiscardDataEmbeddingImpl>>(
+      m, "DiscardDataEmbedding")
+      .def(pybind11::init<int64_t, torch::Device, torch::Dtype>(),
+           pybind11::arg("dimension_out"),
+           pybind11::arg("device") = torch::Device(torch::kCPU),
+           pybind11::arg("dtype") = torch::Dtype(torch::kFloat))
+      .def("forward", &DiscardDataEmbeddingImpl::forward)
+      .def("save_weights", &DiscardDataEmbeddingImpl::save_weights)
+      .def("load_weights", &DiscardDataEmbeddingImpl::load_weights);
 }
