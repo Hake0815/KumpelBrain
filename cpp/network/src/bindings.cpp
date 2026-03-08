@@ -1,5 +1,6 @@
 #include "../include/AttackDataEmbedding.h"
 #include "../include/CardAmountDataEmbedding.h"
+#include "../include/ConditionEmbedding.h"
 #include "../include/DiscardDataEmbedding.h"
 #include "../include/FilterConditionEmbedding.h"
 #include "../include/FilterEmbedding.h"
@@ -498,6 +499,24 @@ PYBIND11_MODULE(kumpel_embedding, m) {
            })
       .def("save_weights", &InstructionEmbeddingImpl::save_weights)
       .def("load_weights", &InstructionEmbeddingImpl::load_weights);
+  pybind11::class_<ConditionEmbeddingImpl, torch::nn::Module,
+                   std::shared_ptr<ConditionEmbeddingImpl>>(m,
+                                                            "ConditionEmbedding")
+      .def(pybind11::init<std::shared_ptr<InstructionDataEmbeddingImpl>,
+                          std::shared_ptr<SharedEmbeddingHolderImpl>, int64_t,
+                          torch::Device, torch::Dtype>(),
+           pybind11::arg("instruction_data_embedding"),
+           pybind11::arg("shared_embedding_holder"),
+           pybind11::arg("dimension_out"),
+           pybind11::arg("device") = torch::Device(torch::kCPU),
+           pybind11::arg("dtype") = torch::Dtype(torch::kFloat))
+      .def("forward",
+           [](ConditionEmbeddingImpl &self,
+              const pybind11::iterable &conditions_batch) {
+             return self.forward(parse_instructions_batch(conditions_batch));
+           })
+      .def("save_weights", &ConditionEmbeddingImpl::save_weights)
+      .def("load_weights", &ConditionEmbeddingImpl::load_weights);
 
   m.def("nesting_traverse_filter", [](const pybind11::iterable &nested_input) {
     auto nodes = parse_filter_list(nested_input);

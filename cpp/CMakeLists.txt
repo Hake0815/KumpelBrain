@@ -23,6 +23,7 @@ find_package(pybind11 CONFIG REQUIRED)
 pybind11_add_module(kumpel_embedding
     network/src/AttackDataEmbedding.cpp
     network/src/CardAmountDataEmbedding.cpp
+    network/src/ConditionEmbedding.cpp
     network/src/DiscardDataEmbedding.cpp
     network/src/FilterConditionEmbedding.cpp
     network/src/FilterEmbedding.cpp
