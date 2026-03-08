@@ -1,10 +1,14 @@
 import os
+from pathlib import Path
+import sys
 import tempfile
 
 import torch
 
 import card_embedding
-import embedding_cpp
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "cpp" / "build"))
+import kumpel_embedding
 
 
 def _assert_close(
@@ -44,10 +48,10 @@ def main() -> None:
     n = 12
 
     py_shared = card_embedding.SharedEmbeddingHolder(dim)
-    cpp_shared = embedding_cpp.SharedEmbeddingHolder(dim)
+    cpp_shared = kumpel_embedding.SharedEmbeddingHolder(dim)
 
     py_fc = card_embedding.FilterConditionEmbedding(py_shared, dim)
-    cpp_fc = embedding_cpp.FilterConditionEmbedding(cpp_shared, dim)
+    cpp_fc = kumpel_embedding.FilterConditionEmbedding(cpp_shared, dim)
     _with_loaded_weights(py_fc, cpp_fc)
 
     field = torch.randint(0, 6, (n,), dtype=torch.int64)
@@ -56,12 +60,12 @@ def main() -> None:
 
     _assert_close(
         "FilterConditionEmbedding",
-        py_fc.forward_v2(field, cmp, value),
-        cpp_fc.forward_v2(field, cmp, value),
+        py_fc.forward(field, cmp, value),
+        cpp_fc.forward(field, cmp, value),
     )
 
     py_filter = card_embedding.FilterEmbedding(py_shared, dim)
-    cpp_filter = embedding_cpp.FilterEmbedding(cpp_shared, dim)
+    cpp_filter = kumpel_embedding.FilterEmbedding(cpp_shared, dim)
     _with_loaded_weights(py_filter, cpp_filter)
 
     filter_batch = [

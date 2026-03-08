@@ -19,6 +19,5 @@ SharedEmbeddingHolderImpl::SharedEmbeddingHolderImpl(int64_t dimension_out,
   position_embedding_ = register_module(
       "position_embedding",
       PositionalEmbedding(dimension_out, 0.1, 5000, device, dtype));
-
   to(device, dtype);
 }

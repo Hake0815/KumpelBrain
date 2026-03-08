@@ -3,10 +3,9 @@
 using torch::indexing::Slice;
 
 ReturnToDeckTypeDataEmbeddingImpl::ReturnToDeckTypeDataEmbeddingImpl(
-    SharedEmbeddingHolder shared_embedding_holder, int64_t dimension_out,
-    torch::Device device, torch::Dtype dtype) {
-  card_position_embedding_ = register_module(
-      "card_position_embedding", shared_embedding_holder->card_position_embedding_);
+    std::shared_ptr<SharedEmbeddingHolderImpl> shared_embedding_holder,
+    int64_t dimension_out, torch::Device device, torch::Dtype dtype) {
+  card_position_embedding_ = shared_embedding_holder->card_position_embedding_;
   return_to_deck_type_embedding_ = register_module(
       "return_to_deck_type_embedding", torch::nn::Embedding(2, dimension_out));
 

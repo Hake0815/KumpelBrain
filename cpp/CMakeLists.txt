@@ -24,7 +24,12 @@ pybind11_add_module(kumpel_embedding
     network/src/AttackDataEmbedding.cpp
     network/src/CardAmountDataEmbedding.cpp
     network/src/DiscardDataEmbedding.cpp
+    network/src/FilterConditionEmbedding.cpp
+    network/src/FilterEmbedding.cpp
+    network/src/InstructionDataEmbedding.cpp
+    network/src/InstructionEmbedding.cpp
     network/src/PositionalEmbedding.cpp
+    network/src/Nesting.cpp
     network/src/PlayerTargetDataEmbedding.cpp
     network/src/ReturnToDeckTypeDataEmbedding.cpp
     network/src/MultiHeadAttention.cpp

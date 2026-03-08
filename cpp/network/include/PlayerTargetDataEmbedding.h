@@ -7,8 +7,9 @@
 
 struct PlayerTargetDataEmbeddingImpl : torch::nn::Module,
                                        SaveLoadMixin<PlayerTargetDataEmbeddingImpl> {
-  PlayerTargetDataEmbeddingImpl(SharedEmbeddingHolder shared_embedding_holder,
-                                int64_t dimension_out,
+  PlayerTargetDataEmbeddingImpl(
+      std::shared_ptr<SharedEmbeddingHolderImpl> shared_embedding_holder,
+      int64_t dimension_out,
                                 torch::Device device = torch::kCPU,
                                 torch::Dtype dtype = torch::kFloat);
 

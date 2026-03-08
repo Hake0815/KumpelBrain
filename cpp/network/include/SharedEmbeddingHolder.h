@@ -19,8 +19,6 @@ struct SharedEmbeddingHolderImpl : torch::nn::Module,
   torch::nn::Embedding card_position_embedding_{nullptr};
   torch::nn::Embedding player_target_embedding_{nullptr};
   PositionalEmbedding position_embedding_{nullptr};
-  // InstructionDataEmbedding instruction_data_embedding_{nullptr}; // TODO: Add
-  // this
 };
 
 TORCH_MODULE(SharedEmbeddingHolder);

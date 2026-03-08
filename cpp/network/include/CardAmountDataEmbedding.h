@@ -7,8 +7,9 @@
 
 struct CardAmountDataEmbeddingImpl : torch::nn::Module,
                                      SaveLoadMixin<CardAmountDataEmbeddingImpl> {
-  CardAmountDataEmbeddingImpl(SharedEmbeddingHolder shared_embedding_holder,
-                              int64_t dimension_out,
+  CardAmountDataEmbeddingImpl(
+      std::shared_ptr<SharedEmbeddingHolderImpl> shared_embedding_holder,
+      int64_t dimension_out,
                               torch::Device device = torch::kCPU,
                               torch::Dtype dtype = torch::kFloat);
 
