@@ -50,6 +50,7 @@ def main() -> None:
     cpp_shared = kumpel_embedding.SharedEmbeddingHolder(dim)
     py_shared.eval()
     cpp_shared.eval()
+    _with_loaded_weights(py_shared, cpp_shared)
 
     py_attack = card_embedding.AttackDataEmbedding(dim)
     cpp_attack = kumpel_embedding.AttackDataEmbedding(dim)

@@ -1,4 +1,5 @@
 #include "../include/Nesting.h"
+#include "../include/TensorUtils.h"
 
 #include <sstream>
 #include <stdexcept>
@@ -17,29 +18,6 @@ torch::TensorOptions make_options(std::optional<torch::Device> device,
     options = options.dtype(*dtype);
   }
   return options;
-}
-
-torch::Tensor tensor_from_2d_int64(
-    const std::vector<std::vector<int64_t>> &values,
-    std::optional<torch::Device> device, std::optional<torch::Dtype> dtype) {
-  auto options = make_options(device, dtype);
-  if (!options.has_dtype()) {
-    options = options.dtype(torch::kInt64);
-  }
-  if (values.empty()) {
-    return torch::empty({0, 0}, options);
-  }
-  const auto width = static_cast<int64_t>(values.front().size());
-  std::vector<int64_t> flat;
-  flat.reserve(values.size() * static_cast<size_t>(width));
-  for (const auto &row : values) {
-    if (static_cast<int64_t>(row.size()) != width) {
-      throw std::invalid_argument("Inconsistent row size in 2D tensor input");
-    }
-    flat.insert(flat.end(), row.begin(), row.end());
-  }
-  return torch::tensor(flat, options)
-      .view({static_cast<int64_t>(values.size()), width});
 }
 
 std::optional<int64_t> get_operator(const OperatorMap &operators,
@@ -325,10 +303,10 @@ FlattenInstructionsResult flatten_instructions(
 
   const auto options = make_options(device, dtype);
   result.instruction_types = torch::tensor(instruction_types, options);
-  result.instruction_indices =
-      tensor_from_2d_int64(instruction_indices, device, dtype);
+  result.instruction_indices = tensor_utils::tensor_from_2d_int64(
+      instruction_indices, device, dtype);
   result.instruction_data_types = torch::tensor(instruction_data_types, options);
-  result.instruction_data_type_indices = tensor_from_2d_int64(
+  result.instruction_data_type_indices = tensor_utils::tensor_from_2d_int64(
       instruction_data_type_indices, device, dtype);
 
   return result;

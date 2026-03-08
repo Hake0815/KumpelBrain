@@ -30,6 +30,7 @@ pybind11_add_module(kumpel_embedding
     network/src/InstructionEmbedding.cpp
     network/src/PositionalEmbedding.cpp
     network/src/Nesting.cpp
+    network/src/TensorUtils.cpp
     network/src/PlayerTargetDataEmbedding.cpp
     network/src/ReturnToDeckTypeDataEmbedding.cpp
     network/src/MultiHeadAttention.cpp

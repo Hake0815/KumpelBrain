@@ -1,26 +1,8 @@
 #include "../include/FilterEmbedding.h"
+#include "../include/TensorUtils.h"
 #include <algorithm>
 
 using torch::indexing::Slice;
-
-namespace {
-torch::Tensor
-tensor_from_2d_int64(const std::vector<std::vector<int64_t>> &values,
-                     torch::Device device) {
-  auto options = torch::TensorOptions().device(device).dtype(torch::kLong);
-  if (values.empty()) {
-    return torch::empty({0, 0}, options);
-  }
-  const auto width = static_cast<int64_t>(values.front().size());
-  std::vector<int64_t> flat;
-  flat.reserve(values.size() * static_cast<size_t>(width));
-  for (const auto &row : values) {
-    flat.insert(flat.end(), row.begin(), row.end());
-  }
-  return torch::tensor(flat, options)
-      .view({static_cast<int64_t>(values.size()), width});
-}
-} // namespace
 
 FilterEmbeddingImpl::FilterEmbeddingImpl(
     std::shared_ptr<SharedEmbeddingHolderImpl> shared_embedding_holder,
@@ -79,7 +61,8 @@ FilterEmbeddingImpl::forward(const std::vector<nesting::FilterNode> &filter) {
   auto flat = nesting::flatten(traverse_entries);
 
   std::vector<std::vector<int64_t>> flattened = flat.flattened_input;
-  auto flattened_tensor = tensor_from_2d_int64(flattened, device_);
+  auto flattened_tensor =
+      tensor_utils::tensor_from_2d_int64(flattened, device_, torch::kLong);
   auto field_type = flattened_tensor.index({Slice(), 0});
   auto comparison_operator = flattened_tensor.index({Slice(), 1});
   auto value = flattened_tensor.index({Slice(), 2});
