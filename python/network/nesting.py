@@ -247,10 +247,10 @@ def flatten_instructions(
                     (batch_index, instruction_index, data_index)
                 )
                 if data_type == 4:
-                    instruction_data[data_type].append(data["Payload"]["Filter"])
+                    instruction_data[data_type].append(data["FilterData"]["Filter"])
                 else:
                     instruction_data[data_type].append(
-                        vectorize_payload(data["Payload"], data_type, **factory_kwargs)
+                        vectorize_payload(data, data_type, **factory_kwargs)
                     )
                 instruction_data_indices[data_type].append(
                     (batch_index, instruction_index, data_index)
@@ -267,7 +267,7 @@ def flatten_instructions(
 
 
 def vectorize_payload(
-    payload: dict,
+    data: dict,
     data_type: int,
     device: torch.device | None = None,
     dtype: torch.dtype | None = None,
@@ -275,14 +275,18 @@ def vectorize_payload(
     factory_kwargs = {"device": device, "dtype": dtype}
     match data_type:
         case 0:
-            return vectorize_attack_data(payload, **factory_kwargs)
+            return vectorize_attack_data(data["AttackData"], **factory_kwargs)
         case 1:
-            return vectorize_discard_data(payload, **factory_kwargs)
+            return vectorize_discard_data(data["DiscardData"], **factory_kwargs)
         case 2:
-            return vectorize_amount_data(payload, **factory_kwargs)
+            return vectorize_amount_data(data["CardAmountData"], **factory_kwargs)
         case 3:
-            return vectorize_return_to_deck_type_data(payload, **factory_kwargs)
+            return vectorize_return_to_deck_type_data(
+                data["ReturnToDeckTypeData"], **factory_kwargs
+            )
         case 5:
-            return vectorize_player_target_data(payload, **factory_kwargs)
+            return vectorize_player_target_data(
+                data["PlayerTargetData"], **factory_kwargs
+            )
         case _:
             raise ValueError(f"Unknown data type: {data_type}")

@@ -16,7 +16,8 @@ struct ConditionEmbeddingImpl : torch::nn::Module,
       torch::Dtype dtype = torch::kFloat);
 
   torch::Tensor
-  forward(const std::vector<std::vector<nesting::Instruction>> &conditions_batch);
+  forward(const std::vector<std::vector<gamecore::serialization::ProtoBufCondition>>
+              &conditions_batch);
 
 private:
   torch::Tensor compute_data_tensors(
@@ -24,7 +25,8 @@ private:
       const torch::Tensor &instruction_data_types,
       const torch::Tensor &instruction_data_type_indices,
       const std::array<std::vector<torch::Tensor>, 6> &instruction_data,
-      const std::vector<std::vector<nesting::FilterNode>> &filter_data,
+      const std::vector<
+          std::vector<gamecore::serialization::ProtoBufFilter>> &filter_data,
       const std::array<std::vector<std::tuple<int64_t, int64_t, int64_t>>, 6>
           &instruction_data_indices,
       int64_t batch_size);

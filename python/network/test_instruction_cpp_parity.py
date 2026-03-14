@@ -10,6 +10,7 @@ import torch
 import instruction_test_data
 import card_embedding
 import nesting
+import proto_serialization
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "cpp" / "build"))
 import kumpel_embedding
@@ -67,6 +68,7 @@ def test_instruction_data_embedding_parity(
     card_embedding.InstructionDataEmbedding, kumpel_embedding.InstructionDataEmbedding
 ]:
     instructions_batch = instruction_test_data.instructions_batch
+
     batch_size = len(instructions_batch)
 
     py_instruction_data = card_embedding.InstructionDataEmbedding(
@@ -96,11 +98,17 @@ def test_instruction_data_embedding_parity(
         instruction_data_indices,
         batch_size,
     )
+    serialized_filter_data = [
+        proto_serialization.serialize_filter_payload(filter_payload)
+        for filter_payload in instruction_data[4]
+    ]
+    cpp_instruction_data_input = list(instruction_data)
+    cpp_instruction_data_input[4] = serialized_filter_data
     cpp_out = cpp_instruction_data.forward(
         instruction_indices,
         instruction_data_types,
         instruction_data_type_indices,
-        instruction_data,
+        tuple(cpp_instruction_data_input),
         instruction_data_indices,
         batch_size,
     )
@@ -200,6 +208,9 @@ def test_instruction_embedding_parity(
     device: torch.device,
 ) -> tuple[float, float]:
     instructions_batch = instruction_test_data.instructions_batch
+    serialized_instructions_batch = proto_serialization.serialize_instruction_batches(
+        instructions_batch
+    )
 
     py_instruction = card_embedding.InstructionEmbedding(
         py_instruction_data, py_shared, dim, device=device
@@ -210,13 +221,17 @@ def test_instruction_embedding_parity(
     _with_loaded_weights(py_instruction, cpp_instruction)
 
     py_out = _python_instruction_forward_reference(py_instruction, instructions_batch)
-    cpp_out = cpp_instruction.forward(instructions_batch)
+    cpp_out = cpp_instruction.forward(serialized_instructions_batch)
     _assert_close("InstructionEmbedding", py_out, cpp_out)
 
     py_avg_seconds = _benchmark_forward(
-        lambda: _python_instruction_forward_reference(py_instruction, instructions_batch)
+        lambda: _python_instruction_forward_reference(
+            py_instruction, instructions_batch
+        )
     )
-    cpp_avg_seconds = _benchmark_forward(lambda: cpp_instruction.forward(instructions_batch))
+    cpp_avg_seconds = _benchmark_forward(
+        lambda: cpp_instruction.forward(serialized_instructions_batch)
+    )
     return py_avg_seconds, cpp_avg_seconds
 
 

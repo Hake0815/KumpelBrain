@@ -28,11 +28,12 @@ InstructionEmbeddingImpl::InstructionEmbeddingImpl(
 }
 
 torch::Tensor InstructionEmbeddingImpl::forward(
-    const std::vector<std::vector<nesting::Instruction>> &instructions_batch) {
+    const std::vector<std::vector<gamecore::serialization::ProtoBufInstruction>>
+        &instructions_batch) {
   const int64_t batch_size = static_cast<int64_t>(instructions_batch.size());
 
-  auto flat = nesting::flatten_instructions(
-      "InstructionType", instructions_batch, device_, std::nullopt);
+  auto flat = nesting::flatten_instructions(instructions_batch, device_,
+                                            torch::kInt64);
   return forward_flattened(flat.instruction_types, flat.instruction_indices,
                            flat.instruction_data_types,
                            flat.instruction_data_type_indices,
@@ -46,7 +47,8 @@ torch::Tensor InstructionEmbeddingImpl::forward_flattened(
     const torch::Tensor &instruction_data_types,
     const torch::Tensor &instruction_data_type_indices,
     const std::array<std::vector<torch::Tensor>, 6> &instruction_data,
-    const std::vector<std::vector<nesting::FilterNode>> &filter_data,
+    const std::vector<std::vector<gamecore::serialization::ProtoBufFilter>>
+        &filter_data,
     const std::array<std::vector<std::tuple<int64_t, int64_t, int64_t>>, 6>
         &instruction_data_indices,
     int64_t batch_size) {
@@ -89,7 +91,8 @@ torch::Tensor InstructionEmbeddingImpl::compute_data_tensors(
     const torch::Tensor &instruction_data_types,
     const torch::Tensor &instruction_data_type_indices,
     const std::array<std::vector<torch::Tensor>, 6> &instruction_data,
-    const std::vector<std::vector<nesting::FilterNode>> &filter_data,
+    const std::vector<std::vector<gamecore::serialization::ProtoBufFilter>>
+        &filter_data,
     const std::array<std::vector<std::tuple<int64_t, int64_t, int64_t>>, 6>
         &instruction_data_indices,
     int64_t batch_size) {

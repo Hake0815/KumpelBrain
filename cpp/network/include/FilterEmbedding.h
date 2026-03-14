@@ -16,7 +16,8 @@ struct FilterEmbeddingImpl : torch::nn::Module, SaveLoadMixin<FilterEmbeddingImp
                       torch::Device device = torch::kCPU,
                       torch::Dtype dtype = torch::kFloat);
 
-  torch::Tensor forward(const std::vector<nesting::FilterNode> &filter);
+  torch::Tensor
+  forward(const std::vector<gamecore::serialization::ProtoBufFilter> &filter);
 
 private:
   torch::Tensor combine_condition(const std::vector<torch::Tensor> &filter_conditions,

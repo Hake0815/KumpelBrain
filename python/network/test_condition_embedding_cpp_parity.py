@@ -8,6 +8,7 @@ import torch
 import card_embedding
 import instruction_test_data
 import nesting
+import proto_serialization
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "cpp" / "build"))
 import kumpel_embedding
@@ -103,10 +104,7 @@ def _python_condition_forward_reference(
         positioned = py_condition._position_embedding(per_batch.unsqueeze(0)).squeeze(0)
         query = positioned.unsqueeze(0)
         batched_conditions.append(
-            (
-                query
-                + py_condition.conditions_multi_head_attention(query, query, query)
-            )
+            (query + py_condition.conditions_multi_head_attention(query, query, query))
             .sum(1)
             .squeeze(0)
         )
@@ -121,6 +119,9 @@ def main() -> None:
     dim = 32
     device = torch.device("cpu")
     conditions_batch = instruction_test_data.conditions_batch
+    serialized_conditions_batch = proto_serialization.serialize_condition_batches(
+        conditions_batch
+    )
 
     py_shared = card_embedding.SharedEmbeddingHolder(dim, device=device)
     cpp_shared = kumpel_embedding.SharedEmbeddingHolder(dim, device=device)
@@ -145,7 +146,7 @@ def main() -> None:
     _with_loaded_weights(py_condition, cpp_condition)
 
     py_out = _python_condition_forward_reference(py_condition, conditions_batch)
-    cpp_out = cpp_condition.forward(conditions_batch)
+    cpp_out = cpp_condition.forward(serialized_conditions_batch)
     _assert_close("ConditionEmbedding", py_out, cpp_out)
 
     print("ConditionEmbedding parity passed.")

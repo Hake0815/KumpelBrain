@@ -19,6 +19,8 @@
 
 namespace {
 
+namespace serialization = gamecore::serialization;
+
 nesting::GroupIndex py_tuple_to_group_index(const pybind11::tuple &t) {
   nesting::GroupIndex group_index;
   group_index.reserve(t.size());
@@ -37,39 +39,34 @@ group_index_to_py_tuple(const nesting::GroupIndex &group_index) {
   return out;
 }
 
-nesting::FilterNode parse_filter_node(const pybind11::dict &node_dict) {
-  nesting::FilterNode node;
-  node.is_leaf = pybind11::cast<bool>(node_dict["IsLeaf"]);
-  node.logical_operator = pybind11::cast<int64_t>(node_dict["LogicalOperator"]);
-
-  if (node.is_leaf) {
-    auto condition_obj = node_dict["Condition"];
-    if (!condition_obj.is_none()) {
-      auto condition_dict = pybind11::cast<pybind11::dict>(condition_obj);
-      node.condition.field = pybind11::cast<int64_t>(condition_dict["Field"]);
-      node.condition.operation =
-          pybind11::cast<int64_t>(condition_dict["Operation"]);
-      node.condition.value = pybind11::cast<int64_t>(condition_dict["Value"]);
-    }
+template <typename MessageType>
+MessageType parse_serialized_message(const pybind11::handle &input,
+                                     const char *name) {
+  std::string serialized;
+  if (pybind11::isinstance<pybind11::bytes>(input) ||
+      pybind11::isinstance<pybind11::str>(input)) {
+    serialized = pybind11::cast<std::string>(input);
   } else {
-    auto operands_obj = node_dict["Operands"];
-    for (auto operand : pybind11::cast<pybind11::list>(operands_obj)) {
-      node.operands.push_back(parse_filter_node(
-          pybind11::cast<pybind11::dict>(operand.cast<pybind11::object>())));
-    }
+    throw std::invalid_argument(std::string(name) +
+                                " must be serialized protobuf bytes/string");
   }
 
-  return node;
+  MessageType message;
+  if (!message.ParseFromString(serialized)) {
+    throw std::invalid_argument(std::string("Failed to parse serialized ") +
+                                name);
+  }
+  return message;
 }
 
-std::vector<nesting::FilterNode>
-parse_filter_list(const pybind11::iterable &nested_input) {
-  std::vector<nesting::FilterNode> nodes;
-  for (auto item : nested_input) {
-    nodes.push_back(parse_filter_node(
-        pybind11::cast<pybind11::dict>(item.cast<pybind11::object>())));
+std::vector<serialization::ProtoBufFilter>
+parse_serialized_filter_list(const pybind11::iterable &filters) {
+  std::vector<serialization::ProtoBufFilter> parsed;
+  for (auto item : filters) {
+    parsed.push_back(parse_serialized_message<serialization::ProtoBufFilter>(
+        item.cast<pybind11::object>(), "ProtoBufFilter"));
   }
-  return nodes;
+  return parsed;
 }
 
 std::array<std::vector<torch::Tensor>, 6>
@@ -92,25 +89,28 @@ parse_instruction_data_tensors(const pybind11::tuple &instruction_data) {
   return parsed;
 }
 
-std::vector<std::vector<nesting::FilterNode>>
+std::vector<std::vector<serialization::ProtoBufFilter>>
 parse_instruction_filter_data(const pybind11::tuple &instruction_data) {
   auto filters = pybind11::cast<pybind11::list>(instruction_data[4]);
-  std::vector<std::vector<nesting::FilterNode>> nodes;
-  nodes.reserve(filters.size());
+  std::vector<std::vector<serialization::ProtoBufFilter>> parsed_filters;
+  parsed_filters.reserve(filters.size());
   for (auto item : filters) {
     auto obj = item.cast<pybind11::object>();
-    if (pybind11::isinstance<pybind11::dict>(obj)) {
-      nodes.push_back({parse_filter_node(pybind11::cast<pybind11::dict>(obj))});
+    if (pybind11::isinstance<pybind11::bytes>(obj) ||
+        pybind11::isinstance<pybind11::str>(obj)) {
+      parsed_filters.push_back(
+          {parse_serialized_message<serialization::ProtoBufFilter>(
+              obj, "ProtoBufFilter")});
     } else if (pybind11::isinstance<pybind11::list>(obj) ||
                pybind11::isinstance<pybind11::tuple>(obj)) {
-      nodes.push_back(
-          parse_filter_list(pybind11::cast<pybind11::iterable>(obj)));
+      parsed_filters.push_back(
+          parse_serialized_filter_list(pybind11::cast<pybind11::iterable>(obj)));
     } else {
       throw std::invalid_argument(
-          "instruction_data[4] items must be filter dict or list");
+          "instruction_data[4] items must be serialized filter bytes or list");
     }
   }
-  return nodes;
+  return parsed_filters;
 }
 
 std::array<std::vector<std::tuple<int64_t, int64_t, int64_t>>, 6>
@@ -137,88 +137,34 @@ parse_instruction_data_indices(
   return parsed;
 }
 
-nesting::PayloadVariant parse_payload_variant(int64_t data_type,
-                                              const pybind11::dict &payload) {
-  switch (data_type) {
-  case 0:
-    return nesting::AttackData{pybind11::cast<int64_t>(payload["AttackTarget"]),
-                               pybind11::cast<int64_t>(payload["Damage"])};
-  case 1:
-    return nesting::DiscardData{
-        pybind11::cast<int64_t>(payload["TargetSource"])};
-  case 2: {
-    auto amount = pybind11::cast<pybind11::dict>(payload["Amount"]);
-    return nesting::AmountData{
-        pybind11::cast<int64_t>(amount["Min"]),
-        pybind11::cast<int64_t>(amount["Max"]),
-        pybind11::cast<int64_t>(payload["FromPosition"])};
-  }
-  case 3:
-    return nesting::ReturnToDeckTypeData{
-        pybind11::cast<int64_t>(payload["ReturnToDeckType"]),
-        pybind11::cast<int64_t>(payload["FromPosition"])};
-  case 5:
-    return nesting::PlayerTargetData{
-        pybind11::cast<int64_t>(payload["PlayerTarget"])};
-  default:
-    throw std::invalid_argument("Unknown InstructionDataType payload");
-  }
-}
-
-nesting::InstructionData
-parse_instruction_data_entry(const pybind11::dict &entry) {
-  nesting::InstructionData data;
-  data.instruction_data_type =
-      pybind11::cast<int64_t>(entry["InstructionDataType"]);
-  auto payload = pybind11::cast<pybind11::dict>(entry["Payload"]);
-
-  if (data.instruction_data_type == 4) {
-    auto filter_obj = payload["Filter"].cast<pybind11::object>();
-    if (pybind11::isinstance<pybind11::dict>(filter_obj)) {
-      data.filter_payload = std::vector<nesting::FilterNode>{
-          parse_filter_node(pybind11::cast<pybind11::dict>(filter_obj))};
-    } else {
-      data.filter_payload =
-          parse_filter_list(pybind11::cast<pybind11::iterable>(filter_obj));
-    }
-  } else {
-    data.payload = parse_payload_variant(data.instruction_data_type, payload);
-  }
-
-  return data;
-}
-
-nesting::Instruction parse_instruction(const pybind11::dict &instruction_dict) {
-  nesting::Instruction instruction;
-  if (instruction_dict.contains("InstructionType")) {
-    instruction.instruction_type =
-        pybind11::cast<int64_t>(instruction_dict["InstructionType"]);
-  }
-  if (instruction_dict.contains("ConditionType")) {
-    instruction.condition_type =
-        pybind11::cast<int64_t>(instruction_dict["ConditionType"]);
-  }
-
-  auto data_list = pybind11::cast<pybind11::list>(instruction_dict["Data"]);
-  instruction.data.reserve(data_list.size());
-  for (auto item : data_list) {
-    instruction.data.push_back(parse_instruction_data_entry(
-        pybind11::cast<pybind11::dict>(item.cast<pybind11::object>())));
-  }
-  return instruction;
-}
-
-std::vector<std::vector<nesting::Instruction>>
-parse_instructions_batch(const pybind11::iterable &instructions_batch) {
-  std::vector<std::vector<nesting::Instruction>> parsed;
+std::vector<std::vector<serialization::ProtoBufInstruction>>
+parse_instruction_batch_serialized(const pybind11::iterable &instructions_batch) {
+  std::vector<std::vector<serialization::ProtoBufInstruction>> parsed;
   for (auto batch_item : instructions_batch) {
     auto batch_list =
         pybind11::cast<pybind11::list>(batch_item.cast<pybind11::object>());
-    std::vector<nesting::Instruction> batch;
+    std::vector<serialization::ProtoBufInstruction> batch;
     batch.reserve(batch_list.size());
     for (auto instruction_item : batch_list) {
-      batch.push_back(parse_instruction(pybind11::cast<pybind11::dict>(
-          instruction_item.cast<pybind11::object>())));
+      batch.push_back(parse_serialized_message<serialization::ProtoBufInstruction>(
+          instruction_item.cast<pybind11::object>(), "ProtoBufInstruction"));
+    }
+    parsed.push_back(std::move(batch));
+  }
+  return parsed;
+}
+
+std::vector<std::vector<serialization::ProtoBufCondition>>
+parse_condition_batch_serialized(const pybind11::iterable &conditions_batch) {
+  std::vector<std::vector<serialization::ProtoBufCondition>> parsed;
+  for (auto batch_item : conditions_batch) {
+    auto batch_list =
+        pybind11::cast<pybind11::list>(batch_item.cast<pybind11::object>());
+    std::vector<serialization::ProtoBufCondition> batch;
+    batch.reserve(batch_list.size());
+    for (auto condition_item : batch_list) {
+      batch.push_back(parse_serialized_message<serialization::ProtoBufCondition>(
+          condition_item.cast<pybind11::object>(), "ProtoBufCondition"));
     }
     parsed.push_back(std::move(batch));
   }
@@ -351,7 +297,7 @@ PYBIND11_MODULE(kumpel_embedding, m) {
            pybind11::arg("dtype") = torch::Dtype(torch::kFloat))
       .def("forward",
            [](FilterEmbeddingImpl &self, const pybind11::iterable &filter) {
-             return self.forward(parse_filter_list(filter));
+             return self.forward(parse_serialized_filter_list(filter));
            })
       .def("save_weights", &FilterEmbeddingImpl::save_weights)
       .def("load_weights", &FilterEmbeddingImpl::load_weights);
@@ -397,105 +343,33 @@ PYBIND11_MODULE(kumpel_embedding, m) {
       .def("forward",
            [](InstructionEmbeddingImpl &self,
               const pybind11::iterable &instructions_batch) {
-             auto nesting_module = pybind11::module_::import("nesting");
-             auto flattened = nesting_module.attr("flatten_instructions")(
-                 "InstructionType", instructions_batch);
-             auto flat_tuple = pybind11::cast<pybind11::tuple>(flattened);
-             if (flat_tuple.size() != 6) {
-               throw std::invalid_argument(
-                   "nesting.flatten_instructions must return 6-tuple");
-             }
-
-             auto instruction_types =
-                 pybind11::cast<torch::Tensor>(flat_tuple[0]);
-             auto instruction_indices =
-                 pybind11::cast<torch::Tensor>(flat_tuple[1]);
-             auto instruction_data_types =
-                 pybind11::cast<torch::Tensor>(flat_tuple[2]);
-             auto instruction_data_type_indices =
-                 pybind11::cast<torch::Tensor>(flat_tuple[3]);
-             auto instruction_data =
-                 pybind11::cast<pybind11::tuple>(flat_tuple[4]);
-             auto instruction_data_indices =
-                 pybind11::cast<pybind11::tuple>(flat_tuple[5]);
-
-             auto parsed_data =
-                 parse_instruction_data_tensors(instruction_data);
-             auto filter_data = parse_instruction_filter_data(instruction_data);
-             auto parsed_indices =
-                 parse_instruction_data_indices(instruction_data_indices);
-
-             const int64_t batch_size =
-                 static_cast<int64_t>(pybind11::len(instructions_batch));
-
-             return self.forward_flattened(
-                 instruction_types, instruction_indices, instruction_data_types,
-                 instruction_data_type_indices, parsed_data, filter_data,
-                 parsed_indices, batch_size);
+             auto parsed = parse_instruction_batch_serialized(instructions_batch);
+             return self.forward(parsed);
            })
       .def("compute_data_tensors",
            [](InstructionEmbeddingImpl &self,
               const pybind11::iterable &instructions_batch) {
-             auto nesting_module = pybind11::module_::import("nesting");
-             auto flattened = nesting_module.attr("flatten_instructions")(
-                 "InstructionType", instructions_batch);
-             auto flat_tuple = pybind11::cast<pybind11::tuple>(flattened);
-             auto instruction_indices =
-                 pybind11::cast<torch::Tensor>(flat_tuple[1]);
-             auto instruction_data_types =
-                 pybind11::cast<torch::Tensor>(flat_tuple[2]);
-             auto instruction_data_type_indices =
-                 pybind11::cast<torch::Tensor>(flat_tuple[3]);
-             auto instruction_data =
-                 pybind11::cast<pybind11::tuple>(flat_tuple[4]);
-             auto instruction_data_indices =
-                 pybind11::cast<pybind11::tuple>(flat_tuple[5]);
-
-             auto parsed_data =
-                 parse_instruction_data_tensors(instruction_data);
-             auto filter_data = parse_instruction_filter_data(instruction_data);
-             auto parsed_indices =
-                 parse_instruction_data_indices(instruction_data_indices);
-             const int64_t batch_size =
-                 static_cast<int64_t>(pybind11::len(instructions_batch));
+             auto parsed = parse_instruction_batch_serialized(instructions_batch);
+             const int64_t batch_size = static_cast<int64_t>(parsed.size());
+             auto flat = nesting::flatten_instructions(parsed);
              return self.compute_data_tensors(
-                 instruction_indices, instruction_data_types,
-                 instruction_data_type_indices, parsed_data, filter_data,
-                 parsed_indices, batch_size);
+                 flat.instruction_indices, flat.instruction_data_types,
+                 flat.instruction_data_type_indices, flat.instruction_data,
+                 flat.filter_data, flat.instruction_data_indices, batch_size);
            })
       .def("compute_instruction_embeddings",
            [](InstructionEmbeddingImpl &self,
               const pybind11::iterable &instructions_batch) {
-             auto nesting_module = pybind11::module_::import("nesting");
-             auto flattened = nesting_module.attr("flatten_instructions")(
-                 "InstructionType", instructions_batch);
-             auto flat_tuple = pybind11::cast<pybind11::tuple>(flattened);
-             auto instruction_types =
-                 pybind11::cast<torch::Tensor>(flat_tuple[0]);
-             auto instruction_indices =
-                 pybind11::cast<torch::Tensor>(flat_tuple[1]);
-             auto instruction_data_types =
-                 pybind11::cast<torch::Tensor>(flat_tuple[2]);
-             auto instruction_data_type_indices =
-                 pybind11::cast<torch::Tensor>(flat_tuple[3]);
-             auto instruction_data =
-                 pybind11::cast<pybind11::tuple>(flat_tuple[4]);
-             auto instruction_data_indices =
-                 pybind11::cast<pybind11::tuple>(flat_tuple[5]);
-             auto parsed_data =
-                 parse_instruction_data_tensors(instruction_data);
-             auto filter_data = parse_instruction_filter_data(instruction_data);
-             auto parsed_indices =
-                 parse_instruction_data_indices(instruction_data_indices);
-             const int64_t batch_size =
-                 static_cast<int64_t>(pybind11::len(instructions_batch));
+             auto parsed = parse_instruction_batch_serialized(instructions_batch);
+             const int64_t batch_size = static_cast<int64_t>(parsed.size());
+             auto flat = nesting::flatten_instructions(parsed);
              auto data_tensors = self.compute_data_tensors(
-                 instruction_indices, instruction_data_types,
-                 instruction_data_type_indices, parsed_data, filter_data,
-                 parsed_indices, batch_size);
+                 flat.instruction_indices, flat.instruction_data_types,
+                 flat.instruction_data_type_indices, flat.instruction_data,
+                 flat.filter_data, flat.instruction_data_indices, batch_size);
              return self.compute_instruction_embeddings(
-                 instruction_types, instruction_indices,
-                 instruction_data_type_indices, data_tensors);
+                 flat.instruction_types, flat.instruction_indices,
+                 flat.instruction_data_type_indices, data_tensors);
            })
       .def("save_weights", &InstructionEmbeddingImpl::save_weights)
       .def("load_weights", &InstructionEmbeddingImpl::load_weights);
@@ -513,13 +387,13 @@ PYBIND11_MODULE(kumpel_embedding, m) {
       .def("forward",
            [](ConditionEmbeddingImpl &self,
               const pybind11::iterable &conditions_batch) {
-             return self.forward(parse_instructions_batch(conditions_batch));
+             return self.forward(parse_condition_batch_serialized(conditions_batch));
            })
       .def("save_weights", &ConditionEmbeddingImpl::save_weights)
       .def("load_weights", &ConditionEmbeddingImpl::load_weights);
 
   m.def("nesting_traverse_filter", [](const pybind11::iterable &nested_input) {
-    auto nodes = parse_filter_list(nested_input);
+    auto nodes = parse_serialized_filter_list(nested_input);
     auto entries = nesting::traverse_filter(nodes);
     pybind11::list out;
     for (const auto &entry : entries) {
@@ -530,7 +404,7 @@ PYBIND11_MODULE(kumpel_embedding, m) {
   });
 
   m.def("nesting_flatten_filter", [](const pybind11::iterable &nested_input) {
-    auto nodes = parse_filter_list(nested_input);
+    auto nodes = parse_serialized_filter_list(nested_input);
     auto entries = nesting::traverse_filter(nodes);
     auto result = nesting::flatten(entries);
 

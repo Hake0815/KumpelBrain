@@ -51,7 +51,8 @@ torch::Tensor FilterEmbeddingImpl::combine_condition(
 }
 
 torch::Tensor
-FilterEmbeddingImpl::forward(const std::vector<nesting::FilterNode> &filter) {
+FilterEmbeddingImpl::forward(
+    const std::vector<gamecore::serialization::ProtoBufFilter> &filter) {
   if (filter.empty()) {
     return torch::zeros({dimension_out_},
                         torch::TensorOptions().device(device_).dtype(dtype_));
