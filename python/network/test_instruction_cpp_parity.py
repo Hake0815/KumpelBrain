@@ -2,6 +2,8 @@ import os
 from pathlib import Path
 import sys
 import tempfile
+import time
+from typing import Callable
 
 import torch
 
@@ -41,6 +43,19 @@ def _set_constant_parameters(model, value: float = 0.01) -> None:
     with torch.no_grad():
         for parameter in model.parameters():
             parameter.fill_(value)
+
+
+def _benchmark_forward(
+    forward_fn: Callable[[], torch.Tensor], warmup_runs: int = 20, runs: int = 200
+) -> float:
+    for _ in range(warmup_runs):
+        forward_fn()
+
+    start = time.perf_counter()
+    for _ in range(runs):
+        forward_fn()
+    total_seconds = time.perf_counter() - start
+    return total_seconds / runs
 
 
 def test_instruction_data_embedding_parity(
@@ -183,7 +198,7 @@ def test_instruction_embedding_parity(
     cpp_shared: kumpel_embedding.SharedEmbeddingHolder,
     dim: int,
     device: torch.device,
-) -> None:
+) -> tuple[float, float]:
     instructions_batch = instruction_test_data.instructions_batch
 
     py_instruction = card_embedding.InstructionEmbedding(
@@ -197,6 +212,12 @@ def test_instruction_embedding_parity(
     py_out = _python_instruction_forward_reference(py_instruction, instructions_batch)
     cpp_out = cpp_instruction.forward(instructions_batch)
     _assert_close("InstructionEmbedding", py_out, cpp_out)
+
+    py_avg_seconds = _benchmark_forward(
+        lambda: _python_instruction_forward_reference(py_instruction, instructions_batch)
+    )
+    cpp_avg_seconds = _benchmark_forward(lambda: cpp_instruction.forward(instructions_batch))
+    return py_avg_seconds, cpp_avg_seconds
 
 
 def main() -> None:
@@ -214,8 +235,15 @@ def main() -> None:
     py_instrction_data, cpp_instrction_data = test_instruction_data_embedding_parity(
         py_shared, cpp_shared, dim, device
     )
-    test_instruction_embedding_parity(
+    py_avg_seconds, cpp_avg_seconds = test_instruction_embedding_parity(
         py_instrction_data, cpp_instrction_data, py_shared, cpp_shared, dim, device
+    )
+    speedup = py_avg_seconds / cpp_avg_seconds if cpp_avg_seconds > 0 else float("inf")
+    print(
+        "InstructionEmbedding timing (avg per forward): "
+        f"Python={py_avg_seconds * 1e3:.3f} ms, "
+        f"C++={cpp_avg_seconds * 1e3:.3f} ms, "
+        f"speedup={speedup:.2f}x"
     )
     print("Instruction parity passed.")
 
