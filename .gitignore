@@ -212,3 +212,6 @@ game_action_logs/*
 game_application_logs/*
 game_state_logs/*
 clear_log_dirs.zsh
+.vscode/settings.json
+.vscode/launch.json
+.vscode/tasks.json

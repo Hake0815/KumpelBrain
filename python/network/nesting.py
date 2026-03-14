@@ -1,3 +1,4 @@
+from typing import Callable
 import torch
 
 
@@ -17,7 +18,7 @@ def traverse_filter(nested_input, path_list=None):
         path_list = []
 
     for i, node in enumerate(nested_input):
-        path_list.append(str(i))
+        path_list.append(i)
         if node["IsLeaf"]:
             yield (
                 [
@@ -48,51 +49,8 @@ def traverse_filter_node(nested_input, path_list, operator):
                 operator,
             )
         else:
-            path_list.append(str(i))
-            yield from traverse_filter_node(
-                node["Operands"], path_list, node["LogicalOperator"]
-            )
-            path_list.pop()  # Backtrack
-
-
-def traverse_filter_v2(nested_input, path_list=None):
-    if path_list is None:
-        path_list = []
-
-    for i, node in enumerate(nested_input):
-        path_list.append(i)
-        if node["IsLeaf"]:
-            yield (
-                [
-                    node["Condition"]["Field"],
-                    node["Condition"]["Operation"],
-                    node["Condition"]["Value"],
-                ],
-                tuple(path_list),
-                0,
-            )
-        else:
-            yield from traverse_filter_node_v2(
-                node["Operands"], path_list, node["LogicalOperator"]
-            )
-        path_list.pop()  # Backtrack
-
-
-def traverse_filter_node_v2(nested_input, path_list, operator):
-    for i, node in enumerate(nested_input):
-        if node["IsLeaf"]:
-            yield (
-                [
-                    node["Condition"]["Field"],
-                    node["Condition"]["Operation"],
-                    node["Condition"]["Value"],
-                ],
-                tuple(path_list),
-                operator,
-            )
-        else:
             path_list.append(i)
-            yield from traverse_filter_node_v2(
+            yield from traverse_filter_node(
                 node["Operands"], path_list, node["LogicalOperator"]
             )
             path_list.pop()  # Backtrack
@@ -108,7 +66,7 @@ def add_to_stack(
     current_groups,
     group_index,
     operators: dict,
-    combine_function: callable,
+    combine_function: Callable,
 ):
     if current_groups and group_index == current_groups[-1]:
         current_combination[-1].append(element)
@@ -132,7 +90,7 @@ def break_down_stack(
     current_groups,
     group_index,
     operators: dict,
-    combine_function: callable,
+    combine_function: Callable,
 ):
     while current_groups and not is_prefix(current_groups[-1], group_index):
         current_group = current_groups.pop()
@@ -152,45 +110,10 @@ def break_down_stack(
 
 def reduce(
     flattened_input: torch.Tensor,
-    groups: list[tuple[str]],
-    operators: dict,
-    combine_function: callable,
-) -> torch.Tensor:
-
-    current_combination = []
-    current_groups = []
-    current_batch_index = 0
-
-    for i in range(len(groups)):
-        if not current_groups:
-            current_groups.append((str(current_batch_index),))
-            current_batch_index += 1
-            current_combination.append([])
-
-        group_index = groups[i]
-        add_to_stack(
-            flattened_input[i],
-            current_combination,
-            current_groups,
-            group_index,
-            operators,
-            combine_function,
-        )
-
-    break_down_stack(
-        current_combination, current_groups, (), operators, combine_function
-    )
-    if not current_combination:
-        return []
-    return current_combination.pop()
-
-
-def reduce_v2(
-    flattened_input: torch.Tensor,
     groups: list[tuple[int]],
     operators: dict,
-    combine_function: callable,
-) -> torch.Tensor:
+    combine_function: Callable,
+) -> list[torch.Tensor]:
 
     current_combination = []
     current_groups = []
@@ -221,7 +144,9 @@ def reduce_v2(
 
 
 def vectorize_amount_data(
-    amount_data: dict, device: torch.device = None, dtype: torch.dtype = None
+    amount_data: dict,
+    device: torch.device | None = None,
+    dtype: torch.dtype | None = None,
 ) -> torch.Tensor:
     factory_kwargs = {"device": device, "dtype": dtype}
     return torch.tensor(
@@ -235,7 +160,9 @@ def vectorize_amount_data(
 
 
 def vectorize_attack_data(
-    attack_data: dict, device: torch.device = None, dtype: torch.dtype = None
+    attack_data: dict,
+    device: torch.device | None = None,
+    dtype: torch.dtype | None = None,
 ) -> torch.Tensor:
     factory_kwargs = {"device": device, "dtype": dtype}
     return torch.tensor(
@@ -244,7 +171,9 @@ def vectorize_attack_data(
 
 
 def vectorize_discard_data(
-    discard_data: dict, device: torch.device = None, dtype: torch.dtype = None
+    discard_data: dict,
+    device: torch.device | None = None,
+    dtype: torch.dtype | None = None,
 ) -> torch.Tensor:
     factory_kwargs = {"device": device, "dtype": dtype}
     return torch.tensor([discard_data["TargetSource"]], **factory_kwargs)
@@ -252,8 +181,8 @@ def vectorize_discard_data(
 
 def vectorize_return_to_deck_type_data(
     return_to_deck_type_data: dict,
-    device: torch.device = None,
-    dtype: torch.dtype = None,
+    device: torch.device | None = None,
+    dtype: torch.dtype | None = None,
 ) -> torch.Tensor:
     factory_kwargs = {"device": device, "dtype": dtype}
     return torch.tensor(
@@ -266,7 +195,9 @@ def vectorize_return_to_deck_type_data(
 
 
 def vectorize_player_target_data(
-    player_target_data: dict, device: torch.device = None, dtype: torch.dtype = None
+    player_target_data: dict,
+    device: torch.device | None = None,
+    dtype: torch.dtype | None = None,
 ) -> torch.Tensor:
     factory_kwargs = {"device": device, "dtype": dtype}
     return torch.tensor([player_target_data["PlayerTarget"]], **factory_kwargs)
@@ -275,10 +206,15 @@ def vectorize_player_target_data(
 def flatten_instructions(
     type_key: str,
     instructions: list[list[dict]],
-    device: torch.device = None,
-    dtype: torch.dtype = None,
+    device: torch.device | None = None,
+    dtype: torch.dtype | None = None,
 ) -> tuple[
-    torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, list[dict], torch.Tensor
+    torch.Tensor,
+    torch.Tensor,
+    torch.Tensor,
+    torch.Tensor,
+    tuple[list, list, list, list, list, list],
+    tuple[list, list, list, list, list, list],
 ]:
     """
     Flatten the instructions
@@ -333,8 +269,8 @@ def flatten_instructions(
 def vectorize_payload(
     payload: dict,
     data_type: int,
-    device: torch.device = None,
-    dtype: torch.dtype = None,
+    device: torch.device | None = None,
+    dtype: torch.dtype | None = None,
 ) -> torch.Tensor:
     factory_kwargs = {"device": device, "dtype": dtype}
     match data_type:

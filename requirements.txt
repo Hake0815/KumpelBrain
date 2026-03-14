@@ -1,0 +1,8 @@
+tqdm
+pythonnet
+torch
+setuptools
+numpy
+pybind11
+pybind11_stubgen
+# sympy
