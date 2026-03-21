@@ -59,12 +59,64 @@ MessageType parse_serialized_message(const pybind11::handle &input,
   return message;
 }
 
+serialization::ProtoBufFilter parse_filter_object(const pybind11::handle &input);
+
+serialization::ProtoBufFilterCondition
+parse_filter_condition_dict(const pybind11::dict &condition_dict) {
+  serialization::ProtoBufFilterCondition condition;
+  condition.set_field(static_cast<serialization::ProtoBufFilterType>(
+      pybind11::cast<int64_t>(condition_dict["Field"])));
+  condition.set_operation(static_cast<serialization::ProtoBufFilterOperation>(
+      pybind11::cast<int64_t>(condition_dict["Operation"])));
+  condition.set_value(pybind11::cast<int64_t>(condition_dict["Value"]));
+  return condition;
+}
+
+serialization::ProtoBufFilter parse_filter_dict(const pybind11::dict &filter_dict) {
+  serialization::ProtoBufFilter filter;
+  filter.set_logical_operator(
+      static_cast<serialization::ProtoBufFilterLogicalOperator>(
+          pybind11::cast<int64_t>(filter_dict["LogicalOperator"])));
+  filter.set_is_leaf(pybind11::cast<bool>(filter_dict["IsLeaf"]));
+
+  pybind11::object condition_handle = pybind11::none();
+  if (filter_dict.contains("Condition")) {
+    condition_handle = filter_dict["Condition"].cast<pybind11::object>();
+  }
+  if (!condition_handle.is_none()) {
+    *filter.mutable_condition() = parse_filter_condition_dict(
+        pybind11::cast<pybind11::dict>(condition_handle));
+  }
+
+  if (filter_dict.contains("Operands")) {
+    auto operands = pybind11::cast<pybind11::iterable>(filter_dict["Operands"]);
+    for (auto operand : operands) {
+      *filter.add_operands() =
+          parse_filter_object(operand.cast<pybind11::object>());
+    }
+  }
+
+  return filter;
+}
+
+serialization::ProtoBufFilter parse_filter_object(const pybind11::handle &input) {
+  if (pybind11::isinstance<pybind11::bytes>(input) ||
+      pybind11::isinstance<pybind11::str>(input)) {
+    return parse_serialized_message<serialization::ProtoBufFilter>(
+        input, "ProtoBufFilter");
+  }
+  if (pybind11::isinstance<pybind11::dict>(input)) {
+    return parse_filter_dict(pybind11::cast<pybind11::dict>(input));
+  }
+  throw std::invalid_argument(
+      "ProtoBufFilter must be serialized protobuf bytes/string or dict");
+}
+
 std::vector<serialization::ProtoBufFilter>
-parse_serialized_filter_list(const pybind11::iterable &filters) {
+parse_filter_list(const pybind11::iterable &filters) {
   std::vector<serialization::ProtoBufFilter> parsed;
   for (auto item : filters) {
-    parsed.push_back(parse_serialized_message<serialization::ProtoBufFilter>(
-        item.cast<pybind11::object>(), "ProtoBufFilter"));
+    parsed.push_back(parse_filter_object(item.cast<pybind11::object>()));
   }
   return parsed;
 }
@@ -104,10 +156,12 @@ parse_instruction_filter_data(const pybind11::tuple &instruction_data) {
     } else if (pybind11::isinstance<pybind11::list>(obj) ||
                pybind11::isinstance<pybind11::tuple>(obj)) {
       parsed_filters.push_back(
-          parse_serialized_filter_list(pybind11::cast<pybind11::iterable>(obj)));
+          parse_filter_list(pybind11::cast<pybind11::iterable>(obj)));
+    } else if (pybind11::isinstance<pybind11::dict>(obj)) {
+      parsed_filters.push_back({parse_filter_object(obj)});
     } else {
       throw std::invalid_argument(
-          "instruction_data[4] items must be serialized filter bytes or list");
+          "instruction_data[4] items must be serialized filter bytes, dict, or list");
     }
   }
   return parsed_filters;
@@ -297,7 +351,7 @@ PYBIND11_MODULE(kumpel_embedding, m) {
            pybind11::arg("dtype") = torch::Dtype(torch::kFloat))
       .def("forward",
            [](FilterEmbeddingImpl &self, const pybind11::iterable &filter) {
-             return self.forward(parse_serialized_filter_list(filter));
+             return self.forward(parse_filter_list(filter));
            })
       .def("save_weights", &FilterEmbeddingImpl::save_weights)
       .def("load_weights", &FilterEmbeddingImpl::load_weights);
@@ -393,7 +447,7 @@ PYBIND11_MODULE(kumpel_embedding, m) {
       .def("load_weights", &ConditionEmbeddingImpl::load_weights);
 
   m.def("nesting_traverse_filter", [](const pybind11::iterable &nested_input) {
-    auto nodes = parse_serialized_filter_list(nested_input);
+    auto nodes = parse_filter_list(nested_input);
     auto entries = nesting::traverse_filter(nodes);
     pybind11::list out;
     for (const auto &entry : entries) {
@@ -404,7 +458,7 @@ PYBIND11_MODULE(kumpel_embedding, m) {
   });
 
   m.def("nesting_flatten_filter", [](const pybind11::iterable &nested_input) {
-    auto nodes = parse_serialized_filter_list(nested_input);
+    auto nodes = parse_filter_list(nested_input);
     auto entries = nesting::traverse_filter(nodes);
     auto result = nesting::flatten(entries);
 
@@ -441,8 +495,8 @@ PYBIND11_MODULE(kumpel_embedding, m) {
     nesting::OperatorMap cpp_operators;
     for (auto item : operators) {
       auto key_tuple = pybind11::cast<pybind11::tuple>(item.first);
-      auto key = nesting::group_index_key(py_tuple_to_group_index(key_tuple));
-      cpp_operators[key] = pybind11::cast<int64_t>(item.second);
+      cpp_operators[py_tuple_to_group_index(key_tuple)] =
+          pybind11::cast<int64_t>(item.second);
     }
 
     std::vector<torch::Tensor> cpp_flattened;

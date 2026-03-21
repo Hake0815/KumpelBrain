@@ -14,8 +14,35 @@
 
 namespace nesting {
 
+using ProtoBufAttackInstructionData =
+    gamecore::serialization::ProtoBufAttackInstructionData;
+using ProtoBufCardAmountInstructionData =
+    gamecore::serialization::ProtoBufCardAmountInstructionData;
+using ProtoBufCondition = gamecore::serialization::ProtoBufCondition;
+using ProtoBufDiscardInstructionData =
+    gamecore::serialization::ProtoBufDiscardInstructionData;
+using ProtoBufFilter = gamecore::serialization::ProtoBufFilter;
+using ProtoBufInstruction = gamecore::serialization::ProtoBufInstruction;
+using ProtoBufInstructionData = gamecore::serialization::ProtoBufInstructionData;
+using ProtoBufPlayerTargetInstructionData =
+    gamecore::serialization::ProtoBufPlayerTargetInstructionData;
+using ProtoBufReturnToDeckTypeInstructionData =
+    gamecore::serialization::ProtoBufReturnToDeckTypeInstructionData;
+
 using GroupIndex = std::vector<int64_t>;
-using OperatorMap = std::unordered_map<std::string, int64_t>;
+
+struct GroupIndexHash {
+  size_t operator()(const GroupIndex &group_index) const noexcept {
+    size_t seed = 0;
+    for (const auto value : group_index) {
+      seed ^= std::hash<int64_t>{}(value) + 0x9e3779b97f4a7c15ULL + (seed << 6) +
+              (seed >> 2);
+    }
+    return seed;
+  }
+};
+
+using OperatorMap = std::unordered_map<GroupIndex, int64_t, GroupIndexHash>;
 
 struct TraverseEntry {
   std::vector<int64_t> value{};
@@ -37,14 +64,14 @@ struct FlattenInstructionsResult {
   std::array<std::vector<torch::Tensor>, 6> instruction_data{};
   std::array<std::vector<std::tuple<int64_t, int64_t, int64_t>>, 6>
       instruction_data_indices{};
-  std::vector<std::vector<gamecore::serialization::ProtoBufFilter>> filter_data{};
+  std::vector<std::vector<ProtoBufFilter>> filter_data{};
 };
 
 std::string group_index_key(const GroupIndex &group_index);
 bool is_prefix(const GroupIndex &prefix, const GroupIndex &test);
 
 std::vector<TraverseEntry> traverse_filter(
-    const std::vector<gamecore::serialization::ProtoBufFilter> &nested_input);
+    const std::vector<ProtoBufFilter> &nested_input);
 FlattenResult flatten(const std::vector<TraverseEntry> &entries);
 
 std::vector<torch::Tensor> reduce(
@@ -54,43 +81,38 @@ std::vector<torch::Tensor> reduce(
                                       std::optional<int64_t>)> &combine_function);
 
 torch::Tensor vectorize_amount_data(
-    const gamecore::serialization::ProtoBufCardAmountInstructionData
-        &amount_data,
+    const ProtoBufCardAmountInstructionData &amount_data,
     std::optional<torch::Device> device = std::nullopt,
     std::optional<torch::Dtype> dtype = std::nullopt);
 torch::Tensor vectorize_attack_data(
-    const gamecore::serialization::ProtoBufAttackInstructionData &attack_data,
+    const ProtoBufAttackInstructionData &attack_data,
     std::optional<torch::Device> device = std::nullopt,
     std::optional<torch::Dtype> dtype = std::nullopt);
 torch::Tensor vectorize_discard_data(
-    const gamecore::serialization::ProtoBufDiscardInstructionData &discard_data,
+    const ProtoBufDiscardInstructionData &discard_data,
     std::optional<torch::Device> device = std::nullopt,
     std::optional<torch::Dtype> dtype = std::nullopt);
 torch::Tensor vectorize_return_to_deck_type_data(
-    const gamecore::serialization::ProtoBufReturnToDeckTypeInstructionData
-        &return_to_deck_type_data,
+    const ProtoBufReturnToDeckTypeInstructionData &return_to_deck_type_data,
     std::optional<torch::Device> device = std::nullopt,
     std::optional<torch::Dtype> dtype = std::nullopt);
 torch::Tensor vectorize_player_target_data(
-    const gamecore::serialization::ProtoBufPlayerTargetInstructionData
-        &player_target_data,
+    const ProtoBufPlayerTargetInstructionData &player_target_data,
     std::optional<torch::Device> device = std::nullopt,
     std::optional<torch::Dtype> dtype = std::nullopt);
 
 torch::Tensor vectorize_payload(
-    const gamecore::serialization::ProtoBufInstructionData &data,
+    const ProtoBufInstructionData &data,
     std::optional<torch::Device> device = std::nullopt,
     std::optional<torch::Dtype> dtype = std::nullopt);
 
 FlattenInstructionsResult flatten_instructions(
-    const std::vector<std::vector<gamecore::serialization::ProtoBufInstruction>>
-        &instructions,
+    const std::vector<std::vector<ProtoBufInstruction>> &instructions,
     std::optional<torch::Device> device = std::nullopt,
     std::optional<torch::Dtype> dtype = std::nullopt);
 
 FlattenInstructionsResult flatten_conditions(
-    const std::vector<std::vector<gamecore::serialization::ProtoBufCondition>>
-        &conditions,
+    const std::vector<std::vector<ProtoBufCondition>> &conditions,
     std::optional<torch::Device> device = std::nullopt,
     std::optional<torch::Dtype> dtype = std::nullopt);
 

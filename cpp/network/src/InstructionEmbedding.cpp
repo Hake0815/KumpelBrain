@@ -1,6 +1,109 @@
 #include "../include/InstructionEmbedding.h"
+#include "../include/Nesting.h"
+#include "../include/TensorUtils.h"
+#include <algorithm>
+
+namespace serialization = gamecore::serialization;
 
 using torch::indexing::Slice;
+
+namespace {
+
+torch::Tensor masked_self_attention_reduce(
+    MultiHeadAttention &multi_head_attention, const torch::Tensor &padded_sequences,
+    const torch::Tensor &valid_token_mask) {
+  if (padded_sequences.size(1) == 0) {
+    return torch::zeros(
+        {padded_sequences.size(0), padded_sequences.size(2)},
+        torch::TensorOptions()
+            .device(padded_sequences.device())
+            .dtype(padded_sequences.dtype()));
+  }
+
+  auto attention_mask = tensor_utils::make_padding_attention_mask(
+      valid_token_mask, padded_sequences.scalar_type());
+  auto attended = padded_sequences + multi_head_attention(
+                                       padded_sequences, padded_sequences,
+                                       padded_sequences, attention_mask);
+  return tensor_utils::masked_sequence_sum(attended, valid_token_mask);
+}
+
+torch::Tensor build_grouped_queries(const torch::Tensor &type_embeddings,
+                                    const std::vector<int64_t> &data_offsets,
+                                    const torch::Tensor &data_tensors) {
+  const auto num_groups = type_embeddings.size(0);
+  if (num_groups == 0) {
+    return torch::empty({0, 0, type_embeddings.size(1)},
+                        torch::TensorOptions()
+                            .device(type_embeddings.device())
+                            .dtype(type_embeddings.dtype()));
+  }
+
+  int64_t max_data_length = 0;
+  for (int64_t group_index = 0; group_index < num_groups; ++group_index) {
+    max_data_length = std::max(
+        max_data_length, data_offsets[static_cast<size_t>(group_index + 1)] -
+                             data_offsets[static_cast<size_t>(group_index)]);
+  }
+
+  auto queries = torch::zeros(
+      {num_groups, max_data_length + 1, type_embeddings.size(1)},
+      torch::TensorOptions()
+          .device(type_embeddings.device())
+          .dtype(type_embeddings.dtype()));
+  queries.index_put_({Slice(), 0}, type_embeddings);
+
+  for (int64_t group_index = 0; group_index < num_groups; ++group_index) {
+    const auto start = data_offsets[static_cast<size_t>(group_index)];
+    const auto end = data_offsets[static_cast<size_t>(group_index + 1)];
+    const auto length = end - start;
+    if (length == 0) {
+      continue;
+    }
+
+    queries.index_put_({group_index, Slice(1, 1 + length)},
+                       data_tensors.index({Slice(start, end)}));
+  }
+
+  return queries;
+}
+
+torch::Tensor build_grouped_query_mask(const std::vector<int64_t> &data_offsets,
+                                       torch::Device device) {
+  const auto num_groups =
+      static_cast<int64_t>(data_offsets.empty() ? 0 : data_offsets.size() - 1);
+  if (num_groups == 0) {
+    return torch::empty({0, 0},
+                        torch::TensorOptions().device(device).dtype(torch::kBool));
+  }
+
+  int64_t max_data_length = 0;
+  for (int64_t group_index = 0; group_index < num_groups; ++group_index) {
+    max_data_length = std::max(
+        max_data_length, data_offsets[static_cast<size_t>(group_index + 1)] -
+                             data_offsets[static_cast<size_t>(group_index)]);
+  }
+
+  auto valid_token_mask = torch::zeros(
+      {num_groups, max_data_length + 1},
+      torch::TensorOptions().device(device).dtype(torch::kBool));
+  valid_token_mask.index_put_({Slice(), 0}, true);
+
+  for (int64_t group_index = 0; group_index < num_groups; ++group_index) {
+    const auto start = data_offsets[static_cast<size_t>(group_index)];
+    const auto end = data_offsets[static_cast<size_t>(group_index + 1)];
+    const auto length = end - start;
+    if (length == 0) {
+      continue;
+    }
+
+    valid_token_mask.index_put_({group_index, Slice(1, 1 + length)}, true);
+  }
+
+  return valid_token_mask;
+}
+
+} // namespace
 
 InstructionEmbeddingImpl::InstructionEmbeddingImpl(
     std::shared_ptr<InstructionDataEmbeddingImpl> instruction_data_embedding,
@@ -28,7 +131,7 @@ InstructionEmbeddingImpl::InstructionEmbeddingImpl(
 }
 
 torch::Tensor InstructionEmbeddingImpl::forward(
-    const std::vector<std::vector<gamecore::serialization::ProtoBufInstruction>>
+    const std::vector<std::vector<serialization::ProtoBufInstruction>>
         &instructions_batch) {
   const int64_t batch_size = static_cast<int64_t>(instructions_batch.size());
 
@@ -47,8 +150,7 @@ torch::Tensor InstructionEmbeddingImpl::forward_flattened(
     const torch::Tensor &instruction_data_types,
     const torch::Tensor &instruction_data_type_indices,
     const std::array<std::vector<torch::Tensor>, 6> &instruction_data,
-    const std::vector<std::vector<gamecore::serialization::ProtoBufFilter>>
-        &filter_data,
+    const std::vector<std::vector<serialization::ProtoBufFilter>> &filter_data,
     const std::array<std::vector<std::tuple<int64_t, int64_t, int64_t>>, 6>
         &instruction_data_indices,
     int64_t batch_size) {
@@ -59,31 +161,14 @@ torch::Tensor InstructionEmbeddingImpl::forward_flattened(
   auto instruction_embeddings = compute_instruction_embeddings(
       instruction_types, instruction_indices, instruction_data_type_indices,
       data_tensors);
-
-  std::vector<torch::Tensor> batch_embeddings;
-  batch_embeddings.reserve(batch_size);
-  for (int64_t batch_index = 0; batch_index < batch_size; ++batch_index) {
-    auto mask = instruction_indices.index({Slice(), 0}).eq(batch_index);
-    auto per_batch = instruction_embeddings.index({mask});
-    if (per_batch.size(0) == 0) {
-      batch_embeddings.push_back(
-          torch::zeros({dimension_out_},
-                       torch::TensorOptions().device(device_).dtype(dtype_)));
-      continue;
-    }
-    auto batched = position_embedding_(per_batch.unsqueeze(0)).squeeze(0);
-    auto query = batched.unsqueeze(0);
-    batch_embeddings.push_back(
-        (query + instructions_multi_head_attention_(query, query, query))
-            .sum(1)
-            .squeeze(0));
-  }
-
-  if (batch_embeddings.empty()) {
-    return torch::empty({0, dimension_out_},
-                        torch::TensorOptions().device(device_).dtype(dtype_));
-  }
-  return torch::stack(batch_embeddings, 0);
+  auto batch_offsets = tensor_utils::build_contiguous_offsets(
+      instruction_indices.index({Slice(), 0}), batch_size);
+  auto [padded_batch, valid_token_mask] =
+      tensor_utils::pad_by_offsets(instruction_embeddings, batch_offsets,
+                                   dimension_out_);
+  auto positioned = position_embedding_(padded_batch);
+  return masked_self_attention_reduce(instructions_multi_head_attention_,
+                                      positioned, valid_token_mask);
 }
 
 torch::Tensor InstructionEmbeddingImpl::compute_data_tensors(
@@ -91,8 +176,7 @@ torch::Tensor InstructionEmbeddingImpl::compute_data_tensors(
     const torch::Tensor &instruction_data_types,
     const torch::Tensor &instruction_data_type_indices,
     const std::array<std::vector<torch::Tensor>, 6> &instruction_data,
-    const std::vector<std::vector<gamecore::serialization::ProtoBufFilter>>
-        &filter_data,
+    const std::vector<std::vector<serialization::ProtoBufFilter>> &filter_data,
     const std::array<std::vector<std::tuple<int64_t, int64_t, int64_t>>, 6>
         &instruction_data_indices,
     int64_t batch_size) {
@@ -109,28 +193,17 @@ torch::Tensor InstructionEmbeddingImpl::compute_instruction_embeddings(
     const torch::Tensor &data_tensors) {
   auto instruction_type_embeddings =
       instruction_type_embedding_(instruction_types.to(torch::kLong));
-  std::vector<torch::Tensor> instruction_embeddings_list;
   const auto num_instructions = instruction_indices.size(0);
-  instruction_embeddings_list.reserve(num_instructions);
-  for (int64_t i = 0; i < num_instructions; ++i) {
-    auto instruction_index = instruction_indices[i];
-    auto mask = (instruction_data_type_indices.index({Slice(), Slice(0, 2)}) ==
-                 instruction_index)
-                    .sum(1)
-                    .eq(2);
-    auto per_instruction_data = data_tensors.index({mask});
-    auto query = torch::cat({instruction_type_embeddings[i].unsqueeze(0),
-                             per_instruction_data},
-                            0)
-                     .unsqueeze(0);
-    auto embedded = (query + data_multi_head_attention_(query, query, query))
-                        .sum(1)
-                        .squeeze(0);
-    instruction_embeddings_list.push_back(embedded);
-  }
-  if (instruction_embeddings_list.empty()) {
+  if (num_instructions == 0) {
     return torch::empty({0, dimension_out_},
                         torch::TensorOptions().device(device_).dtype(dtype_));
   }
-  return torch::stack(instruction_embeddings_list, 0);
+
+  auto data_offsets = tensor_utils::build_parent_offsets(
+      instruction_indices, instruction_data_type_indices, 2);
+  auto queries =
+      build_grouped_queries(instruction_type_embeddings, data_offsets, data_tensors);
+  auto valid_token_mask = build_grouped_query_mask(data_offsets, device_);
+  return masked_self_attention_reduce(data_multi_head_attention_, queries,
+                                      valid_token_mask);
 }

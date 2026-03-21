@@ -1,5 +1,4 @@
 #include "../include/InstructionDataEmbedding.h"
-#include <algorithm>
 
 InstructionDataEmbeddingImpl::InstructionDataEmbeddingImpl(
     std::shared_ptr<SharedEmbeddingHolderImpl> shared_embedding_holder,
@@ -39,8 +38,8 @@ torch::Tensor InstructionDataEmbeddingImpl::sort_tensors_with_respect_to_index(
     const std::array<torch::Tensor, 6> &tensors,
     const std::array<std::vector<std::tuple<int64_t, int64_t, int64_t>>, 6>
         &indices) const {
-  std::vector<std::pair<std::tuple<int64_t, int64_t, int64_t>, torch::Tensor>>
-      indexed_tensors;
+  std::array<int64_t, 6> cursors{};
+  int64_t total_rows = 0;
 
   for (size_t group = 0; group < tensors.size(); ++group) {
     if (!tensors[group].defined() || tensors[group].numel() == 0) {
@@ -51,19 +50,38 @@ torch::Tensor InstructionDataEmbeddingImpl::sort_tensors_with_respect_to_index(
     if (static_cast<int64_t>(indices[group].size()) != rows) {
       throw std::invalid_argument("Tensor/index count mismatch in sorting");
     }
-
-    for (int64_t i = 0; i < rows; ++i) {
-      indexed_tensors.emplace_back(indices[group][i], tensors[group][i]);
-    }
+    total_rows += rows;
   }
 
-  std::sort(indexed_tensors.begin(), indexed_tensors.end(),
-            [](const auto &a, const auto &b) { return a.first < b.first; });
-
   std::vector<torch::Tensor> sorted;
-  sorted.reserve(indexed_tensors.size());
-  for (const auto &item : indexed_tensors) {
-    sorted.push_back(item.second);
+  sorted.reserve(total_rows);
+  while (static_cast<int64_t>(sorted.size()) < total_rows) {
+    int best_group = -1;
+    std::tuple<int64_t, int64_t, int64_t> best_index{};
+
+    for (size_t group = 0; group < tensors.size(); ++group) {
+      if (!tensors[group].defined() || tensors[group].numel() == 0) {
+        continue;
+      }
+
+      const auto cursor = cursors[group];
+      if (cursor >= tensors[group].size(0)) {
+        continue;
+      }
+
+      const auto &current_index = indices[group][static_cast<size_t>(cursor)];
+      if (best_group < 0 || current_index < best_index) {
+        best_group = static_cast<int>(group);
+        best_index = current_index;
+      }
+    }
+
+    if (best_group < 0) {
+      break;
+    }
+
+    const auto row_index = cursors[static_cast<size_t>(best_group)]++;
+    sorted.push_back(tensors[static_cast<size_t>(best_group)][row_index]);
   }
 
   if (sorted.empty()) {
@@ -78,8 +96,7 @@ torch::Tensor InstructionDataEmbeddingImpl::forward(
     const torch::Tensor &instruction_data_types,
     const torch::Tensor &instruction_data_type_indices,
     const std::array<std::vector<torch::Tensor>, 6> &instruction_data,
-    const std::vector<std::vector<gamecore::serialization::ProtoBufFilter>>
-        &filter_data,
+    const std::vector<std::vector<ProtoBufFilter>> &filter_data,
     const std::array<std::vector<std::tuple<int64_t, int64_t, int64_t>>, 6>
         &instruction_data_indices,
     int64_t batch_size) {

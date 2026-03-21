@@ -41,19 +41,19 @@ FilterConditionEmbeddingImpl::forward(const torch::Tensor &field_type,
   auto mask_4 = field_type == 4;
   auto mask_5 = field_type == 5;
 
-  if (mask_3.any().item<bool>()) {
-    auto idx_3 = torch::nonzero(mask_3).squeeze(1);
+  auto idx_3 = torch::nonzero(mask_3).squeeze(1);
+  if (idx_3.numel() > 0) {
     value_embedding.index_put_(
         {idx_3}, card_type_embedding_(value.index({idx_3}).to(torch::kLong)));
   }
-  if (mask_4.any().item<bool>()) {
-    auto idx_4 = torch::nonzero(mask_4).squeeze(1);
+  auto idx_4 = torch::nonzero(mask_4).squeeze(1);
+  if (idx_4.numel() > 0) {
     value_embedding.index_put_(
         {idx_4},
         card_subtype_embedding_(value.index({idx_4}).to(torch::kLong)));
   }
-  if (mask_5.any().item<bool>()) {
-    auto idx_5 = torch::nonzero(mask_5).squeeze(1);
+  auto idx_5 = torch::nonzero(mask_5).squeeze(1);
+  if (idx_5.numel() > 0) {
     value_embedding.index_put_(
         {idx_5}, hp_embedding_(value.index({idx_5}).to(dtype_).unsqueeze(1)));
   }

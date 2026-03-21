@@ -26,8 +26,7 @@ torch::TensorOptions make_options(std::optional<torch::Device> device,
 
 std::optional<int64_t> get_operator(const OperatorMap &operators,
                                     const GroupIndex &group_index) {
-  const auto key = group_index_key(group_index);
-  auto it = operators.find(key);
+  auto it = operators.find(group_index);
   if (it == operators.end()) {
     return std::nullopt;
   }
@@ -57,31 +56,20 @@ void append_filter_leaf_entry(const serialization::ProtoBufFilter &node,
                     path, logical_operator});
 }
 
-std::vector<serialization::ProtoBufFilter>
-copy_filter_operands(const serialization::ProtoBufFilter &node) {
-  std::vector<serialization::ProtoBufFilter> operands;
-  operands.reserve(node.operands_size());
-  for (int operand_index = 0; operand_index < node.operands_size();
-       ++operand_index) {
-    operands.push_back(node.operands(operand_index));
-  }
-  return operands;
-}
-
-void append_nested_filter_entries(
-    const std::vector<serialization::ProtoBufFilter> &nodes, GroupIndex &path,
-    int64_t logical_operator, std::vector<TraverseEntry> &out) {
-  for (size_t child_index = 0; child_index < nodes.size(); ++child_index) {
-    const auto &node = nodes[child_index];
-    if (node.is_leaf()) {
-      append_filter_leaf_entry(node, path, logical_operator, out);
+void append_nested_filter_entries(const serialization::ProtoBufFilter &node,
+                                  GroupIndex &path,
+                                  std::vector<TraverseEntry> &out) {
+  const auto logical_operator = static_cast<int64_t>(node.logical_operator());
+  const auto &operands = node.operands();
+  for (int child_index = 0; child_index < operands.size(); ++child_index) {
+    const auto &child = operands.Get(child_index);
+    if (child.is_leaf()) {
+      append_filter_leaf_entry(child, path, logical_operator, out);
       continue;
     }
 
     path.push_back(static_cast<int64_t>(child_index));
-    append_nested_filter_entries(copy_filter_operands(node), path,
-                                 static_cast<int64_t>(node.logical_operator()),
-                                 out);
+    append_nested_filter_entries(child, path, out);
     path.pop_back();
   }
 }
@@ -96,9 +84,7 @@ void append_root_filter_entries(
     if (node.is_leaf()) {
       append_filter_leaf_entry(node, path, 0, out);
     } else {
-      append_nested_filter_entries(
-          copy_filter_operands(node), path,
-          static_cast<int64_t>(node.logical_operator()), out);
+      append_nested_filter_entries(node, path, out);
     }
     path.pop_back();
   }
@@ -309,12 +295,12 @@ flatten_messages(const std::vector<std::vector<MessageType>> &instruction_likes,
 
   for (size_t batch_index = 0; batch_index < instruction_likes.size();
        ++batch_index) {
-    const auto &batch_instraction_likes = instruction_likes[batch_index];
+    const auto &batch_instruction_likes = instruction_likes[batch_index];
     for (size_t instruction_index = 0;
-         instruction_index < batch_instraction_likes.size();
+         instruction_index < batch_instruction_likes.size();
          ++instruction_index) {
       append_message_entries(
-          batch_instraction_likes[instruction_index], batch_index,
+          batch_instruction_likes[instruction_index], batch_index,
           instruction_index, type_accessor, instruction_types,
           instruction_indices, instruction_data_types,
           instruction_data_type_indices, result, device, payload_dtype);
@@ -368,7 +354,7 @@ FlattenResult flatten(const std::vector<TraverseEntry> &entries) {
   for (const auto &entry : entries) {
     result.flattened_input.push_back(entry.value);
     result.groups.push_back(entry.group_index);
-    result.operators[group_index_key(entry.group_index)] = entry.op;
+    result.operators[entry.group_index] = entry.op;
   }
   return result;
 }
