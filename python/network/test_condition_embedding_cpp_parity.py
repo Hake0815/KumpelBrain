@@ -109,6 +109,7 @@ def run_condition_parity(
 
 def main() -> None:
     torch.manual_seed(42)
+    # torch.use_deterministic_algorithms(True)
 
     dim = 32
     run_condition_parity(dim, torch.device("cpu"))

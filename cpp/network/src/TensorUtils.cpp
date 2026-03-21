@@ -1,5 +1,6 @@
 #include "../include/TensorUtils.h"
 
+#include <ATen/Context.h>
 #include <limits>
 #include <stdexcept>
 
@@ -16,6 +17,44 @@ torch::Tensor make_long_options_like(const torch::Tensor &tensor) {
   return tensor.to(torch::TensorOptions()
                        .device(tensor.device())
                        .dtype(torch::kInt64));
+}
+
+torch::Tensor build_offsets_from_sorted_group_ids(const torch::Tensor &group_ids,
+                                                  int64_t num_groups) {
+  auto options =
+      torch::TensorOptions().device(group_ids.device()).dtype(torch::kInt64);
+  if (num_groups <= 0) {
+    return torch::zeros({1}, options);
+  }
+
+  auto flattened_group_ids =
+      make_long_options_like(group_ids).contiguous().view({-1});
+  auto group_starts = torch::searchsorted(
+      flattened_group_ids, torch::arange(num_groups, options),
+      /*out_int32=*/false, /*right=*/false);
+  auto total_count = torch::full({1}, flattened_group_ids.size(0), options);
+  return torch::cat({group_starts, total_count});
+}
+
+torch::Tensor build_offsets_from_group_ids(const torch::Tensor &group_ids,
+                                           int64_t num_groups) {
+  auto options =
+      torch::TensorOptions().device(group_ids.device()).dtype(torch::kInt64);
+  if (num_groups <= 0) {
+    return torch::zeros({1}, options);
+  }
+
+  auto flattened_group_ids = make_long_options_like(group_ids).view({-1});
+
+  // Prefer the cheaper histogram path unless CUDA determinism is explicitly
+  // enabled, because bincount has no deterministic CUDA implementation.
+  if (!group_ids.is_cuda() || !at::globalContext().deterministicAlgorithms()) {
+    auto counts =
+        torch::bincount(flattened_group_ids, torch::Tensor(), num_groups);
+    return build_offsets_from_counts(counts);
+  }
+
+  return build_offsets_from_sorted_group_ids(flattened_group_ids, num_groups);
 }
 
 } // namespace
@@ -55,31 +94,12 @@ tensor_from_2d_int64(const std::vector<std::vector<int64_t>> &values,
 
 torch::Tensor build_contiguous_offsets(const torch::Tensor &group_indices,
                                        int64_t num_groups) {
-  auto options = torch::TensorOptions()
-                     .device(group_indices.device())
-                     .dtype(torch::kInt64);
-  if (num_groups <= 0) {
-    return torch::zeros({1}, options);
-  }
-
-  auto flattened_indices = make_long_options_like(group_indices).view({-1});
-  auto counts = torch::bincount(flattened_indices, torch::Tensor(), num_groups);
-  return build_offsets_from_counts(counts);
+  return build_offsets_from_group_ids(group_indices, num_groups);
 }
 
 torch::Tensor build_parent_offsets(const torch::Tensor &parent_row_ids,
                                    int64_t num_parents) {
-  auto options = torch::TensorOptions()
-                     .device(parent_row_ids.device())
-                     .dtype(torch::kInt64);
-  if (num_parents <= 0) {
-    return torch::zeros({1}, options);
-  }
-
-  auto flattened_parent_rows = make_long_options_like(parent_row_ids).view({-1});
-  auto counts =
-      torch::bincount(flattened_parent_rows, torch::Tensor(), num_parents);
-  return build_offsets_from_counts(counts);
+  return build_offsets_from_group_ids(parent_row_ids, num_parents);
 }
 
 std::pair<torch::Tensor, torch::Tensor>
@@ -109,7 +129,7 @@ pad_by_offsets(const torch::Tensor &flat_sequences,
   }
 
   auto row_ids = torch::arange(flat_sequences.size(0), offsets.options());
-  auto end_offsets = offsets.slice(0, 1, batch_size + 1);
+  auto end_offsets = offsets.slice(0, 1, batch_size + 1).contiguous();
   auto group_ids =
       torch::searchsorted(end_offsets, row_ids, /*out_int32=*/false,
                           /*right=*/true);

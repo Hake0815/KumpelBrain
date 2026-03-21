@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 4.2.3)
+cmake_minimum_required(VERSION 3.20)
 
 project(kumpel_embedding)
 
@@ -73,10 +73,8 @@ target_link_libraries(kumpel_embedding_bench PRIVATE
     ${Protobuf_LIBRARIES}
     ${TORCH_LIBRARIES}
     protobuf::libprotobuf
-    absl::log_internal_check_op
-    absl::log_internal_message
-    absl::base
-    absl::raw_logging_internal
+    absl::absl_check
+    absl::absl_log
 )
 
 set_property(TARGET kumpel_embedding_bench PROPERTY CXX_STANDARD 17)

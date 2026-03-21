@@ -189,6 +189,7 @@ def run_instruction_parity(
 
 def main() -> None:
     torch.manual_seed(42)
+    # torch.use_deterministic_algorithms(True)
 
     dim = 32
     run_instruction_parity(dim, torch.device("cpu"))
