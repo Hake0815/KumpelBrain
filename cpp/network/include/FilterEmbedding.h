@@ -3,11 +3,13 @@
 
 #include "../include/FilterConditionEmbedding.h"
 #include "../include/MultiHeadAttention.h"
-#include "../include/Nesting.h"
 #include "../include/SaveLoadMixin.h"
 #include "../include/SharedEmbeddingHolder.h"
+#include "../src/serialization/gamecore_serialization.pb.h"
 #include <torch/torch.h>
 #include <unordered_map>
+
+using ProtoBufFilter = gamecore::serialization::ProtoBufFilter;
 
 struct FilterEmbeddingImpl : torch::nn::Module, SaveLoadMixin<FilterEmbeddingImpl> {
   FilterEmbeddingImpl(
@@ -16,7 +18,8 @@ struct FilterEmbeddingImpl : torch::nn::Module, SaveLoadMixin<FilterEmbeddingImp
                       torch::Device device = torch::kCPU,
                       torch::Dtype dtype = torch::kFloat);
 
-  torch::Tensor forward(const std::vector<nesting::FilterNode> &filter);
+  torch::Tensor
+  forward(const std::vector<ProtoBufFilter> &filter);
 
 private:
   torch::Tensor combine_condition(const std::vector<torch::Tensor> &filter_conditions,

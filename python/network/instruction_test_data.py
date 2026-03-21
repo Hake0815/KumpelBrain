@@ -1,14 +1,57 @@
+research_instructions = [
+    {
+        "InstructionType": 2,
+        "Data": [
+            {
+                "InstructionDataType": 1,
+                "AttackData": None,
+                "DiscardData": {"TargetSource": 0},
+                "CardAmountData": None,
+                "ReturnToDeckTypeData": None,
+                "FilterData": None,
+                "PlayerTargetData": None,
+                "PayloadCase": 3,
+            }
+        ],
+    },
+    {
+        "InstructionType": 3,
+        "Data": [
+            {
+                "InstructionDataType": 2,
+                "AttackData": None,
+                "DiscardData": None,
+                "CardAmountData": {"Amount": {"Min": 7, "Max": 7}, "FromPosition": 7},
+                "ReturnToDeckTypeData": None,
+                "FilterData": None,
+                "PlayerTargetData": None,
+                "PayloadCase": 4,
+            }
+        ],
+    },
+]
+
 instructions_ultra_ball = [
     {
         "InstructionType": 1,
         "Data": [
             {
                 "InstructionDataType": 2,
-                "Payload": {"Amount": {"Min": 2, "Max": 2}, "FromPosition": 8},
+                "AttackData": None,
+                "DiscardData": None,
+                "CardAmountData": {"Amount": {"Min": 2, "Max": 2}, "FromPosition": 8},
+                "ReturnToDeckTypeData": None,
+                "FilterData": None,
+                "PlayerTargetData": None,
+                "PayloadCase": 4,
             },
             {
                 "InstructionDataType": 4,
-                "Payload": {
+                "AttackData": None,
+                "DiscardData": None,
+                "CardAmountData": None,
+                "ReturnToDeckTypeData": None,
+                "FilterData": {
                     "Filter": {
                         "Operands": [],
                         "LogicalOperator": 0,
@@ -16,23 +59,46 @@ instructions_ultra_ball = [
                         "Condition": {"Field": 2, "Operation": 0, "Value": -1},
                     }
                 },
+                "PlayerTargetData": None,
+                "PayloadCase": 6,
             },
         ],
     },
     {
         "InstructionType": 2,
-        "Data": [{"InstructionDataType": 1, "Payload": {"TargetSource": 2}}],
+        "Data": [
+            {
+                "InstructionDataType": 1,
+                "AttackData": None,
+                "DiscardData": {"TargetSource": 2},
+                "CardAmountData": None,
+                "ReturnToDeckTypeData": None,
+                "FilterData": None,
+                "PlayerTargetData": None,
+                "PayloadCase": 3,
+            }
+        ],
     },
     {
         "InstructionType": 1,
         "Data": [
             {
                 "InstructionDataType": 2,
-                "Payload": {"Amount": {"Min": 0, "Max": 1}, "FromPosition": 7},
+                "AttackData": None,
+                "DiscardData": None,
+                "CardAmountData": {"Amount": {"Min": 0, "Max": 1}, "FromPosition": 7},
+                "ReturnToDeckTypeData": None,
+                "FilterData": None,
+                "PlayerTargetData": None,
+                "PayloadCase": 4,
             },
             {
                 "InstructionDataType": 4,
-                "Payload": {
+                "AttackData": None,
+                "DiscardData": None,
+                "CardAmountData": None,
+                "ReturnToDeckTypeData": None,
+                "FilterData": {
                     "Filter": {
                         "Operands": [],
                         "LogicalOperator": 0,
@@ -40,6 +106,8 @@ instructions_ultra_ball = [
                         "Condition": {"Field": 3, "Operation": 1, "Value": 1},
                     }
                 },
+                "PlayerTargetData": None,
+                "PayloadCase": 6,
             },
         ],
     },
@@ -49,17 +117,48 @@ instructions_ultra_ball = [
         "Data": [
             {
                 "InstructionDataType": 2,
-                "Payload": {"Amount": {"Min": -1, "Max": -1}, "FromPosition": 10},
+                "AttackData": None,
+                "DiscardData": None,
+                "CardAmountData": {
+                    "Amount": {"Min": -1, "Max": -1},
+                    "FromPosition": 10,
+                },
+                "ReturnToDeckTypeData": None,
+                "FilterData": None,
+                "PlayerTargetData": None,
+                "PayloadCase": 4,
             }
         ],
     },
     {
         "InstructionType": 7,
-        "Data": [{"InstructionDataType": 5, "Payload": {"PlayerTarget": 0}}],
+        "Data": [
+            {
+                "InstructionDataType": 5,
+                "AttackData": None,
+                "DiscardData": None,
+                "CardAmountData": None,
+                "ReturnToDeckTypeData": None,
+                "FilterData": None,
+                "PlayerTargetData": {"PlayerTarget": 0},
+                "PayloadCase": 7,
+            }
+        ],
     },
     {
         "InstructionType": 2,
-        "Data": [{"InstructionDataType": 1, "Payload": {"TargetSource": 1}}],
+        "Data": [
+            {
+                "InstructionDataType": 1,
+                "AttackData": None,
+                "DiscardData": {"TargetSource": 1},
+                "CardAmountData": None,
+                "ReturnToDeckTypeData": None,
+                "FilterData": None,
+                "PlayerTargetData": None,
+                "PayloadCase": 3,
+            }
+        ],
     },
 ]
 instructions_night_stretcher = [
@@ -68,11 +167,21 @@ instructions_night_stretcher = [
         "Data": [
             {
                 "InstructionDataType": 2,
-                "Payload": {"Amount": {"Min": 1, "Max": 1}, "FromPosition": 5},
+                "AttackData": None,
+                "DiscardData": None,
+                "CardAmountData": {"Amount": {"Min": 1, "Max": 1}, "FromPosition": 5},
+                "ReturnToDeckTypeData": None,
+                "FilterData": None,
+                "PlayerTargetData": None,
+                "PayloadCase": 4,
             },
             {
                 "InstructionDataType": 4,
-                "Payload": {
+                "AttackData": None,
+                "DiscardData": None,
+                "CardAmountData": None,
+                "ReturnToDeckTypeData": None,
+                "FilterData": {
                     "Filter": {
                         "Operands": [
                             {
@@ -93,6 +202,8 @@ instructions_night_stretcher = [
                         "Condition": None,
                     }
                 },
+                "PlayerTargetData": None,
+                "PayloadCase": 6,
             },
         ],
     },
@@ -102,20 +213,49 @@ instructions_night_stretcher = [
         "Data": [
             {
                 "InstructionDataType": 2,
-                "Payload": {"Amount": {"Min": -1, "Max": -1}, "FromPosition": 10},
+                "AttackData": None,
+                "DiscardData": None,
+                "CardAmountData": {
+                    "Amount": {"Min": -1, "Max": -1},
+                    "FromPosition": 10,
+                },
+                "ReturnToDeckTypeData": None,
+                "FilterData": None,
+                "PlayerTargetData": None,
+                "PayloadCase": 4,
             }
         ],
     },
     {
         "InstructionType": 2,
-        "Data": [{"InstructionDataType": 1, "Payload": {"TargetSource": 1}}],
+        "Data": [
+            {
+                "InstructionDataType": 1,
+                "AttackData": None,
+                "DiscardData": {"TargetSource": 1},
+                "CardAmountData": None,
+                "ReturnToDeckTypeData": None,
+                "FilterData": None,
+                "PlayerTargetData": None,
+                "PayloadCase": 3,
+            }
+        ],
     },
 ]
 petty_grudge_instructions = [
     {
         "InstructionType": 0,
         "Data": [
-            {"InstructionDataType": 0, "Payload": {"AttackTarget": 0, "Damage": 10}}
+            {
+                "InstructionDataType": 0,
+                "AttackData": {"AttackTarget": 0, "Damage": 10},
+                "DiscardData": None,
+                "CardAmountData": None,
+                "ReturnToDeckTypeData": None,
+                "FilterData": None,
+                "PlayerTargetData": None,
+                "PayloadCase": 2,
+            }
         ],
     }
 ]
@@ -123,17 +263,33 @@ dragon_headbutt_instructions = [
     {
         "InstructionType": 0,
         "Data": [
-            {"InstructionDataType": 0, "Payload": {"AttackTarget": 0, "Damage": 70}}
+            {
+                "InstructionDataType": 0,
+                "AttackData": {"AttackTarget": 0, "Damage": 70},
+                "DiscardData": None,
+                "CardAmountData": None,
+                "ReturnToDeckTypeData": None,
+                "FilterData": None,
+                "PlayerTargetData": None,
+                "PayloadCase": 2,
+            }
         ],
     }
 ]
+
 recon_directive_instructions = [
     {
         "InstructionType": 5,
         "Data": [
             {
                 "InstructionDataType": 2,
-                "Payload": {"Amount": {"Min": 2, "Max": 2}, "FromPosition": 7},
+                "AttackData": None,
+                "DiscardData": None,
+                "CardAmountData": {"Amount": {"Min": 2, "Max": 2}, "FromPosition": 7},
+                "ReturnToDeckTypeData": None,
+                "FilterData": None,
+                "PlayerTargetData": None,
+                "PayloadCase": 4,
             }
         ],
     },
@@ -142,11 +298,21 @@ recon_directive_instructions = [
         "Data": [
             {
                 "InstructionDataType": 2,
-                "Payload": {"Amount": {"Min": 1, "Max": 1}, "FromPosition": 4},
+                "AttackData": None,
+                "DiscardData": None,
+                "CardAmountData": {"Amount": {"Min": 1, "Max": 1}, "FromPosition": 4},
+                "ReturnToDeckTypeData": None,
+                "FilterData": None,
+                "PlayerTargetData": None,
+                "PayloadCase": 4,
             },
             {
                 "InstructionDataType": 4,
-                "Payload": {
+                "AttackData": None,
+                "DiscardData": None,
+                "CardAmountData": None,
+                "ReturnToDeckTypeData": None,
+                "FilterData": {
                     "Filter": {
                         "Operands": [],
                         "LogicalOperator": 0,
@@ -154,6 +320,8 @@ recon_directive_instructions = [
                         "Condition": {"Field": 1, "Operation": 0, "Value": -1},
                     }
                 },
+                "PlayerTargetData": None,
+                "PayloadCase": 6,
             },
         ],
     },
@@ -162,7 +330,16 @@ recon_directive_instructions = [
         "Data": [
             {
                 "InstructionDataType": 2,
-                "Payload": {"Amount": {"Min": -1, "Max": -1}, "FromPosition": 10},
+                "AttackData": None,
+                "DiscardData": None,
+                "CardAmountData": {
+                    "Amount": {"Min": -1, "Max": -1},
+                    "FromPosition": 10,
+                },
+                "ReturnToDeckTypeData": None,
+                "FilterData": None,
+                "PlayerTargetData": None,
+                "PayloadCase": 4,
             }
         ],
     },
@@ -171,13 +348,20 @@ recon_directive_instructions = [
         "Data": [
             {
                 "InstructionDataType": 3,
-                "Payload": {"ReturnToDeckType": 0, "FromPosition": 9},
+                "AttackData": None,
+                "DiscardData": None,
+                "CardAmountData": None,
+                "ReturnToDeckTypeData": {"ReturnToDeckType": 0, "FromPosition": 9},
+                "FilterData": None,
+                "PlayerTargetData": None,
+                "PayloadCase": 5,
             }
         ],
     },
 ]
 
 instructions_batch = [
+    research_instructions,
     instructions_ultra_ball,
     instructions_night_stretcher,
     petty_grudge_instructions,
@@ -191,7 +375,13 @@ research_conditions = [
         "Data": [
             {
                 "InstructionDataType": 2,
-                "Payload": {"Amount": {"Min": 1, "Max": 60}, "FromPosition": 7},
+                "AttackData": None,
+                "DiscardData": None,
+                "CardAmountData": {"Amount": {"Min": 1, "Max": 60}, "FromPosition": 7},
+                "ReturnToDeckTypeData": None,
+                "FilterData": None,
+                "PlayerTargetData": None,
+                "PayloadCase": 4,
             }
         ],
     }
@@ -203,7 +393,13 @@ recon_directive_conditions = [
         "Data": [
             {
                 "InstructionDataType": 2,
-                "Payload": {"Amount": {"Min": 1, "Max": 60}, "FromPosition": 7},
+                "AttackData": None,
+                "DiscardData": None,
+                "CardAmountData": {"Amount": {"Min": 1, "Max": 60}, "FromPosition": 7},
+                "ReturnToDeckTypeData": None,
+                "FilterData": None,
+                "PlayerTargetData": None,
+                "PayloadCase": 4,
             }
         ],
     },
@@ -216,7 +412,13 @@ ultra_ball_conditions = [
         "Data": [
             {
                 "InstructionDataType": 2,
-                "Payload": {"Amount": {"Min": 3, "Max": 60}, "FromPosition": 8},
+                "AttackData": None,
+                "DiscardData": None,
+                "CardAmountData": {"Amount": {"Min": 3, "Max": 60}, "FromPosition": 8},
+                "ReturnToDeckTypeData": None,
+                "FilterData": None,
+                "PlayerTargetData": None,
+                "PayloadCase": 4,
             }
         ],
     },
@@ -225,7 +427,13 @@ ultra_ball_conditions = [
         "Data": [
             {
                 "InstructionDataType": 2,
-                "Payload": {"Amount": {"Min": 1, "Max": 60}, "FromPosition": 7},
+                "AttackData": None,
+                "DiscardData": None,
+                "CardAmountData": {"Amount": {"Min": 1, "Max": 60}, "FromPosition": 7},
+                "ReturnToDeckTypeData": None,
+                "FilterData": None,
+                "PlayerTargetData": None,
+                "PayloadCase": 4,
             }
         ],
     },

@@ -68,6 +68,8 @@ template <typename Derived> struct SaveLoadMixin {
     if (!file)
       throw std::runtime_error("Failed to open file for reading");
 
+    torch::NoGradGuard no_grad;
+
     std::unordered_map<std::string, torch::Tensor> params_map;
     for (auto &pair : self.named_parameters()) {
       params_map[pair.key()] = pair.value();
@@ -115,8 +117,12 @@ template <typename Derived> struct SaveLoadMixin {
       int64_t num_elems = 1;
       for (auto dim : shape)
         num_elems *= dim;
-      file.read(reinterpret_cast<char *>(param.data_ptr()),
+
+      auto host_tensor =
+          torch::empty(shape, torch::TensorOptions().dtype(param.dtype()));
+      file.read(reinterpret_cast<char *>(host_tensor.data_ptr()),
                 num_elems * param.element_size());
+      param.copy_(host_tensor.to(param.device()));
     }
   }
 };

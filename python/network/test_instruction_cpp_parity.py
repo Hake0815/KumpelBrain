@@ -2,12 +2,15 @@ import os
 from pathlib import Path
 import sys
 import tempfile
+import time
+from typing import Callable
 
 import torch
 
 import instruction_test_data
 import card_embedding
 import nesting
+import proto_serialization
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "cpp" / "build"))
 import kumpel_embedding
@@ -43,6 +46,28 @@ def _set_constant_parameters(model, value: float = 0.01) -> None:
             parameter.fill_(value)
 
 
+def _benchmark_forward(
+    forward_fn: Callable[[], torch.Tensor],
+    device: torch.device,
+    warmup_runs: int = 20,
+    runs: int = 200,
+) -> float:
+    def _synchronize() -> None:
+        if device.type == "cuda":
+            torch.cuda.synchronize(device)
+
+    for _ in range(warmup_runs):
+        forward_fn()
+
+    _synchronize()
+    start = time.perf_counter()
+    for _ in range(runs):
+        forward_fn()
+    _synchronize()
+    total_seconds = time.perf_counter() - start
+    return total_seconds / runs
+
+
 def test_instruction_data_embedding_parity(
     py_shared: card_embedding.SharedEmbeddingHolder,
     cpp_shared: kumpel_embedding.SharedEmbeddingHolder,
@@ -52,6 +77,7 @@ def test_instruction_data_embedding_parity(
     card_embedding.InstructionDataEmbedding, kumpel_embedding.InstructionDataEmbedding
 ]:
     instructions_batch = instruction_test_data.instructions_batch
+
     batch_size = len(instructions_batch)
 
     py_instruction_data = card_embedding.InstructionDataEmbedding(
@@ -81,99 +107,23 @@ def test_instruction_data_embedding_parity(
         instruction_data_indices,
         batch_size,
     )
+    serialized_filter_data = [
+        proto_serialization.serialize_filter_payload(filter_payload)
+        for filter_payload in instruction_data[4]
+    ]
+    cpp_instruction_data_input = list(instruction_data)
+    cpp_instruction_data_input[4] = serialized_filter_data
     cpp_out = cpp_instruction_data.forward(
         instruction_indices,
         instruction_data_types,
         instruction_data_type_indices,
-        instruction_data,
+        tuple(cpp_instruction_data_input),
         instruction_data_indices,
         batch_size,
     )
     _assert_close("InstructionDataEmbedding", py_out, cpp_out)
 
     return py_instruction_data, cpp_instruction_data
-
-
-def _python_instruction_forward_reference(
-    py_instruction: card_embedding.InstructionEmbedding,
-    instructions_batch: list[list[dict]],
-) -> torch.Tensor:
-    batch_size = len(instructions_batch)
-    (
-        instruction_types,
-        instruction_indices,
-        instruction_data_types,
-        instruction_data_type_indices,
-        instruction_data,
-        instruction_data_indices,
-    ) = nesting.flatten_instructions(
-        "InstructionType",
-        instructions_batch,
-        device=py_instruction.factory_kwargs["device"],
-        dtype=py_instruction.factory_kwargs["dtype"],
-    )
-
-    instruction_type_embeddings = py_instruction.instruction_type_embedding(
-        instruction_types
-    )
-    data_tensors = py_instruction.instruction_data_embedding(
-        instruction_indices,
-        instruction_data_types,
-        instruction_data_type_indices,
-        instruction_data,
-        instruction_data_indices,
-        batch_size,
-    )
-
-    # Equivalent to embed_instruction_data but avoids nested tensor SDPA.
-    instruction_embeddings = []
-    for i, instruction_index in enumerate(instruction_indices):
-        per_instruction_data = data_tensors[
-            (instruction_data_type_indices[:, 0:2] == instruction_index).sum(1) == 2
-        ]
-        query = torch.cat(
-            [instruction_type_embeddings[i].unsqueeze(0), per_instruction_data], dim=0
-        ).unsqueeze(0)
-        instruction_embeddings.append(
-            (query + py_instruction.data_multi_head_attention(query, query, query))
-            .sum(1)
-            .squeeze(0)
-        )
-
-    if instruction_embeddings:
-        instruction_embeddings = torch.stack(instruction_embeddings, dim=0)
-    else:
-        instruction_embeddings = torch.empty(
-            (0, py_instruction.dimension_out),
-            device=py_instruction.factory_kwargs["device"],
-        )
-
-    batched_instructions = []
-    for batch_index in range(batch_size):
-        per_batch = instruction_embeddings[instruction_indices[:, 0] == batch_index]
-        if per_batch.shape[0] == 0:
-            batched_instructions.append(
-                torch.zeros(
-                    py_instruction.dimension_out,
-                    device=py_instruction.factory_kwargs["device"],
-                    dtype=py_instruction.factory_kwargs["dtype"],
-                )
-            )
-            continue
-        positioned = py_instruction._position_embedding(per_batch.unsqueeze(0)).squeeze(
-            0
-        )
-        query = positioned.unsqueeze(0)
-        batched_instructions.append(
-            (
-                query
-                + py_instruction.instructions_multi_head_attention(query, query, query)
-            )
-            .sum(1)
-            .squeeze(0)
-        )
-
-    return torch.stack(batched_instructions, dim=0)
 
 
 def test_instruction_embedding_parity(
@@ -183,8 +133,12 @@ def test_instruction_embedding_parity(
     cpp_shared: kumpel_embedding.SharedEmbeddingHolder,
     dim: int,
     device: torch.device,
-) -> None:
+    benchmark: bool = False,
+) -> tuple[float | None, float | None]:
     instructions_batch = instruction_test_data.instructions_batch
+    serialized_instructions_batch = proto_serialization.serialize_instruction_batches(
+        instructions_batch
+    )
 
     py_instruction = card_embedding.InstructionEmbedding(
         py_instruction_data, py_shared, dim, device=device
@@ -194,17 +148,25 @@ def test_instruction_embedding_parity(
     )
     _with_loaded_weights(py_instruction, cpp_instruction)
 
-    py_out = _python_instruction_forward_reference(py_instruction, instructions_batch)
-    cpp_out = cpp_instruction.forward(instructions_batch)
+    py_out = py_instruction.forward(instructions_batch)
+    cpp_out = cpp_instruction.forward(serialized_instructions_batch)
     _assert_close("InstructionEmbedding", py_out, cpp_out)
 
+    if not benchmark:
+        return None, None
 
-def main() -> None:
-    torch.manual_seed(42)
-    torch.use_deterministic_algorithms(True)
+    py_avg_seconds = _benchmark_forward(
+        lambda: py_instruction.forward(instructions_batch), device
+    )
+    cpp_avg_seconds = _benchmark_forward(
+        lambda: cpp_instruction.forward(serialized_instructions_batch), device
+    )
+    return py_avg_seconds, cpp_avg_seconds
 
-    dim = 32
-    device = torch.device("cpu")
+
+def run_instruction_parity(
+    dim: int, device: torch.device, benchmark: bool = False
+) -> tuple[float | None, float | None]:
     py_shared = card_embedding.SharedEmbeddingHolder(dim, device=device)
     cpp_shared = kumpel_embedding.SharedEmbeddingHolder(dim, device=device)
     _with_loaded_weights(py_shared, cpp_shared)
@@ -214,9 +176,44 @@ def main() -> None:
     py_instrction_data, cpp_instrction_data = test_instruction_data_embedding_parity(
         py_shared, cpp_shared, dim, device
     )
-    test_instruction_embedding_parity(
-        py_instrction_data, cpp_instrction_data, py_shared, cpp_shared, dim, device
+    return test_instruction_embedding_parity(
+        py_instrction_data,
+        cpp_instrction_data,
+        py_shared,
+        cpp_shared,
+        dim,
+        device,
+        benchmark=benchmark,
     )
+
+
+def main() -> None:
+    torch.manual_seed(42)
+    # torch.use_deterministic_algorithms(True)
+
+    dim = 32
+    run_instruction_parity(dim, torch.device("cpu"))
+    print("Instruction CPU fallback parity passed.")
+
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+        py_avg_seconds, cpp_avg_seconds = run_instruction_parity(
+            dim, device, benchmark=True
+        )
+        assert py_avg_seconds is not None
+        assert cpp_avg_seconds is not None
+        speedup = (
+            py_avg_seconds / cpp_avg_seconds if cpp_avg_seconds > 0 else float("inf")
+        )
+        print(
+            "InstructionEmbedding timing (avg per forward): "
+            f"Python={py_avg_seconds * 1e3:.3f} ms, "
+            f"C++={cpp_avg_seconds * 1e3:.3f} ms, "
+            f"speedup={speedup:.2f}x"
+        )
+    else:
+        print("Instruction CUDA timing skipped: CUDA is not available.")
+
     print("Instruction parity passed.")
 
 

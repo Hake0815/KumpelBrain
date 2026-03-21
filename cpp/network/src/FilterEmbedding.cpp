@@ -1,6 +1,9 @@
 #include "../include/FilterEmbedding.h"
+#include "../include/Nesting.h"
 #include "../include/TensorUtils.h"
 #include <algorithm>
+
+namespace serialization = gamecore::serialization;
 
 using torch::indexing::Slice;
 
@@ -51,7 +54,8 @@ torch::Tensor FilterEmbeddingImpl::combine_condition(
 }
 
 torch::Tensor
-FilterEmbeddingImpl::forward(const std::vector<nesting::FilterNode> &filter) {
+FilterEmbeddingImpl::forward(
+    const std::vector<serialization::ProtoBufFilter> &filter) {
   if (filter.empty()) {
     return torch::zeros({dimension_out_},
                         torch::TensorOptions().device(device_).dtype(dtype_));
@@ -60,9 +64,9 @@ FilterEmbeddingImpl::forward(const std::vector<nesting::FilterNode> &filter) {
   auto traverse_entries = nesting::traverse_filter(filter);
   auto flat = nesting::flatten(traverse_entries);
 
-  std::vector<std::vector<int64_t>> flattened = flat.flattened_input;
   auto flattened_tensor =
-      tensor_utils::tensor_from_2d_int64(flattened, device_, torch::kLong);
+      tensor_utils::tensor_from_2d_int64(flat.flattened_input, device_,
+                                         torch::kLong);
   auto field_type = flattened_tensor.index({Slice(), 0});
   auto comparison_operator = flattened_tensor.index({Slice(), 1});
   auto value = flattened_tensor.index({Slice(), 2});
