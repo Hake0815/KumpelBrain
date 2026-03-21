@@ -1,3 +1,4 @@
+#include <ATen/Context.h>
 #include "../network/include/ConditionEmbedding.h"
 #include "../network/include/InstructionDataEmbedding.h"
 #include "../network/include/InstructionEmbedding.h"
@@ -10,6 +11,7 @@
 #include <iostream>
 #include <memory>
 #include <string>
+#include <torch/cuda.h>
 #include <vector>
 
 namespace serialization = gamecore::serialization;
@@ -256,16 +258,25 @@ build_condition_batches(int64_t batch_size, int64_t conditions_per_batch) {
   return batches;
 }
 
-double benchmark_ms(const std::string &name, int warmup_runs, int measured_runs,
+void synchronize_device(const torch::Device &device) {
+  if (device.is_cuda()) {
+    torch::cuda::synchronize(device.index());
+  }
+}
+
+double benchmark_ms(const std::string &name, const torch::Device &device,
+                    int warmup_runs, int measured_runs,
                     const std::function<void()> &fn) {
   for (int run = 0; run < warmup_runs; ++run) {
     fn();
   }
 
+  synchronize_device(device);
   const auto start = std::chrono::steady_clock::now();
   for (int run = 0; run < measured_runs; ++run) {
     fn();
   }
+  synchronize_device(device);
   const auto end = std::chrono::steady_clock::now();
 
   const auto elapsed_ms =
@@ -275,17 +286,32 @@ double benchmark_ms(const std::string &name, int warmup_runs, int measured_runs,
   return average_ms;
 }
 
-} // namespace
+template <typename Fn>
+void with_deterministic_algorithms(bool enabled, const Fn &fn) {
+  auto &context = at::globalContext();
+  const auto previous_enabled = context.deterministicAlgorithms();
+  const auto previous_warn_only = context.deterministicAlgorithmsWarnOnly();
+  context.setDeterministicAlgorithms(enabled, false);
+  try {
+    fn();
+  } catch (...) {
+    context.setDeterministicAlgorithms(previous_enabled, previous_warn_only);
+    throw;
+  }
+  context.setDeterministicAlgorithms(previous_enabled, previous_warn_only);
+}
 
-int main() {
-  torch::manual_seed(42);
-  torch::InferenceMode guard;
-
-  const auto device = torch::Device(torch::kCPU);
+void run_embedding_benchmarks(const torch::Device &device,
+                              const std::string &label) {
   const auto dtype = torch::kFloat;
   constexpr int64_t dimension = 32;
   constexpr int warmup_runs = 10;
   constexpr int measured_runs = 50;
+
+  torch::manual_seed(42);
+  if (device.is_cuda()) {
+    torch::cuda::manual_seed_all(42);
+  }
 
   auto instructions = build_instruction_batches(256, 8);
   auto conditions = build_condition_batches(256, 4);
@@ -314,6 +340,7 @@ int main() {
       static_cast<int64_t>(instructions.size());
   const auto condition_batch_size = static_cast<int64_t>(conditions.size());
 
+  std::cout << "\n== " << label << " ==\n";
   std::cout << "Instruction batches: " << instruction_batch_size
             << ", flattened instructions: "
             << flat_instructions.instruction_indices.size(0)
@@ -325,13 +352,15 @@ int main() {
             << ", flattened data rows: "
             << flat_conditions.instruction_data_type_indices.size(0) << "\n";
 
-  benchmark_ms("flatten_instructions", warmup_runs, measured_runs, [&]() {
-    auto flat = nesting::flatten_instructions(instructions, device, torch::kInt64);
-    benchmark_sink += flat.instruction_indices.size(0);
-  });
+  benchmark_ms(label + " flatten_instructions", device, warmup_runs,
+               measured_runs, [&]() {
+                 auto flat =
+                     nesting::flatten_instructions(instructions, device, torch::kInt64);
+                 benchmark_sink += flat.instruction_indices.size(0);
+               });
 
-  benchmark_ms("instruction_compute_data_tensors", warmup_runs, measured_runs,
-               [&]() {
+  benchmark_ms(label + " instruction_compute_data_tensors", device, warmup_runs,
+               measured_runs, [&]() {
                  auto data_tensors = instruction_embedding->compute_data_tensors(
                      flat_instructions.instruction_indices,
                      flat_instructions.instruction_data_types,
@@ -350,8 +379,8 @@ int main() {
       flat_instructions.instruction_data, flat_instructions.filter_data,
       flat_instructions.instruction_data_indices, instruction_batch_size);
 
-  benchmark_ms("instruction_compute_embeddings", warmup_runs, measured_runs,
-               [&]() {
+  benchmark_ms(label + " instruction_compute_embeddings", device, warmup_runs,
+               measured_runs, [&]() {
                  auto embeddings =
                      instruction_embedding->compute_instruction_embeddings(
                          flat_instructions.instruction_types,
@@ -361,18 +390,21 @@ int main() {
                  benchmark_sink += embeddings.size(0);
                });
 
-  benchmark_ms("instruction_forward", warmup_runs, measured_runs, [&]() {
-    auto embeddings = instruction_embedding->forward(instructions);
-    benchmark_sink += embeddings.size(0);
-  });
+  benchmark_ms(label + " instruction_forward", device, warmup_runs,
+               measured_runs, [&]() {
+                 auto embeddings = instruction_embedding->forward(instructions);
+                 benchmark_sink += embeddings.size(0);
+               });
 
-  benchmark_ms("flatten_conditions", warmup_runs, measured_runs, [&]() {
-    auto flat = nesting::flatten_conditions(conditions, device, torch::kInt64);
-    benchmark_sink += flat.instruction_indices.size(0);
-  });
-
-  benchmark_ms("condition_compute_data_tensors", warmup_runs, measured_runs,
+  benchmark_ms(label + " flatten_conditions", device, warmup_runs, measured_runs,
                [&]() {
+                 auto flat =
+                     nesting::flatten_conditions(conditions, device, torch::kInt64);
+                 benchmark_sink += flat.instruction_indices.size(0);
+               });
+
+  benchmark_ms(label + " condition_compute_data_tensors", device, warmup_runs,
+               measured_runs, [&]() {
                  auto data_tensors = condition_embedding->compute_data_tensors(
                      flat_conditions.instruction_indices,
                      flat_conditions.instruction_data_types,
@@ -390,8 +422,8 @@ int main() {
       flat_conditions.instruction_data, flat_conditions.filter_data,
       flat_conditions.instruction_data_indices, condition_batch_size);
 
-  benchmark_ms("condition_compute_embeddings", warmup_runs, measured_runs,
-               [&]() {
+  benchmark_ms(label + " condition_compute_embeddings", device, warmup_runs,
+               measured_runs, [&]() {
                  auto embeddings = condition_embedding->compute_condition_embeddings(
                      flat_conditions.instruction_types,
                      flat_conditions.instruction_indices,
@@ -400,10 +432,26 @@ int main() {
                  benchmark_sink += embeddings.size(0);
                });
 
-  benchmark_ms("condition_forward", warmup_runs, measured_runs, [&]() {
-    auto embeddings = condition_embedding->forward(conditions);
-    benchmark_sink += embeddings.size(0);
-  });
+  benchmark_ms(label + " condition_forward", device, warmup_runs, measured_runs,
+               [&]() {
+                 auto embeddings = condition_embedding->forward(conditions);
+                 benchmark_sink += embeddings.size(0);
+               });
+}
+
+} // namespace
+
+int main() {
+  torch::InferenceMode guard;
+  run_embedding_benchmarks(torch::Device(torch::kCPU), "cpu");
+  if (torch::cuda::is_available()) {
+    run_embedding_benchmarks(torch::Device(torch::kCUDA), "cuda");
+    with_deterministic_algorithms(true, [&]() {
+      run_embedding_benchmarks(torch::Device(torch::kCUDA), "cuda_deterministic");
+    });
+  } else {
+    std::cout << "\nCUDA benchmark skipped: CUDA is not available.\n";
+  }
 
   std::cout << "Benchmark sink: " << benchmark_sink << "\n";
   return 0;

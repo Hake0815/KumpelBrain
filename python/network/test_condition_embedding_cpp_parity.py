@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 import os
 from pathlib import Path
 import sys
@@ -61,6 +62,19 @@ def _benchmark_forward(
     return total_seconds / runs
 
 
+@contextmanager
+def _deterministic_algorithms(enabled: bool):
+    previous_enabled = torch.are_deterministic_algorithms_enabled()
+    previous_warn_only = torch.is_deterministic_algorithms_warn_only_enabled()
+    torch.use_deterministic_algorithms(enabled)
+    try:
+        yield
+    finally:
+        torch.use_deterministic_algorithms(
+            previous_enabled, warn_only=previous_warn_only
+        )
+
+
 def run_condition_parity(
     dim: int, device: torch.device, benchmark: bool = False
 ) -> tuple[float | None, float | None]:
@@ -109,7 +123,6 @@ def run_condition_parity(
 
 def main() -> None:
     torch.manual_seed(42)
-    # torch.use_deterministic_algorithms(True)
 
     dim = 32
     run_condition_parity(dim, torch.device("cpu"))
@@ -117,20 +130,25 @@ def main() -> None:
 
     if torch.cuda.is_available():
         device = torch.device("cuda")
-        py_avg_seconds, cpp_avg_seconds = run_condition_parity(
-            dim, device, benchmark=True
-        )
-        assert py_avg_seconds is not None
-        assert cpp_avg_seconds is not None
-        speedup = (
-            py_avg_seconds / cpp_avg_seconds if cpp_avg_seconds > 0 else float("inf")
-        )
-        print(
-            "ConditionEmbedding timing (avg per forward): "
-            f"Python={py_avg_seconds * 1e3:.3f} ms, "
-            f"C++={cpp_avg_seconds * 1e3:.3f} ms, "
-            f"speedup={speedup:.2f}x"
-        )
+        for deterministic in (False, True):
+            mode_name = "deterministic" if deterministic else "non-deterministic"
+            with _deterministic_algorithms(deterministic):
+                py_avg_seconds, cpp_avg_seconds = run_condition_parity(
+                    dim, device, benchmark=True
+                )
+            assert py_avg_seconds is not None
+            assert cpp_avg_seconds is not None
+            speedup = (
+                py_avg_seconds / cpp_avg_seconds
+                if cpp_avg_seconds > 0
+                else float("inf")
+            )
+            print(
+                f"ConditionEmbedding {mode_name} timing (avg per forward): "
+                f"Python={py_avg_seconds * 1e3:.3f} ms, "
+                f"C++={cpp_avg_seconds * 1e3:.3f} ms, "
+                f"speedup={speedup:.2f}x"
+            )
     else:
         print("Condition CUDA timing skipped: CUDA is not available.")
 
