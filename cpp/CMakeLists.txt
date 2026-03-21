@@ -2,9 +2,6 @@ cmake_minimum_required(VERSION 4.2.3)
 
 project(kumpel_embedding)
 
-set(Torch_DIR "/home/felix/ai/KumpelBrain/.venv/lib/python3.13/site-packages/torch/share/cmake/Torch")
-# set(Torch_DIR "$ENV{HOME}/.lib/libtorch/share/cmake/Torch")
-# set(CMAKE_PREFIX_PATH "$ENV{HOME}/.lib/libtorch")
 set(Python_FIND_VIRTUALENV ONLY)
 
 find_package(Torch REQUIRED)
@@ -23,6 +20,7 @@ list(APPEND CMAKE_PREFIX_PATH ${pybind11_DIR})
 find_package(pybind11 CONFIG REQUIRED)
 
 set(KUMPEL_CORE_SOURCES
+    network/src/AttentionUtils.cpp
     network/src/AttackDataEmbedding.cpp
     network/src/CardAmountDataEmbedding.cpp
     network/src/ConditionEmbedding.cpp

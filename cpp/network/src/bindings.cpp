@@ -423,7 +423,7 @@ PYBIND11_MODULE(kumpel_embedding, m) {
                  flat.filter_data, flat.instruction_data_indices, batch_size);
              return self.compute_instruction_embeddings(
                  flat.instruction_types, flat.instruction_indices,
-                 flat.instruction_data_type_indices, data_tensors);
+                 flat.instruction_data_parent_rows, data_tensors);
            })
       .def("save_weights", &InstructionEmbeddingImpl::save_weights)
       .def("load_weights", &InstructionEmbeddingImpl::load_weights);

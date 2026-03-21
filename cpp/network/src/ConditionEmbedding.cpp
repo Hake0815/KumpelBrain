@@ -1,109 +1,10 @@
 #include "../include/ConditionEmbedding.h"
+#include "../include/AttentionUtils.h"
 #include "../include/Nesting.h"
 #include "../include/TensorUtils.h"
 #include <algorithm>
 
 namespace serialization = gamecore::serialization;
-
-using torch::indexing::Slice;
-
-namespace {
-
-torch::Tensor masked_self_attention_reduce(
-    MultiHeadAttention &multi_head_attention, const torch::Tensor &padded_sequences,
-    const torch::Tensor &valid_token_mask) {
-  if (padded_sequences.size(1) == 0) {
-    return torch::zeros(
-        {padded_sequences.size(0), padded_sequences.size(2)},
-        torch::TensorOptions()
-            .device(padded_sequences.device())
-            .dtype(padded_sequences.dtype()));
-  }
-
-  auto attention_mask = tensor_utils::make_padding_attention_mask(
-      valid_token_mask, padded_sequences.scalar_type());
-  auto attended = padded_sequences + multi_head_attention(
-                                       padded_sequences, padded_sequences,
-                                       padded_sequences, attention_mask);
-  return tensor_utils::masked_sequence_sum(attended, valid_token_mask);
-}
-
-torch::Tensor build_grouped_queries(const torch::Tensor &type_embeddings,
-                                    const std::vector<int64_t> &data_offsets,
-                                    const torch::Tensor &data_tensors) {
-  const auto num_groups = type_embeddings.size(0);
-  if (num_groups == 0) {
-    return torch::empty({0, 0, type_embeddings.size(1)},
-                        torch::TensorOptions()
-                            .device(type_embeddings.device())
-                            .dtype(type_embeddings.dtype()));
-  }
-
-  int64_t max_data_length = 0;
-  for (int64_t group_index = 0; group_index < num_groups; ++group_index) {
-    max_data_length = std::max(
-        max_data_length, data_offsets[static_cast<size_t>(group_index + 1)] -
-                             data_offsets[static_cast<size_t>(group_index)]);
-  }
-
-  auto queries = torch::zeros(
-      {num_groups, max_data_length + 1, type_embeddings.size(1)},
-      torch::TensorOptions()
-          .device(type_embeddings.device())
-          .dtype(type_embeddings.dtype()));
-  queries.index_put_({Slice(), 0}, type_embeddings);
-
-  for (int64_t group_index = 0; group_index < num_groups; ++group_index) {
-    const auto start = data_offsets[static_cast<size_t>(group_index)];
-    const auto end = data_offsets[static_cast<size_t>(group_index + 1)];
-    const auto length = end - start;
-    if (length == 0) {
-      continue;
-    }
-
-    queries.index_put_({group_index, Slice(1, 1 + length)},
-                       data_tensors.index({Slice(start, end)}));
-  }
-
-  return queries;
-}
-
-torch::Tensor build_grouped_query_mask(const std::vector<int64_t> &data_offsets,
-                                       torch::Device device) {
-  const auto num_groups =
-      static_cast<int64_t>(data_offsets.empty() ? 0 : data_offsets.size() - 1);
-  if (num_groups == 0) {
-    return torch::empty({0, 0},
-                        torch::TensorOptions().device(device).dtype(torch::kBool));
-  }
-
-  int64_t max_data_length = 0;
-  for (int64_t group_index = 0; group_index < num_groups; ++group_index) {
-    max_data_length = std::max(
-        max_data_length, data_offsets[static_cast<size_t>(group_index + 1)] -
-                             data_offsets[static_cast<size_t>(group_index)]);
-  }
-
-  auto valid_token_mask = torch::zeros(
-      {num_groups, max_data_length + 1},
-      torch::TensorOptions().device(device).dtype(torch::kBool));
-  valid_token_mask.index_put_({Slice(), 0}, true);
-
-  for (int64_t group_index = 0; group_index < num_groups; ++group_index) {
-    const auto start = data_offsets[static_cast<size_t>(group_index)];
-    const auto end = data_offsets[static_cast<size_t>(group_index + 1)];
-    const auto length = end - start;
-    if (length == 0) {
-      continue;
-    }
-
-    valid_token_mask.index_put_({group_index, Slice(1, 1 + length)}, true);
-  }
-
-  return valid_token_mask;
-}
-
-} // namespace
 
 ConditionEmbeddingImpl::ConditionEmbeddingImpl(
     std::shared_ptr<InstructionDataEmbeddingImpl> instruction_data_embedding,
@@ -144,15 +45,15 @@ torch::Tensor ConditionEmbeddingImpl::forward(
                            flat.instruction_data_indices, batch_size);
   auto condition_embeddings = compute_condition_embeddings(
       flat.instruction_types, flat.instruction_indices,
-      flat.instruction_data_type_indices, data_tensors);
+      flat.instruction_data_parent_rows, data_tensors);
   auto batch_offsets = tensor_utils::build_contiguous_offsets(
-      flat.instruction_indices.index({Slice(), 0}), batch_size);
+      flat.instruction_indices.select(1, 0), batch_size);
   auto [padded_batch, valid_token_mask] =
       tensor_utils::pad_by_offsets(condition_embeddings, batch_offsets,
                                    dimension_out_);
   auto positioned = position_embedding_(padded_batch);
-  return masked_self_attention_reduce(conditions_multi_head_attention_,
-                                      positioned, valid_token_mask);
+  return attention_utils::masked_self_attention_reduce(
+      conditions_multi_head_attention_, positioned, valid_token_mask);
 }
 
 torch::Tensor ConditionEmbeddingImpl::compute_data_tensors(
@@ -171,7 +72,7 @@ torch::Tensor ConditionEmbeddingImpl::compute_data_tensors(
 
 torch::Tensor ConditionEmbeddingImpl::compute_condition_embeddings(
     const torch::Tensor &condition_types, const torch::Tensor &condition_indices,
-    const torch::Tensor &instruction_data_type_indices,
+    const torch::Tensor &instruction_data_parent_rows,
     const torch::Tensor &data_tensors) {
   auto condition_type_embeddings =
       condition_type_embedding_(condition_types.to(torch::kLong));
@@ -182,10 +83,16 @@ torch::Tensor ConditionEmbeddingImpl::compute_condition_embeddings(
   }
 
   auto data_offsets = tensor_utils::build_parent_offsets(
-      condition_indices, instruction_data_type_indices, 2);
-  auto queries =
-      build_grouped_queries(condition_type_embeddings, data_offsets, data_tensors);
-  auto valid_token_mask = build_grouped_query_mask(data_offsets, device_);
-  return masked_self_attention_reduce(data_multi_head_attention_, queries,
-                                      valid_token_mask);
+      instruction_data_parent_rows, num_conditions);
+  auto [padded_data, data_token_mask] =
+      tensor_utils::pad_by_offsets(data_tensors, data_offsets, dimension_out_);
+  auto queries = torch::cat({condition_type_embeddings.unsqueeze(1), padded_data},
+                            1);
+  auto valid_token_mask = torch::cat(
+      {torch::ones({num_conditions, 1},
+                   torch::TensorOptions().device(device_).dtype(torch::kBool)),
+       data_token_mask},
+      1);
+  return attention_utils::masked_self_attention_reduce(
+      data_multi_head_attention_, queries, valid_token_mask);
 }

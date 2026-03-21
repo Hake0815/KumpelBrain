@@ -356,7 +356,7 @@ int main() {
                      instruction_embedding->compute_instruction_embeddings(
                          flat_instructions.instruction_types,
                          flat_instructions.instruction_indices,
-                         flat_instructions.instruction_data_type_indices,
+                         flat_instructions.instruction_data_parent_rows,
                          instruction_data_tensors);
                  benchmark_sink += embeddings.size(0);
                });
@@ -395,7 +395,7 @@ int main() {
                  auto embeddings = condition_embedding->compute_condition_embeddings(
                      flat_conditions.instruction_types,
                      flat_conditions.instruction_indices,
-                     flat_conditions.instruction_data_type_indices,
+                     flat_conditions.instruction_data_parent_rows,
                      condition_data_tensors);
                  benchmark_sink += embeddings.size(0);
                });

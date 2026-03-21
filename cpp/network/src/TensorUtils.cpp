@@ -1,6 +1,5 @@
 #include "../include/TensorUtils.h"
 
-#include <algorithm>
 #include <limits>
 #include <stdexcept>
 
@@ -8,20 +7,15 @@ namespace tensor_utils {
 
 namespace {
 
-torch::Tensor to_cpu_long(const torch::Tensor &tensor) {
-  return tensor.to(torch::TensorOptions().device(torch::kCPU).dtype(torch::kLong));
+torch::Tensor build_offsets_from_counts(const torch::Tensor &counts) {
+  auto zero = torch::zeros({1}, counts.options());
+  return torch::cat({zero, counts.cumsum(0)});
 }
 
-bool row_prefix_matches(const torch::TensorAccessor<int64_t, 2> &lhs,
-                        int64_t lhs_row,
-                        const torch::TensorAccessor<int64_t, 2> &rhs,
-                        int64_t rhs_row, int64_t columns) {
-  for (int64_t column = 0; column < columns; ++column) {
-    if (lhs[lhs_row][column] != rhs[rhs_row][column]) {
-      return false;
-    }
-  }
-  return true;
+torch::Tensor make_long_options_like(const torch::Tensor &tensor) {
+  return tensor.to(torch::TensorOptions()
+                       .device(tensor.device())
+                       .dtype(torch::kInt64));
 }
 
 } // namespace
@@ -59,66 +53,39 @@ tensor_from_2d_int64(const std::vector<std::vector<int64_t>> &values,
       .view({static_cast<int64_t>(values.size()), width});
 }
 
-std::vector<int64_t> build_contiguous_offsets(const torch::Tensor &group_indices,
-                                              int64_t num_groups) {
-  std::vector<int64_t> offsets(static_cast<size_t>(num_groups) + 1, 0);
+torch::Tensor build_contiguous_offsets(const torch::Tensor &group_indices,
+                                       int64_t num_groups) {
+  auto options = torch::TensorOptions()
+                     .device(group_indices.device())
+                     .dtype(torch::kInt64);
   if (num_groups <= 0) {
-    return offsets;
+    return torch::zeros({1}, options);
   }
 
-  const auto group_indices_cpu = to_cpu_long(group_indices.contiguous()).view({-1});
-  const auto accessor = group_indices_cpu.accessor<int64_t, 1>();
-  int64_t cursor = 0;
-
-  for (int64_t group = 0; group < num_groups; ++group) {
-    offsets[static_cast<size_t>(group)] = cursor;
-    while (cursor < group_indices_cpu.size(0) && accessor[cursor] == group) {
-      ++cursor;
-    }
-  }
-
-  offsets[static_cast<size_t>(num_groups)] = group_indices_cpu.size(0);
-  return offsets;
+  auto flattened_indices = make_long_options_like(group_indices).view({-1});
+  auto counts = torch::bincount(flattened_indices, torch::Tensor(), num_groups);
+  return build_offsets_from_counts(counts);
 }
 
-std::vector<int64_t>
-build_parent_offsets(const torch::Tensor &parent_indices,
-                     const torch::Tensor &child_indices, int64_t parent_columns) {
-  const auto parent_count = parent_indices.size(0);
-  std::vector<int64_t> offsets(static_cast<size_t>(parent_count) + 1, 0);
-  if (parent_count == 0) {
-    return offsets;
+torch::Tensor build_parent_offsets(const torch::Tensor &parent_row_ids,
+                                   int64_t num_parents) {
+  auto options = torch::TensorOptions()
+                     .device(parent_row_ids.device())
+                     .dtype(torch::kInt64);
+  if (num_parents <= 0) {
+    return torch::zeros({1}, options);
   }
 
-  const auto child_count = child_indices.size(0);
-  if (child_count == 0) {
-    return offsets;
-  }
-
-  const auto parent_cpu = to_cpu_long(parent_indices.contiguous());
-  const auto child_cpu = to_cpu_long(child_indices.contiguous());
-  const auto parent_accessor = parent_cpu.accessor<int64_t, 2>();
-  const auto child_accessor = child_cpu.accessor<int64_t, 2>();
-
-  int64_t child_cursor = 0;
-  for (int64_t parent_row = 0; parent_row < parent_count; ++parent_row) {
-    offsets[static_cast<size_t>(parent_row)] = child_cursor;
-    while (child_cursor < child_count &&
-           row_prefix_matches(parent_accessor, parent_row, child_accessor,
-                              child_cursor, parent_columns)) {
-      ++child_cursor;
-    }
-  }
-
-  offsets[static_cast<size_t>(parent_count)] = child_cursor;
-  return offsets;
+  auto flattened_parent_rows = make_long_options_like(parent_row_ids).view({-1});
+  auto counts =
+      torch::bincount(flattened_parent_rows, torch::Tensor(), num_parents);
+  return build_offsets_from_counts(counts);
 }
 
 std::pair<torch::Tensor, torch::Tensor>
 pad_by_offsets(const torch::Tensor &flat_sequences,
-               const std::vector<int64_t> &offsets, int64_t dimension_out) {
-  const auto batch_size =
-      static_cast<int64_t>(offsets.empty() ? 0 : offsets.size() - 1);
+               const torch::Tensor &offsets, int64_t dimension_out) {
+  const auto batch_size = offsets.size(0) == 0 ? 0 : offsets.size(0) - 1;
   const auto options =
       torch::TensorOptions().device(flat_sequences.device()).dtype(flat_sequences.dtype());
   auto mask_options =
@@ -129,12 +96,9 @@ pad_by_offsets(const torch::Tensor &flat_sequences,
             torch::empty({0, 0}, mask_options)};
   }
 
-  int64_t max_sequence_length = 0;
-  for (int64_t batch_index = 0; batch_index < batch_size; ++batch_index) {
-    max_sequence_length = std::max(
-        max_sequence_length, offsets[static_cast<size_t>(batch_index + 1)] -
-                                 offsets[static_cast<size_t>(batch_index)]);
-  }
+  auto lengths = offsets.slice(0, 1, batch_size + 1) -
+                 offsets.slice(0, 0, batch_size);
+  const auto max_sequence_length = lengths.max().item<int64_t>();
 
   auto padded =
       torch::zeros({batch_size, max_sequence_length, dimension_out}, options);
@@ -144,20 +108,15 @@ pad_by_offsets(const torch::Tensor &flat_sequences,
     return {padded, valid_token_mask};
   }
 
-  for (int64_t batch_index = 0; batch_index < batch_size; ++batch_index) {
-    const auto start = offsets[static_cast<size_t>(batch_index)];
-    const auto end = offsets[static_cast<size_t>(batch_index + 1)];
-    const auto length = end - start;
-    if (length == 0) {
-      continue;
-    }
+  auto row_ids = torch::arange(flat_sequences.size(0), offsets.options());
+  auto end_offsets = offsets.slice(0, 1, batch_size + 1);
+  auto group_ids =
+      torch::searchsorted(end_offsets, row_ids, /*out_int32=*/false,
+                          /*right=*/true);
+  auto positions = row_ids - offsets.index_select(0, group_ids);
 
-    padded.index_put_(
-        {batch_index, torch::indexing::Slice(0, length)},
-        flat_sequences.index({torch::indexing::Slice(start, end)}));
-    valid_token_mask.index_put_(
-        {batch_index, torch::indexing::Slice(0, length)}, true);
-  }
+  padded.index_put_({group_ids, positions}, flat_sequences);
+  valid_token_mask.index_put_({group_ids, positions}, true);
 
   return {padded, valid_token_mask};
 }

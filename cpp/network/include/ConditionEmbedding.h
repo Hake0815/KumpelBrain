@@ -33,7 +33,7 @@ struct ConditionEmbeddingImpl : torch::nn::Module,
 
   torch::Tensor compute_condition_embeddings(
       const torch::Tensor &condition_types, const torch::Tensor &condition_indices,
-      const torch::Tensor &instruction_data_type_indices,
+      const torch::Tensor &instruction_data_parent_rows,
       const torch::Tensor &data_tensors);
 
 private:

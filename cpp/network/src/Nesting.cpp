@@ -219,13 +219,15 @@ void append_vectorized_payload(
 
 void append_instruction_data_entry(
     const serialization::ProtoBufInstructionData &data, size_t batch_index,
-    size_t instruction_index, int data_index,
+    size_t instruction_index, int data_index, int64_t parent_row,
     std::vector<int64_t> &instruction_data_types,
+    std::vector<int64_t> &instruction_data_parent_rows,
     std::vector<std::vector<int64_t>> &instruction_data_type_indices,
     FlattenInstructionsResult &result, std::optional<torch::Device> device,
     std::optional<torch::Dtype> payload_dtype) {
   const auto data_type = static_cast<int64_t>(data.instruction_data_type());
   instruction_data_types.push_back(data_type);
+  instruction_data_parent_rows.push_back(parent_row);
   instruction_data_type_indices.push_back(
       make_instruction_data_index(batch_index, instruction_index, data_index));
 
@@ -246,18 +248,20 @@ void append_message_entries(
     const TypeAccessor &type_accessor, std::vector<int64_t> &instruction_types,
     std::vector<std::vector<int64_t>> &instruction_indices,
     std::vector<int64_t> &instruction_data_types,
+    std::vector<int64_t> &instruction_data_parent_rows,
     std::vector<std::vector<int64_t>> &instruction_data_type_indices,
     FlattenInstructionsResult &result, std::optional<torch::Device> device,
     std::optional<torch::Dtype> payload_dtype) {
   instruction_types.push_back(type_accessor(message));
   instruction_indices.push_back(
       make_instruction_index(batch_index, instruction_index));
+  const auto parent_row = static_cast<int64_t>(instruction_types.size() - 1);
 
   for (int data_index = 0; data_index < message.data_size(); ++data_index) {
     append_instruction_data_entry(
         message.data(data_index), batch_index, instruction_index, data_index,
-        instruction_data_types, instruction_data_type_indices, result, device,
-        payload_dtype);
+        parent_row, instruction_data_types, instruction_data_parent_rows,
+        instruction_data_type_indices, result, device, payload_dtype);
   }
 }
 
@@ -265,6 +269,7 @@ FlattenInstructionsResult build_flatten_result(
     std::vector<int64_t> instruction_types,
     std::vector<std::vector<int64_t>> instruction_indices,
     std::vector<int64_t> instruction_data_types,
+    std::vector<int64_t> instruction_data_parent_rows,
     std::vector<std::vector<int64_t>> instruction_data_type_indices,
     FlattenInstructionsResult result, std::optional<torch::Device> device,
     std::optional<torch::Dtype> dtype) {
@@ -274,6 +279,8 @@ FlattenInstructionsResult build_flatten_result(
       tensor_utils::tensor_from_2d_int64(instruction_indices, device, dtype);
   result.instruction_data_types =
       torch::tensor(instruction_data_types, options);
+  result.instruction_data_parent_rows =
+      torch::tensor(instruction_data_parent_rows, options);
   result.instruction_data_type_indices = tensor_utils::tensor_from_2d_int64(
       instruction_data_type_indices, device, dtype);
   return result;
@@ -288,6 +295,7 @@ flatten_messages(const std::vector<std::vector<MessageType>> &instruction_likes,
   std::vector<int64_t> instruction_types;
   std::vector<std::vector<int64_t>> instruction_indices;
   std::vector<int64_t> instruction_data_types;
+  std::vector<int64_t> instruction_data_parent_rows;
   std::vector<std::vector<int64_t>> instruction_data_type_indices;
   FlattenInstructionsResult result;
 
@@ -303,6 +311,7 @@ flatten_messages(const std::vector<std::vector<MessageType>> &instruction_likes,
           batch_instruction_likes[instruction_index], batch_index,
           instruction_index, type_accessor, instruction_types,
           instruction_indices, instruction_data_types,
+          instruction_data_parent_rows,
           instruction_data_type_indices, result, device, payload_dtype);
     }
   }
@@ -310,6 +319,7 @@ flatten_messages(const std::vector<std::vector<MessageType>> &instruction_likes,
   return build_flatten_result(std::move(instruction_types),
                               std::move(instruction_indices),
                               std::move(instruction_data_types),
+                              std::move(instruction_data_parent_rows),
                               std::move(instruction_data_type_indices),
                               std::move(result), device, dtype);
 }

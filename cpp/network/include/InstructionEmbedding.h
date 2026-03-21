@@ -25,6 +25,7 @@ struct InstructionEmbeddingImpl : torch::nn::Module,
       const torch::Tensor &instruction_types,
       const torch::Tensor &instruction_indices,
       const torch::Tensor &instruction_data_types,
+      const torch::Tensor &instruction_data_parent_rows,
       const torch::Tensor &instruction_data_type_indices,
       const std::array<std::vector<torch::Tensor>, 6> &instruction_data,
       const std::vector<std::vector<ProtoBufFilter>> &filter_data,
@@ -45,7 +46,7 @@ struct InstructionEmbeddingImpl : torch::nn::Module,
   torch::Tensor compute_instruction_embeddings(
       const torch::Tensor &instruction_types,
       const torch::Tensor &instruction_indices,
-      const torch::Tensor &instruction_data_type_indices,
+      const torch::Tensor &instruction_data_parent_rows,
       const torch::Tensor &data_tensors);
 
 private:

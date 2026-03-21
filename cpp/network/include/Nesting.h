@@ -60,6 +60,7 @@ struct FlattenInstructionsResult {
   torch::Tensor instruction_types{};
   torch::Tensor instruction_indices{};
   torch::Tensor instruction_data_types{};
+  torch::Tensor instruction_data_parent_rows{};
   torch::Tensor instruction_data_type_indices{};
   std::array<std::vector<torch::Tensor>, 6> instruction_data{};
   std::array<std::vector<std::tuple<int64_t, int64_t, int64_t>>, 6>

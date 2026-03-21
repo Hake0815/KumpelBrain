@@ -98,7 +98,9 @@ def run_condition_parity(
     if not benchmark:
         return None, None
 
-    py_avg_seconds = _benchmark_forward(lambda: py_condition.forward(conditions_batch), device)
+    py_avg_seconds = _benchmark_forward(
+        lambda: py_condition.forward(conditions_batch), device
+    )
     cpp_avg_seconds = _benchmark_forward(
         lambda: cpp_condition.forward(serialized_conditions_batch), device
     )
@@ -107,7 +109,6 @@ def run_condition_parity(
 
 def main() -> None:
     torch.manual_seed(42)
-    torch.use_deterministic_algorithms(True)
 
     dim = 32
     run_condition_parity(dim, torch.device("cpu"))

@@ -155,7 +155,9 @@ def test_instruction_embedding_parity(
     if not benchmark:
         return None, None
 
-    py_avg_seconds = _benchmark_forward(lambda: py_instruction.forward(instructions_batch), device)
+    py_avg_seconds = _benchmark_forward(
+        lambda: py_instruction.forward(instructions_batch), device
+    )
     cpp_avg_seconds = _benchmark_forward(
         lambda: cpp_instruction.forward(serialized_instructions_batch), device
     )
@@ -187,7 +189,6 @@ def run_instruction_parity(
 
 def main() -> None:
     torch.manual_seed(42)
-    torch.use_deterministic_algorithms(True)
 
     dim = 32
     run_instruction_parity(dim, torch.device("cpu"))

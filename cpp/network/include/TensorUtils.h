@@ -13,17 +13,15 @@ tensor_from_2d_int64(const std::vector<std::vector<int64_t>> &values,
                      std::optional<torch::Device> device = std::nullopt,
                      std::optional<torch::Dtype> dtype = std::nullopt);
 
-std::vector<int64_t> build_contiguous_offsets(const torch::Tensor &group_indices,
-                                              int64_t num_groups);
+torch::Tensor build_contiguous_offsets(const torch::Tensor &group_indices,
+                                       int64_t num_groups);
 
-std::vector<int64_t>
-build_parent_offsets(const torch::Tensor &parent_indices,
-                     const torch::Tensor &child_indices,
-                     int64_t parent_columns);
+torch::Tensor build_parent_offsets(const torch::Tensor &parent_row_ids,
+                                   int64_t num_parents);
 
 std::pair<torch::Tensor, torch::Tensor>
 pad_by_offsets(const torch::Tensor &flat_sequences,
-               const std::vector<int64_t> &offsets, int64_t dimension_out);
+               const torch::Tensor &offsets, int64_t dimension_out);
 
 torch::Tensor make_padding_attention_mask(const torch::Tensor &valid_token_mask,
                                           torch::Dtype dtype);
