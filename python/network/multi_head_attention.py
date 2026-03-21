@@ -67,7 +67,9 @@ class MultiHeadAttention(nn.Module, SaveLoadMixin):
             query (torch.Tensor): query of shape (``N``, ``L_q``, ``d_qk``)
             key (torch.Tensor): key of shape (``N``, ``L_kv``, ``d_qk``)
             value (torch.Tensor): value of shape (``N``, ``L_kv``, ``d_v``)
-            attn_mask (torch.Tensor, optional): attention mask of shape (``N``, ``L_q``, ``L_kv``) to pass to SDPA. Default: None
+            attn_mask (torch.Tensor, optional): attention mask of shape
+                (``N``, ``L_q``, ``L_kv``) or broadcastable equivalent to
+                pass to SDPA. Default: None
             is_causal (bool, optional): Whether to apply causal mask. Default: False
 
         Returns:
@@ -110,6 +112,8 @@ class MultiHeadAttention(nn.Module, SaveLoadMixin):
 
         # Step 3. Run SDPA
         # (N, nheads, L_t, E_head)
+        if attn_mask is not None and attn_mask.dim() == 3:
+            attn_mask = attn_mask.unsqueeze(1)
         attn_output = F.scaled_dot_product_attention(
             query,
             key,
