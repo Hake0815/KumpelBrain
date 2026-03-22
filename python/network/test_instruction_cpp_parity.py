@@ -93,6 +93,9 @@ def test_instruction_data_embedding_parity(
     instructions_batch = instruction_test_data.instructions_batch
 
     batch_size = len(instructions_batch)
+    serialized_instructions_batch = proto_serialization.serialize_instruction_batches(
+        instructions_batch
+    )
 
     py_instruction_data = card_embedding.InstructionDataEmbedding(
         py_shared, dim, device=device
@@ -121,20 +124,7 @@ def test_instruction_data_embedding_parity(
         instruction_data_indices,
         batch_size,
     )
-    serialized_filter_data = [
-        proto_serialization.serialize_filter_payload(filter_payload)
-        for filter_payload in instruction_data[4]
-    ]
-    cpp_instruction_data_input = list(instruction_data)
-    cpp_instruction_data_input[4] = serialized_filter_data
-    cpp_out = cpp_instruction_data.forward(
-        instruction_indices,
-        instruction_data_types,
-        instruction_data_type_indices,
-        tuple(cpp_instruction_data_input),
-        instruction_data_indices,
-        batch_size,
-    )
+    cpp_out = cpp_instruction_data.forward(serialized_instructions_batch)
     _assert_close("InstructionDataEmbedding", py_out, cpp_out)
 
     return py_instruction_data, cpp_instruction_data
