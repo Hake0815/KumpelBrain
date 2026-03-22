@@ -1,10 +1,11 @@
-#include <ATen/Context.h>
 #include "../network/include/ConditionEmbedding.h"
 #include "../network/include/InstructionDataEmbedding.h"
 #include "../network/include/InstructionEmbedding.h"
 #include "../network/include/Nesting.h"
 #include "../network/include/SharedEmbeddingHolder.h"
+#include <ATen/Context.h>
 
+#include <c10/core/Device.h>
 #include <chrono>
 #include <cstdint>
 #include <functional>
@@ -47,7 +48,8 @@ make_group_filter(serialization::ProtoBufFilterLogicalOperator logical_operator,
 
 serialization::ProtoBufFilter make_nested_filter(int64_t batch_index,
                                                  int64_t instruction_index) {
-  const auto card_type = static_cast<int>((batch_index + instruction_index) % 4);
+  const auto card_type =
+      static_cast<int>((batch_index + instruction_index) % 4);
   const auto card_subtype =
       static_cast<int>(1 + ((batch_index + instruction_index) % 8));
   const auto hp_threshold =
@@ -92,9 +94,8 @@ serialization::ProtoBufInstructionData make_discard_data(int source) {
   return data;
 }
 
-serialization::ProtoBufInstructionData make_card_amount_data(int min_amount,
-                                                             int max_amount,
-                                                             int from_position) {
+serialization::ProtoBufInstructionData
+make_card_amount_data(int min_amount, int max_amount, int from_position) {
   serialization::ProtoBufInstructionData data;
   data.set_instruction_data_type(
       serialization::INSTRUCTION_DATA_TYPE_CARD_AMOUNT_DATA);
@@ -137,9 +138,9 @@ serialization::ProtoBufInstructionData make_player_target_data(int target) {
   return data;
 }
 
-serialization::ProtoBufInstruction
-make_instruction(int instruction_type,
-                 const std::vector<serialization::ProtoBufInstructionData> &data) {
+serialization::ProtoBufInstruction make_instruction(
+    int instruction_type,
+    const std::vector<serialization::ProtoBufInstructionData> &data) {
   serialization::ProtoBufInstruction instruction;
   instruction.set_instruction_type(
       static_cast<serialization::ProtoBufInstructionType>(instruction_type));
@@ -149,9 +150,9 @@ make_instruction(int instruction_type,
   return instruction;
 }
 
-serialization::ProtoBufCondition
-make_condition(int condition_type,
-               const std::vector<serialization::ProtoBufInstructionData> &data) {
+serialization::ProtoBufCondition make_condition(
+    int condition_type,
+    const std::vector<serialization::ProtoBufInstructionData> &data) {
   serialization::ProtoBufCondition condition;
   condition.set_condition_type(
       static_cast<serialization::ProtoBufConditionType>(condition_type));
@@ -170,26 +171,28 @@ build_instruction_batches(int64_t batch_size, int64_t instructions_per_batch) {
     std::vector<serialization::ProtoBufInstruction> batch;
     batch.reserve(instructions_per_batch);
 
-    for (int64_t instruction_index = 0; instruction_index < instructions_per_batch;
-         ++instruction_index) {
+    for (int64_t instruction_index = 0;
+         instruction_index < instructions_per_batch; ++instruction_index) {
       switch (instruction_index % 8) {
       case 0:
         batch.push_back(make_instruction(
             serialization::INSTRUCTION_TYPE_DEAL_DAMAGE,
-            {make_attack_data(20 + static_cast<int>((batch_index + instruction_index) %
-                                                    120))}));
+            {make_attack_data(
+                20 +
+                static_cast<int>((batch_index + instruction_index) % 120))}));
         break;
       case 1:
         batch.push_back(make_instruction(
             serialization::INSTRUCTION_TYPE_SELECT_CARDS,
             {make_card_amount_data(1, 2, serialization::CARD_POSITION_HAND),
-             make_filter_data(make_nested_filter(batch_index, instruction_index))}));
+             make_filter_data(
+                 make_nested_filter(batch_index, instruction_index))}));
         break;
       case 2:
-        batch.push_back(make_instruction(
-            serialization::INSTRUCTION_TYPE_DISCARD,
-            {make_discard_data(static_cast<int>((batch_index + instruction_index) %
-                                                3))}));
+        batch.push_back(
+            make_instruction(serialization::INSTRUCTION_TYPE_DISCARD,
+                             {make_discard_data(static_cast<int>(
+                                 (batch_index + instruction_index) % 3))}));
         break;
       case 3:
         batch.push_back(make_instruction(
@@ -206,20 +209,21 @@ build_instruction_batches(int64_t batch_size, int64_t instructions_per_batch) {
       case 5:
         batch.push_back(make_instruction(
             serialization::INSTRUCTION_TYPE_REVEAL_CARDS,
-            {make_card_amount_data(1, 3, serialization::CARD_POSITION_SELECTED_CARDS),
-             make_filter_data(make_leaf_filter(
-                 serialization::FILTER_TYPE_EXCLUDE_SOURCE,
-                 serialization::FILTER_OPERATION_NONE, 0))}));
+            {make_card_amount_data(1, 3,
+                                   serialization::CARD_POSITION_SELECTED_CARDS),
+             make_filter_data(
+                 make_leaf_filter(serialization::FILTER_TYPE_EXCLUDE_SOURCE,
+                                  serialization::FILTER_OPERATION_NONE, 0))}));
         break;
       case 6:
-        batch.push_back(make_instruction(
-            serialization::INSTRUCTION_TYPE_SHOW_CARDS, {}));
+        batch.push_back(
+            make_instruction(serialization::INSTRUCTION_TYPE_SHOW_CARDS, {}));
         break;
       default:
-        batch.push_back(make_instruction(
-            serialization::INSTRUCTION_TYPE_SHUFFLE_DECK,
-            {make_player_target_data(
-                static_cast<int>((batch_index + instruction_index) % 2))}));
+        batch.push_back(
+            make_instruction(serialization::INSTRUCTION_TYPE_SHUFFLE_DECK,
+                             {make_player_target_data(static_cast<int>(
+                                 (batch_index + instruction_index) % 2))}));
         break;
       }
     }
@@ -245,10 +249,11 @@ build_condition_batches(int64_t batch_size, int64_t conditions_per_batch) {
         batch.push_back(make_condition(
             serialization::CONDITION_TYPE_HAS_CARDS,
             {make_card_amount_data(1, 60, serialization::CARD_POSITION_DECK),
-             make_filter_data(make_nested_filter(batch_index, condition_index))}));
+             make_filter_data(
+                 make_nested_filter(batch_index, condition_index))}));
       } else {
-        batch.push_back(make_condition(
-            serialization::CONDITION_TYPE_ABILITY_NOT_USED, {}));
+        batch.push_back(
+            make_condition(serialization::CONDITION_TYPE_ABILITY_NOT_USED, {}));
       }
     }
 
@@ -331,14 +336,17 @@ void run_embedding_benchmarks(const torch::Device &device,
   instruction_embedding->eval();
   condition_embedding->eval();
 
-  auto flat_instructions =
-      nesting::flatten_instructions(instructions, device, torch::kInt64);
-  auto flat_conditions =
-      nesting::flatten_conditions(conditions, device, torch::kInt64);
-
-  const auto instruction_batch_size =
-      static_cast<int64_t>(instructions.size());
+  const auto instruction_batch_size = static_cast<int64_t>(instructions.size());
   const auto condition_batch_size = static_cast<int64_t>(conditions.size());
+
+  auto flat_instructions = nesting::flatten_instructions(
+      instructions, torch::Device(torch::kCPU), torch::kInt64);
+  flat_instructions =
+      nesting::move_flattened_result_to_device(flat_instructions, device);
+  auto flat_conditions = nesting::flatten_conditions(
+      conditions, torch::Device(torch::kCPU), torch::kInt64);
+  flat_conditions =
+      nesting::move_flattened_result_to_device(flat_conditions, device);
 
   std::cout << "\n== " << label << " ==\n";
   std::cout << "Instruction batches: " << instruction_batch_size
@@ -352,32 +360,24 @@ void run_embedding_benchmarks(const torch::Device &device,
             << ", flattened data rows: "
             << flat_conditions.instruction_data_type_indices.size(0) << "\n";
 
-  benchmark_ms(label + " flatten_instructions", device, warmup_runs,
-               measured_runs, [&]() {
-                 auto flat =
-                     nesting::flatten_instructions(instructions, device, torch::kInt64);
-                 benchmark_sink += flat.instruction_indices.size(0);
-               });
-
+  if (device.is_cpu()) {
+    benchmark_ms(label + " flatten_instructions", device, warmup_runs,
+                 measured_runs, [&]() {
+                   auto flat = nesting::flatten_instructions(
+                       instructions, device, torch::kInt64);
+                   benchmark_sink += flat.instruction_indices.size(0);
+                 });
+  }
   benchmark_ms(label + " instruction_compute_data_tensors", device, warmup_runs,
                measured_runs, [&]() {
-                 auto data_tensors = instruction_embedding->compute_data_tensors(
-                     flat_instructions.instruction_indices,
-                     flat_instructions.instruction_data_types,
-                     flat_instructions.instruction_data_type_indices,
-                     flat_instructions.instruction_data,
-                     flat_instructions.filter_data,
-                     flat_instructions.instruction_data_indices,
-                     instruction_batch_size);
+                 auto data_tensors =
+                     instruction_embedding->compute_data_tensors(
+                         flat_instructions);
                  benchmark_sink += data_tensors.size(0);
                });
 
-  auto instruction_data_tensors = instruction_embedding->compute_data_tensors(
-      flat_instructions.instruction_indices,
-      flat_instructions.instruction_data_types,
-      flat_instructions.instruction_data_type_indices,
-      flat_instructions.instruction_data, flat_instructions.filter_data,
-      flat_instructions.instruction_data_indices, instruction_batch_size);
+  auto instruction_data_tensors =
+      instruction_embedding->compute_data_tensors(flat_instructions);
 
   benchmark_ms(label + " instruction_compute_embeddings", device, warmup_runs,
                measured_runs, [&]() {
@@ -396,39 +396,32 @@ void run_embedding_benchmarks(const torch::Device &device,
                  benchmark_sink += embeddings.size(0);
                });
 
-  benchmark_ms(label + " flatten_conditions", device, warmup_runs, measured_runs,
-               [&]() {
-                 auto flat =
-                     nesting::flatten_conditions(conditions, device, torch::kInt64);
-                 benchmark_sink += flat.instruction_indices.size(0);
-               });
+  if (device.is_cpu()) {
+    benchmark_ms(label + " flatten_conditions", device, warmup_runs,
+                 measured_runs, [&]() {
+                   auto flat = nesting::flatten_conditions(conditions, device,
+                                                           torch::kInt64);
+                   benchmark_sink += flat.instruction_indices.size(0);
+                 });
+  }
 
   benchmark_ms(label + " condition_compute_data_tensors", device, warmup_runs,
                measured_runs, [&]() {
-                 auto data_tensors = condition_embedding->compute_data_tensors(
-                     flat_conditions.instruction_indices,
-                     flat_conditions.instruction_data_types,
-                     flat_conditions.instruction_data_type_indices,
-                     flat_conditions.instruction_data,
-                     flat_conditions.filter_data,
-                     flat_conditions.instruction_data_indices,
-                     condition_batch_size);
+                 auto data_tensors =
+                     condition_embedding->compute_data_tensors(flat_conditions);
                  benchmark_sink += data_tensors.size(0);
                });
-
-  auto condition_data_tensors = condition_embedding->compute_data_tensors(
-      flat_conditions.instruction_indices, flat_conditions.instruction_data_types,
-      flat_conditions.instruction_data_type_indices,
-      flat_conditions.instruction_data, flat_conditions.filter_data,
-      flat_conditions.instruction_data_indices, condition_batch_size);
+  auto condition_data_tensors =
+      condition_embedding->compute_data_tensors(flat_conditions);
 
   benchmark_ms(label + " condition_compute_embeddings", device, warmup_runs,
                measured_runs, [&]() {
-                 auto embeddings = condition_embedding->compute_condition_embeddings(
-                     flat_conditions.instruction_types,
-                     flat_conditions.instruction_indices,
-                     flat_conditions.instruction_data_parent_rows,
-                     condition_data_tensors);
+                 auto embeddings =
+                     condition_embedding->compute_condition_embeddings(
+                         flat_conditions.instruction_types,
+                         flat_conditions.instruction_indices,
+                         flat_conditions.instruction_data_parent_rows,
+                         condition_data_tensors);
                  benchmark_sink += embeddings.size(0);
                });
 
@@ -447,7 +440,8 @@ int main() {
   if (torch::cuda::is_available()) {
     run_embedding_benchmarks(torch::Device(torch::kCUDA), "cuda");
     with_deterministic_algorithms(true, [&]() {
-      run_embedding_benchmarks(torch::Device(torch::kCUDA), "cuda_deterministic");
+      run_embedding_benchmarks(torch::Device(torch::kCUDA),
+                               "cuda_deterministic");
     });
   } else {
     std::cout << "\nCUDA benchmark skipped: CUDA is not available.\n";

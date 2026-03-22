@@ -36,57 +36,30 @@ torch::Tensor InstructionEmbeddingImpl::forward(
         &instructions_batch) {
   const int64_t batch_size = static_cast<int64_t>(instructions_batch.size());
 
-  auto flat = nesting::flatten_instructions(instructions_batch, device_,
+  auto flat = nesting::flatten_instructions(instructions_batch, std::nullopt,
                                             torch::kInt64);
-  return forward_flattened(flat.instruction_types, flat.instruction_indices,
-                           flat.instruction_data_types,
-                           flat.instruction_data_parent_rows,
-                           flat.instruction_data_type_indices,
-                           flat.instruction_data, flat.filter_data,
-                           flat.instruction_data_indices, batch_size);
+  flat = nesting::move_flattened_result_to_device(flat, device_);
+  return forward_flattened(flat, batch_size);
 }
 
 torch::Tensor InstructionEmbeddingImpl::forward_flattened(
-    const torch::Tensor &instruction_types,
-    const torch::Tensor &instruction_indices,
-    const torch::Tensor &instruction_data_types,
-    const torch::Tensor &instruction_data_parent_rows,
-    const torch::Tensor &instruction_data_type_indices,
-    const std::array<std::vector<torch::Tensor>, 6> &instruction_data,
-    const std::vector<std::vector<serialization::ProtoBufFilter>> &filter_data,
-    const std::array<std::vector<std::tuple<int64_t, int64_t, int64_t>>, 6>
-        &instruction_data_indices,
-    int64_t batch_size) {
-  auto data_tensors =
-      compute_data_tensors(instruction_indices, instruction_data_types,
-                           instruction_data_type_indices, instruction_data,
-                           filter_data, instruction_data_indices, batch_size);
+    const nesting::FlattenInstructionsResult &flat, int64_t batch_size) {
+  auto data_tensors = compute_data_tensors(flat).to(device_);
   auto instruction_embeddings = compute_instruction_embeddings(
-      instruction_types, instruction_indices, instruction_data_parent_rows,
-      data_tensors);
+      flat.instruction_types, flat.instruction_indices,
+      flat.instruction_data_parent_rows, data_tensors);
   auto batch_offsets = tensor_utils::build_contiguous_offsets(
-      instruction_indices.select(1, 0), batch_size);
-  auto [padded_batch, valid_token_mask] =
-      tensor_utils::pad_by_offsets(instruction_embeddings, batch_offsets,
-                                   dimension_out_);
+      flat.instruction_indices.select(1, 0), batch_size);
+  auto [padded_batch, valid_token_mask] = tensor_utils::pad_by_offsets(
+      instruction_embeddings, batch_offsets, dimension_out_);
   auto positioned = position_embedding_(padded_batch);
   return attention_utils::masked_self_attention_reduce(
       instructions_multi_head_attention_, positioned, valid_token_mask);
 }
 
 torch::Tensor InstructionEmbeddingImpl::compute_data_tensors(
-    const torch::Tensor &instruction_indices,
-    const torch::Tensor &instruction_data_types,
-    const torch::Tensor &instruction_data_type_indices,
-    const std::array<std::vector<torch::Tensor>, 6> &instruction_data,
-    const std::vector<std::vector<serialization::ProtoBufFilter>> &filter_data,
-    const std::array<std::vector<std::tuple<int64_t, int64_t, int64_t>>, 6>
-        &instruction_data_indices,
-    int64_t batch_size) {
-  return instruction_data_embedding_->forward(
-      instruction_indices, instruction_data_types,
-      instruction_data_type_indices, instruction_data, filter_data,
-      instruction_data_indices, batch_size);
+    const nesting::FlattenInstructionsResult &flat) {
+  return instruction_data_embedding_->forward(flat);
 }
 
 torch::Tensor InstructionEmbeddingImpl::compute_instruction_embeddings(
@@ -106,8 +79,8 @@ torch::Tensor InstructionEmbeddingImpl::compute_instruction_embeddings(
       instruction_data_parent_rows, num_instructions);
   auto [padded_data, data_token_mask] =
       tensor_utils::pad_by_offsets(data_tensors, data_offsets, dimension_out_);
-  auto queries = torch::cat({instruction_type_embeddings.unsqueeze(1), padded_data},
-                            1);
+  auto queries =
+      torch::cat({instruction_type_embeddings.unsqueeze(1), padded_data}, 1);
   auto valid_token_mask = torch::cat(
       {torch::ones({num_instructions, 1},
                    torch::TensorOptions().device(device_).dtype(torch::kBool)),

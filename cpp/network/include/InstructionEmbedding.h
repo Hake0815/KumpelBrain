@@ -7,7 +7,6 @@
 #include "../include/SharedEmbeddingHolder.h"
 #include "../src/serialization/gamecore_serialization.pb.h"
 
-using ProtoBufFilter = gamecore::serialization::ProtoBufFilter;
 using ProtoBufInstruction = gamecore::serialization::ProtoBufInstruction;
 
 struct InstructionEmbeddingImpl : torch::nn::Module,
@@ -21,27 +20,12 @@ struct InstructionEmbeddingImpl : torch::nn::Module,
   torch::Tensor forward(
       const std::vector<std::vector<ProtoBufInstruction>> &instructions_batch);
 
-  torch::Tensor forward_flattened(
-      const torch::Tensor &instruction_types,
-      const torch::Tensor &instruction_indices,
-      const torch::Tensor &instruction_data_types,
-      const torch::Tensor &instruction_data_parent_rows,
-      const torch::Tensor &instruction_data_type_indices,
-      const std::array<std::vector<torch::Tensor>, 6> &instruction_data,
-      const std::vector<std::vector<ProtoBufFilter>> &filter_data,
-      const std::array<std::vector<std::tuple<int64_t, int64_t, int64_t>>, 6>
-          &instruction_data_indices,
-      int64_t batch_size);
+  torch::Tensor
+  forward_flattened(const nesting::FlattenInstructionsResult &flat,
+                    int64_t batch_size);
 
-  torch::Tensor compute_data_tensors(
-      const torch::Tensor &instruction_indices,
-      const torch::Tensor &instruction_data_types,
-      const torch::Tensor &instruction_data_type_indices,
-      const std::array<std::vector<torch::Tensor>, 6> &instruction_data,
-      const std::vector<std::vector<ProtoBufFilter>> &filter_data,
-      const std::array<std::vector<std::tuple<int64_t, int64_t, int64_t>>, 6>
-          &instruction_data_indices,
-      int64_t batch_size);
+  torch::Tensor
+  compute_data_tensors(const nesting::FlattenInstructionsResult &flat);
 
   torch::Tensor compute_instruction_embeddings(
       const torch::Tensor &instruction_types,

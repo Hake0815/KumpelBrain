@@ -59,7 +59,8 @@ MessageType parse_serialized_message(const pybind11::handle &input,
   return message;
 }
 
-serialization::ProtoBufFilter parse_filter_object(const pybind11::handle &input);
+serialization::ProtoBufFilter
+parse_filter_object(const pybind11::handle &input);
 
 serialization::ProtoBufFilterCondition
 parse_filter_condition_dict(const pybind11::dict &condition_dict) {
@@ -72,7 +73,8 @@ parse_filter_condition_dict(const pybind11::dict &condition_dict) {
   return condition;
 }
 
-serialization::ProtoBufFilter parse_filter_dict(const pybind11::dict &filter_dict) {
+serialization::ProtoBufFilter
+parse_filter_dict(const pybind11::dict &filter_dict) {
   serialization::ProtoBufFilter filter;
   filter.set_logical_operator(
       static_cast<serialization::ProtoBufFilterLogicalOperator>(
@@ -99,7 +101,8 @@ serialization::ProtoBufFilter parse_filter_dict(const pybind11::dict &filter_dic
   return filter;
 }
 
-serialization::ProtoBufFilter parse_filter_object(const pybind11::handle &input) {
+serialization::ProtoBufFilter
+parse_filter_object(const pybind11::handle &input) {
   if (pybind11::isinstance<pybind11::bytes>(input) ||
       pybind11::isinstance<pybind11::str>(input)) {
     return parse_serialized_message<serialization::ProtoBufFilter>(
@@ -121,78 +124,9 @@ parse_filter_list(const pybind11::iterable &filters) {
   return parsed;
 }
 
-std::array<std::vector<torch::Tensor>, 6>
-parse_instruction_data_tensors(const pybind11::tuple &instruction_data) {
-  if (instruction_data.size() != 6) {
-    throw std::invalid_argument("instruction_data must have length 6");
-  }
-
-  std::array<std::vector<torch::Tensor>, 6> parsed;
-  for (size_t i = 0; i < 6; ++i) {
-    if (i == 4) {
-      continue;
-    }
-    auto items = pybind11::cast<pybind11::list>(instruction_data[i]);
-    for (auto item : items) {
-      parsed[i].push_back(
-          pybind11::cast<torch::Tensor>(item.cast<pybind11::object>()));
-    }
-  }
-  return parsed;
-}
-
-std::vector<std::vector<serialization::ProtoBufFilter>>
-parse_instruction_filter_data(const pybind11::tuple &instruction_data) {
-  auto filters = pybind11::cast<pybind11::list>(instruction_data[4]);
-  std::vector<std::vector<serialization::ProtoBufFilter>> parsed_filters;
-  parsed_filters.reserve(filters.size());
-  for (auto item : filters) {
-    auto obj = item.cast<pybind11::object>();
-    if (pybind11::isinstance<pybind11::bytes>(obj) ||
-        pybind11::isinstance<pybind11::str>(obj)) {
-      parsed_filters.push_back(
-          {parse_serialized_message<serialization::ProtoBufFilter>(
-              obj, "ProtoBufFilter")});
-    } else if (pybind11::isinstance<pybind11::list>(obj) ||
-               pybind11::isinstance<pybind11::tuple>(obj)) {
-      parsed_filters.push_back(
-          parse_filter_list(pybind11::cast<pybind11::iterable>(obj)));
-    } else if (pybind11::isinstance<pybind11::dict>(obj)) {
-      parsed_filters.push_back({parse_filter_object(obj)});
-    } else {
-      throw std::invalid_argument(
-          "instruction_data[4] items must be serialized filter bytes, dict, or list");
-    }
-  }
-  return parsed_filters;
-}
-
-std::array<std::vector<std::tuple<int64_t, int64_t, int64_t>>, 6>
-parse_instruction_data_indices(
-    const pybind11::tuple &instruction_data_indices) {
-  if (instruction_data_indices.size() != 6) {
-    throw std::invalid_argument("instruction_data_indices must have length 6");
-  }
-
-  std::array<std::vector<std::tuple<int64_t, int64_t, int64_t>>, 6> parsed;
-  for (size_t i = 0; i < 6; ++i) {
-    auto idx_list = pybind11::cast<pybind11::list>(instruction_data_indices[i]);
-    parsed[i].reserve(idx_list.size());
-    for (auto item : idx_list) {
-      auto tup = pybind11::cast<pybind11::tuple>(item);
-      if (tup.size() != 3) {
-        throw std::invalid_argument("Each instruction index must be length 3");
-      }
-      parsed[i].emplace_back(pybind11::cast<int64_t>(tup[0]),
-                             pybind11::cast<int64_t>(tup[1]),
-                             pybind11::cast<int64_t>(tup[2]));
-    }
-  }
-  return parsed;
-}
-
 std::vector<std::vector<serialization::ProtoBufInstruction>>
-parse_instruction_batch_serialized(const pybind11::iterable &instructions_batch) {
+parse_instruction_batch_serialized(
+    const pybind11::iterable &instructions_batch) {
   std::vector<std::vector<serialization::ProtoBufInstruction>> parsed;
   for (auto batch_item : instructions_batch) {
     auto batch_list =
@@ -200,8 +134,10 @@ parse_instruction_batch_serialized(const pybind11::iterable &instructions_batch)
     std::vector<serialization::ProtoBufInstruction> batch;
     batch.reserve(batch_list.size());
     for (auto instruction_item : batch_list) {
-      batch.push_back(parse_serialized_message<serialization::ProtoBufInstruction>(
-          instruction_item.cast<pybind11::object>(), "ProtoBufInstruction"));
+      batch.push_back(
+          parse_serialized_message<serialization::ProtoBufInstruction>(
+              instruction_item.cast<pybind11::object>(),
+              "ProtoBufInstruction"));
     }
     parsed.push_back(std::move(batch));
   }
@@ -217,8 +153,9 @@ parse_condition_batch_serialized(const pybind11::iterable &conditions_batch) {
     std::vector<serialization::ProtoBufCondition> batch;
     batch.reserve(batch_list.size());
     for (auto condition_item : batch_list) {
-      batch.push_back(parse_serialized_message<serialization::ProtoBufCondition>(
-          condition_item.cast<pybind11::object>(), "ProtoBufCondition"));
+      batch.push_back(
+          parse_serialized_message<serialization::ProtoBufCondition>(
+              condition_item.cast<pybind11::object>(), "ProtoBufCondition"));
     }
     parsed.push_back(std::move(batch));
   }
@@ -366,20 +303,14 @@ PYBIND11_MODULE(kumpel_embedding, m) {
            pybind11::arg("dtype") = torch::Dtype(torch::kFloat))
       .def("forward",
            [](InstructionDataEmbeddingImpl &self,
-              const torch::Tensor &instruction_indices,
-              const torch::Tensor &instruction_data_types,
-              const torch::Tensor &instruction_data_type_indices,
-              const pybind11::tuple &instruction_data,
-              const pybind11::tuple &instruction_data_indices,
-              int64_t batch_size) {
-             auto parsed_data =
-                 parse_instruction_data_tensors(instruction_data);
-             auto filter_data = parse_instruction_filter_data(instruction_data);
-             auto parsed_indices =
-                 parse_instruction_data_indices(instruction_data_indices);
-             return self.forward(instruction_indices, instruction_data_types,
-                                 instruction_data_type_indices, parsed_data,
-                                 filter_data, parsed_indices, batch_size);
+              const pybind11::iterable &instructions_batch) {
+             auto parsed =
+                 parse_instruction_batch_serialized(instructions_batch);
+             auto flat = nesting::flatten_instructions(
+                 parsed, std::nullopt, torch::kInt64);
+             flat = nesting::move_flattened_result_to_device(
+                 flat, self.parameters()[0].device());
+             return self.forward(flat);
            })
       .def("save_weights", &InstructionDataEmbeddingImpl::save_weights)
       .def("load_weights", &InstructionDataEmbeddingImpl::load_weights);
@@ -397,30 +328,25 @@ PYBIND11_MODULE(kumpel_embedding, m) {
       .def("forward",
            [](InstructionEmbeddingImpl &self,
               const pybind11::iterable &instructions_batch) {
-             auto parsed = parse_instruction_batch_serialized(instructions_batch);
+             auto parsed =
+                 parse_instruction_batch_serialized(instructions_batch);
              return self.forward(parsed);
            })
       .def("compute_data_tensors",
            [](InstructionEmbeddingImpl &self,
               const pybind11::iterable &instructions_batch) {
-             auto parsed = parse_instruction_batch_serialized(instructions_batch);
-             const int64_t batch_size = static_cast<int64_t>(parsed.size());
+             auto parsed =
+                 parse_instruction_batch_serialized(instructions_batch);
              auto flat = nesting::flatten_instructions(parsed);
-             return self.compute_data_tensors(
-                 flat.instruction_indices, flat.instruction_data_types,
-                 flat.instruction_data_type_indices, flat.instruction_data,
-                 flat.filter_data, flat.instruction_data_indices, batch_size);
+             return self.compute_data_tensors(flat);
            })
       .def("compute_instruction_embeddings",
            [](InstructionEmbeddingImpl &self,
               const pybind11::iterable &instructions_batch) {
-             auto parsed = parse_instruction_batch_serialized(instructions_batch);
-             const int64_t batch_size = static_cast<int64_t>(parsed.size());
+             auto parsed =
+                 parse_instruction_batch_serialized(instructions_batch);
              auto flat = nesting::flatten_instructions(parsed);
-             auto data_tensors = self.compute_data_tensors(
-                 flat.instruction_indices, flat.instruction_data_types,
-                 flat.instruction_data_type_indices, flat.instruction_data,
-                 flat.filter_data, flat.instruction_data_indices, batch_size);
+             auto data_tensors = self.compute_data_tensors(flat);
              return self.compute_instruction_embeddings(
                  flat.instruction_types, flat.instruction_indices,
                  flat.instruction_data_parent_rows, data_tensors);
@@ -428,8 +354,8 @@ PYBIND11_MODULE(kumpel_embedding, m) {
       .def("save_weights", &InstructionEmbeddingImpl::save_weights)
       .def("load_weights", &InstructionEmbeddingImpl::load_weights);
   pybind11::class_<ConditionEmbeddingImpl, torch::nn::Module,
-                   std::shared_ptr<ConditionEmbeddingImpl>>(m,
-                                                            "ConditionEmbedding")
+                   std::shared_ptr<ConditionEmbeddingImpl>>(
+      m, "ConditionEmbedding")
       .def(pybind11::init<std::shared_ptr<InstructionDataEmbeddingImpl>,
                           std::shared_ptr<SharedEmbeddingHolderImpl>, int64_t,
                           torch::Device, torch::Dtype>(),
@@ -441,7 +367,8 @@ PYBIND11_MODULE(kumpel_embedding, m) {
       .def("forward",
            [](ConditionEmbeddingImpl &self,
               const pybind11::iterable &conditions_batch) {
-             return self.forward(parse_condition_batch_serialized(conditions_batch));
+             return self.forward(
+                 parse_condition_batch_serialized(conditions_batch));
            })
       .def("save_weights", &ConditionEmbeddingImpl::save_weights)
       .def("load_weights", &ConditionEmbeddingImpl::load_weights);
@@ -481,47 +408,50 @@ PYBIND11_MODULE(kumpel_embedding, m) {
                                     py_tuple_to_group_index(test));
         });
 
-  m.def("nesting_reduce", [](const torch::Tensor &flattened_input,
-                             const pybind11::list &groups,
-                             const pybind11::dict &operators,
-                             pybind11::function combine_function) {
-    std::vector<nesting::GroupIndex> cpp_groups;
-    cpp_groups.reserve(groups.size());
-    for (auto item : groups) {
-      cpp_groups.push_back(
-          py_tuple_to_group_index(pybind11::cast<pybind11::tuple>(item)));
-    }
-
-    nesting::OperatorMap cpp_operators;
-    for (auto item : operators) {
-      auto key_tuple = pybind11::cast<pybind11::tuple>(item.first);
-      cpp_operators[py_tuple_to_group_index(key_tuple)] =
-          pybind11::cast<int64_t>(item.second);
-    }
-
-    std::vector<torch::Tensor> cpp_flattened;
-    cpp_flattened.reserve(flattened_input.size(0));
-    for (int64_t i = 0; i < flattened_input.size(0); ++i) {
-      cpp_flattened.push_back(flattened_input[i]);
-    }
-
-    auto reduced = nesting::reduce(
-        cpp_flattened, cpp_groups, cpp_operators,
-        [&combine_function](const std::vector<torch::Tensor> &values,
-                            std::optional<int64_t> op) {
-          pybind11::list py_values;
-          for (const auto &value : values) {
-            py_values.append(value);
+  m.def("nesting_reduce",
+        [](const torch::Tensor &flattened_input, const pybind11::list &groups,
+           const pybind11::dict &operators,
+           pybind11::function combine_function) {
+          std::vector<nesting::GroupIndex> cpp_groups;
+          cpp_groups.reserve(groups.size());
+          for (auto item : groups) {
+            cpp_groups.push_back(
+                py_tuple_to_group_index(pybind11::cast<pybind11::tuple>(item)));
           }
-          pybind11::object py_op =
-              op.has_value() ? pybind11::cast(*op) : pybind11::none();
-          return combine_function(py_values, py_op).cast<torch::Tensor>();
-        });
 
-    pybind11::list out;
-    for (const auto &tensor : reduced) {
-      out.append(tensor);
-    }
-    return out;
-  });
+          nesting::OperatorMap cpp_operators;
+          for (auto item : operators) {
+            auto key_tuple = pybind11::cast<pybind11::tuple>(item.first);
+            cpp_operators[py_tuple_to_group_index(key_tuple)] =
+                pybind11::cast<int64_t>(item.second);
+          }
+
+          std::vector<torch::Tensor> cpp_flattened;
+          cpp_flattened.reserve(flattened_input.size(0));
+          for (int64_t i = 0; i < flattened_input.size(0); ++i) {
+            cpp_flattened.push_back(flattened_input[i]);
+          }
+
+          const nesting::ReduceCombineFunction cpp_combine =
+              [&combine_function](const std::vector<torch::Tensor> &values,
+                                  std::optional<int64_t> op) {
+                pybind11::list py_values;
+                for (const auto &value : values) {
+                  py_values.append(value);
+                }
+                pybind11::object py_op =
+                    op.has_value() ? pybind11::cast(*op) : pybind11::none();
+                return combine_function(py_values, py_op).cast<torch::Tensor>();
+              };
+
+          auto reduced = nesting::reduce(
+              nesting::ReduceRequest{cpp_flattened, cpp_groups, cpp_operators,
+                                     cpp_combine});
+
+          pybind11::list out;
+          for (const auto &tensor : reduced) {
+            out.append(tensor);
+          }
+          return out;
+        });
 }

@@ -36,13 +36,10 @@ torch::Tensor ConditionEmbeddingImpl::forward(
         &conditions_batch) {
   const int64_t batch_size = static_cast<int64_t>(conditions_batch.size());
   auto flat =
-      nesting::flatten_conditions(conditions_batch, device_, torch::kInt64);
+      nesting::flatten_conditions(conditions_batch, std::nullopt, torch::kInt64);
+  flat = nesting::move_flattened_result_to_device(flat, device_);
 
-  auto data_tensors =
-      compute_data_tensors(flat.instruction_indices, flat.instruction_data_types,
-                           flat.instruction_data_type_indices,
-                           flat.instruction_data, flat.filter_data,
-                           flat.instruction_data_indices, batch_size);
+  auto data_tensors = compute_data_tensors(flat);
   auto condition_embeddings = compute_condition_embeddings(
       flat.instruction_types, flat.instruction_indices,
       flat.instruction_data_parent_rows, data_tensors);
@@ -57,21 +54,13 @@ torch::Tensor ConditionEmbeddingImpl::forward(
 }
 
 torch::Tensor ConditionEmbeddingImpl::compute_data_tensors(
-    const torch::Tensor &condition_indices,
-    const torch::Tensor &instruction_data_types,
-    const torch::Tensor &instruction_data_type_indices,
-    const std::array<std::vector<torch::Tensor>, 6> &instruction_data,
-    const std::vector<std::vector<serialization::ProtoBufFilter>> &filter_data,
-    const std::array<std::vector<std::tuple<int64_t, int64_t, int64_t>>, 6>
-        &instruction_data_indices,
-    int64_t batch_size) {
-  return instruction_data_embedding_->forward(
-      condition_indices, instruction_data_types, instruction_data_type_indices,
-      instruction_data, filter_data, instruction_data_indices, batch_size);
+    const nesting::FlattenInstructionsResult &flat) {
+  return instruction_data_embedding_->forward(flat);
 }
 
 torch::Tensor ConditionEmbeddingImpl::compute_condition_embeddings(
-    const torch::Tensor &condition_types, const torch::Tensor &condition_indices,
+    const torch::Tensor &condition_types,
+    const torch::Tensor &condition_indices,
     const torch::Tensor &instruction_data_parent_rows,
     const torch::Tensor &data_tensors) {
   auto condition_type_embeddings =
@@ -86,8 +75,8 @@ torch::Tensor ConditionEmbeddingImpl::compute_condition_embeddings(
       instruction_data_parent_rows, num_conditions);
   auto [padded_data, data_token_mask] =
       tensor_utils::pad_by_offsets(data_tensors, data_offsets, dimension_out_);
-  auto queries = torch::cat({condition_type_embeddings.unsqueeze(1), padded_data},
-                            1);
+  auto queries =
+      torch::cat({condition_type_embeddings.unsqueeze(1), padded_data}, 1);
   auto valid_token_mask = torch::cat(
       {torch::ones({num_conditions, 1},
                    torch::TensorOptions().device(device_).dtype(torch::kBool)),

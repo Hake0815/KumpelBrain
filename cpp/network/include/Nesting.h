@@ -2,10 +2,10 @@
 #define NESTING_H
 
 #include <array>
+#include <cstddef>
 #include <functional>
 #include <optional>
 #include <string>
-#include <tuple>
 #include <unordered_map>
 #include <vector>
 
@@ -13,6 +13,8 @@
 #include <torch/torch.h>
 
 namespace nesting {
+
+constexpr size_t kNumInstructionDataTypes = 6;
 
 using ProtoBufAttackInstructionData =
     gamecore::serialization::ProtoBufAttackInstructionData;
@@ -56,16 +58,39 @@ struct FlattenResult {
   OperatorMap operators{};
 };
 
+using ReduceCombineFunction =
+    std::function<torch::Tensor(const std::vector<torch::Tensor> &,
+                                std::optional<int64_t>)>;
+
+struct ReduceRequest {
+  const std::vector<torch::Tensor> &flattened_input;
+  const std::vector<GroupIndex> &groups;
+  const OperatorMap &operators;
+  const ReduceCombineFunction &combine_function;
+};
+
+struct FilterBatchTensors {
+  torch::Tensor node_is_leaf{};
+  torch::Tensor node_logical_operator{};
+  torch::Tensor node_depth{};
+  torch::Tensor child_ptr{};
+  torch::Tensor child_idx{};
+  torch::Tensor leaf_node_index{};
+  torch::Tensor leaf_field{};
+  torch::Tensor leaf_compare_op{};
+  torch::Tensor leaf_value{};
+  torch::Tensor root_node_index{};
+};
+
 struct FlattenInstructionsResult {
   torch::Tensor instruction_types{};
   torch::Tensor instruction_indices{};
   torch::Tensor instruction_data_types{};
   torch::Tensor instruction_data_parent_rows{};
   torch::Tensor instruction_data_type_indices{};
-  std::array<std::vector<torch::Tensor>, 6> instruction_data{};
-  std::array<std::vector<std::tuple<int64_t, int64_t, int64_t>>, 6>
-      instruction_data_indices{};
-  std::vector<std::vector<ProtoBufFilter>> filter_data{};
+  torch::Tensor instruction_data_reorder{};
+  std::array<torch::Tensor, kNumInstructionDataTypes> instruction_data_tensors{};
+  FilterBatchTensors filter_batch{};
 };
 
 std::string group_index_key(const GroupIndex &group_index);
@@ -75,37 +100,7 @@ std::vector<TraverseEntry> traverse_filter(
     const std::vector<ProtoBufFilter> &nested_input);
 FlattenResult flatten(const std::vector<TraverseEntry> &entries);
 
-std::vector<torch::Tensor> reduce(
-    const std::vector<torch::Tensor> &flattened_input,
-    const std::vector<GroupIndex> &groups, const OperatorMap &operators,
-    const std::function<torch::Tensor(const std::vector<torch::Tensor> &,
-                                      std::optional<int64_t>)> &combine_function);
-
-torch::Tensor vectorize_amount_data(
-    const ProtoBufCardAmountInstructionData &amount_data,
-    std::optional<torch::Device> device = std::nullopt,
-    std::optional<torch::Dtype> dtype = std::nullopt);
-torch::Tensor vectorize_attack_data(
-    const ProtoBufAttackInstructionData &attack_data,
-    std::optional<torch::Device> device = std::nullopt,
-    std::optional<torch::Dtype> dtype = std::nullopt);
-torch::Tensor vectorize_discard_data(
-    const ProtoBufDiscardInstructionData &discard_data,
-    std::optional<torch::Device> device = std::nullopt,
-    std::optional<torch::Dtype> dtype = std::nullopt);
-torch::Tensor vectorize_return_to_deck_type_data(
-    const ProtoBufReturnToDeckTypeInstructionData &return_to_deck_type_data,
-    std::optional<torch::Device> device = std::nullopt,
-    std::optional<torch::Dtype> dtype = std::nullopt);
-torch::Tensor vectorize_player_target_data(
-    const ProtoBufPlayerTargetInstructionData &player_target_data,
-    std::optional<torch::Device> device = std::nullopt,
-    std::optional<torch::Dtype> dtype = std::nullopt);
-
-torch::Tensor vectorize_payload(
-    const ProtoBufInstructionData &data,
-    std::optional<torch::Device> device = std::nullopt,
-    std::optional<torch::Dtype> dtype = std::nullopt);
+std::vector<torch::Tensor> reduce(const ReduceRequest &request);
 
 FlattenInstructionsResult flatten_instructions(
     const std::vector<std::vector<ProtoBufInstruction>> &instructions,
@@ -116,6 +111,18 @@ FlattenInstructionsResult flatten_conditions(
     const std::vector<std::vector<ProtoBufCondition>> &conditions,
     std::optional<torch::Device> device = std::nullopt,
     std::optional<torch::Dtype> dtype = std::nullopt);
+
+FilterBatchTensors compile_filter_batch(
+    const std::vector<std::vector<ProtoBufFilter>> &filters,
+    std::optional<torch::Device> device = std::nullopt,
+    std::optional<torch::Dtype> dtype = std::nullopt);
+
+FlattenInstructionsResult
+move_flattened_result_to_device(const FlattenInstructionsResult &result,
+                                torch::Device device);
+
+FilterBatchTensors move_filter_batch_to_device(const FilterBatchTensors &result,
+                                               torch::Device device);
 
 } // namespace nesting
 
