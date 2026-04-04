@@ -5,7 +5,6 @@
 #include <cstddef>
 #include <functional>
 #include <optional>
-#include <string>
 #include <unordered_map>
 #include <vector>
 
@@ -25,7 +24,8 @@ using ProtoBufDiscardInstructionData =
     gamecore::serialization::ProtoBufDiscardInstructionData;
 using ProtoBufFilter = gamecore::serialization::ProtoBufFilter;
 using ProtoBufInstruction = gamecore::serialization::ProtoBufInstruction;
-using ProtoBufInstructionData = gamecore::serialization::ProtoBufInstructionData;
+using ProtoBufInstructionData =
+    gamecore::serialization::ProtoBufInstructionData;
 using ProtoBufPlayerTargetInstructionData =
     gamecore::serialization::ProtoBufPlayerTargetInstructionData;
 using ProtoBufReturnToDeckTypeInstructionData =
@@ -37,8 +37,8 @@ struct GroupIndexHash {
   size_t operator()(const GroupIndex &group_index) const noexcept {
     size_t seed = 0;
     for (const auto value : group_index) {
-      seed ^= std::hash<int64_t>{}(value) + 0x9e3779b97f4a7c15ULL + (seed << 6) +
-              (seed >> 2);
+      seed ^= std::hash<int64_t>{}(value) + 0x9e3779b97f4a7c15ULL +
+              (seed << 6) + (seed >> 2);
     }
     return seed;
   }
@@ -58,9 +58,8 @@ struct FlattenResult {
   OperatorMap operators{};
 };
 
-using ReduceCombineFunction =
-    std::function<torch::Tensor(const std::vector<torch::Tensor> &,
-                                std::optional<int64_t>)>;
+using ReduceCombineFunction = std::function<torch::Tensor(
+    const std::vector<torch::Tensor> &, std::optional<int64_t>)>;
 
 struct ReduceRequest {
   const std::vector<torch::Tensor> &flattened_input;
@@ -89,15 +88,15 @@ struct FlattenInstructionsResult {
   torch::Tensor instruction_data_parent_rows{};
   torch::Tensor instruction_data_type_indices{};
   torch::Tensor instruction_data_reorder{};
-  std::array<torch::Tensor, kNumInstructionDataTypes> instruction_data_tensors{};
+  std::array<torch::Tensor, kNumInstructionDataTypes>
+      instruction_data_tensors{};
   FilterBatchTensors filter_batch{};
 };
 
-std::string group_index_key(const GroupIndex &group_index);
 bool is_prefix(const GroupIndex &prefix, const GroupIndex &test);
 
-std::vector<TraverseEntry> traverse_filter(
-    const std::vector<ProtoBufFilter> &nested_input);
+std::vector<TraverseEntry>
+traverse_filter(const std::vector<ProtoBufFilter> &nested_input);
 FlattenResult flatten(const std::vector<TraverseEntry> &entries);
 
 std::vector<torch::Tensor> reduce(const ReduceRequest &request);
@@ -112,10 +111,10 @@ FlattenInstructionsResult flatten_conditions(
     std::optional<torch::Device> device = std::nullopt,
     std::optional<torch::Dtype> dtype = std::nullopt);
 
-FilterBatchTensors compile_filter_batch(
-    const std::vector<std::vector<ProtoBufFilter>> &filters,
-    std::optional<torch::Device> device = std::nullopt,
-    std::optional<torch::Dtype> dtype = std::nullopt);
+FilterBatchTensors
+compile_filter_batch(const std::vector<std::vector<ProtoBufFilter>> &filters,
+                     std::optional<torch::Device> device = std::nullopt,
+                     std::optional<torch::Dtype> dtype = std::nullopt);
 
 FlattenInstructionsResult
 move_flattened_result_to_device(const FlattenInstructionsResult &result,

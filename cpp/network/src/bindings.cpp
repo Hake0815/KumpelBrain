@@ -306,8 +306,8 @@ PYBIND11_MODULE(kumpel_embedding, m) {
               const pybind11::iterable &instructions_batch) {
              auto parsed =
                  parse_instruction_batch_serialized(instructions_batch);
-             auto flat = nesting::flatten_instructions(
-                 parsed, std::nullopt, torch::kInt64);
+             auto flat = nesting::flatten_instructions(parsed, std::nullopt,
+                                                       torch::kInt64);
              flat = nesting::move_flattened_result_to_device(
                  flat, self.parameters()[0].device());
              return self.forward(flat);
@@ -331,25 +331,6 @@ PYBIND11_MODULE(kumpel_embedding, m) {
              auto parsed =
                  parse_instruction_batch_serialized(instructions_batch);
              return self.forward(parsed);
-           })
-      .def("compute_data_tensors",
-           [](InstructionEmbeddingImpl &self,
-              const pybind11::iterable &instructions_batch) {
-             auto parsed =
-                 parse_instruction_batch_serialized(instructions_batch);
-             auto flat = nesting::flatten_instructions(parsed);
-             return self.compute_data_tensors(flat);
-           })
-      .def("compute_instruction_embeddings",
-           [](InstructionEmbeddingImpl &self,
-              const pybind11::iterable &instructions_batch) {
-             auto parsed =
-                 parse_instruction_batch_serialized(instructions_batch);
-             auto flat = nesting::flatten_instructions(parsed);
-             auto data_tensors = self.compute_data_tensors(flat);
-             return self.compute_instruction_embeddings(
-                 flat.instruction_types, flat.instruction_indices,
-                 flat.instruction_data_parent_rows, data_tensors);
            })
       .def("save_weights", &InstructionEmbeddingImpl::save_weights)
       .def("load_weights", &InstructionEmbeddingImpl::load_weights);
@@ -402,12 +383,6 @@ PYBIND11_MODULE(kumpel_embedding, m) {
     return pybind11::make_tuple(result.flattened_input, groups, operators);
   });
 
-  m.def("nesting_is_prefix",
-        [](const pybind11::tuple &prefix, const pybind11::tuple &test) {
-          return nesting::is_prefix(py_tuple_to_group_index(prefix),
-                                    py_tuple_to_group_index(test));
-        });
-
   m.def("nesting_reduce",
         [](const torch::Tensor &flattened_input, const pybind11::list &groups,
            const pybind11::dict &operators,
@@ -444,9 +419,8 @@ PYBIND11_MODULE(kumpel_embedding, m) {
                 return combine_function(py_values, py_op).cast<torch::Tensor>();
               };
 
-          auto reduced = nesting::reduce(
-              nesting::ReduceRequest{cpp_flattened, cpp_groups, cpp_operators,
-                                     cpp_combine});
+          auto reduced = nesting::reduce(nesting::ReduceRequest{
+              cpp_flattened, cpp_groups, cpp_operators, cpp_combine});
 
           pybind11::list out;
           for (const auto &tensor : reduced) {

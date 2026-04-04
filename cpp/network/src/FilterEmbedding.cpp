@@ -45,32 +45,6 @@ FilterEmbeddingImpl::FilterEmbeddingImpl(
   to(device_, dtype_);
 }
 
-// torch::Tensor FilterEmbeddingImpl::combine_condition(
-//     const std::vector<torch::Tensor> &filter_conditions,
-//     std::optional<int64_t> op) {
-//   if (filter_conditions.size() == 1) {
-//     return filter_conditions[0];
-//   }
-
-//   const int64_t operator_value = op.value_or(0);
-//   if (operator_tensor_cache_.find(operator_value) ==
-//       operator_tensor_cache_.end()) {
-//     operator_tensor_cache_[operator_value] = torch::tensor(
-//         operator_value,
-//         torch::TensorOptions().device(device_).dtype(torch::kLong));
-//   }
-
-//   auto embedded_operator =
-//       logical_operator_embedding_(operator_tensor_cache_[operator_value])
-//           .unsqueeze(0);
-//   auto filter_conditions_stacked = torch::stack(filter_conditions, 0);
-//   auto query = torch::cat({filter_conditions_stacked, embedded_operator}, 0)
-//                    .unsqueeze(0);
-//   auto updated_query =
-//       (multi_head_attention_(query, query, query) + query).squeeze(0);
-//   return updated_query.sum(0);
-// }
-
 torch::Tensor FilterEmbeddingImpl::forward(
     const std::vector<serialization::ProtoBufFilter> &filter) {
   if (filter.empty()) {

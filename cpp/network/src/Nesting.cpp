@@ -1,7 +1,6 @@
 #include "../include/Nesting.h"
 #include "../include/TensorUtils.h"
 
-#include <sstream>
 #include <stdexcept>
 
 namespace nesting {
@@ -232,8 +231,7 @@ vectorize_payload_values(const serialization::ProtoBufInstructionData &data) {
   switch (data_type) {
   case 0:
     if (!data.has_attack_data()) {
-      throw std::invalid_argument(
-          "InstructionDataType 0 requires attack_data");
+      throw std::invalid_argument("InstructionDataType 0 requires attack_data");
     }
     return {static_cast<int64_t>(data.attack_data().attack_target()),
             static_cast<int64_t>(data.attack_data().damage())};
@@ -244,8 +242,7 @@ vectorize_payload_values(const serialization::ProtoBufInstructionData &data) {
     }
     return {static_cast<int64_t>(data.discard_data().target_source())};
   case 2:
-    if (!data.has_card_amount_data() ||
-        !data.card_amount_data().has_amount()) {
+    if (!data.has_card_amount_data() || !data.card_amount_data().has_amount()) {
       throw std::invalid_argument(
           "InstructionDataType 2 requires card_amount_data.amount");
     }
@@ -257,10 +254,10 @@ vectorize_payload_values(const serialization::ProtoBufInstructionData &data) {
       throw std::invalid_argument(
           "InstructionDataType 3 requires return_to_deck_type_data");
     }
-    return {static_cast<int64_t>(
-                data.return_to_deck_type_data().return_to_deck_type()),
-            static_cast<int64_t>(
-                data.return_to_deck_type_data().from_position())};
+    return {
+        static_cast<int64_t>(
+            data.return_to_deck_type_data().return_to_deck_type()),
+        static_cast<int64_t>(data.return_to_deck_type_data().from_position())};
   case 5:
     if (!data.has_player_target_data()) {
       throw std::invalid_argument(
@@ -361,8 +358,7 @@ int64_t append_compiled_filter_node(const serialization::ProtoBufFilter &node,
                                     FilterCompileBuilder &builder) {
   std::vector<int64_t> child_nodes;
   child_nodes.reserve(node.operands_size());
-  for (int child_index = 0; child_index < node.operands_size();
-       ++child_index) {
+  for (int child_index = 0; child_index < node.operands_size(); ++child_index) {
     child_nodes.push_back(append_compiled_filter_node(
         node.operands(child_index), depth + 1, builder));
   }
@@ -424,8 +420,7 @@ std::vector<int64_t> make_instruction_index(const MessageLocation &location) {
           static_cast<int64_t>(location.instruction_index)};
 }
 
-std::vector<int64_t>
-make_instruction_data_index(const DataLocation &location) {
+std::vector<int64_t> make_instruction_data_index(const DataLocation &location) {
   return {static_cast<int64_t>(location.message.batch_index),
           static_cast<int64_t>(location.message.instruction_index),
           static_cast<int64_t>(location.data_index)};
@@ -443,9 +438,9 @@ struct FlatMessageBuilder {
   explicit FlatMessageBuilder(const TypeAccessor &type_accessor)
       : type_accessor(type_accessor) {}
 
-  void append_instruction_data(
-      const serialization::ProtoBufInstructionData &data,
-      const DataLocation &location, int64_t parent_row) {
+  void
+  append_instruction_data(const serialization::ProtoBufInstructionData &data,
+                          const DataLocation &location, int64_t parent_row) {
     const auto data_type = static_cast<int64_t>(data.instruction_data_type());
     instruction_data_types.push_back(data_type);
     instruction_data_parent_rows.push_back(parent_row);
@@ -473,8 +468,7 @@ struct FlatMessageBuilder {
                       const MessageLocation &location) {
     instruction_types.push_back(type_accessor(message));
     instruction_indices.push_back(make_instruction_index(location));
-    const auto parent_row =
-        static_cast<int64_t>(instruction_types.size() - 1);
+    const auto parent_row = static_cast<int64_t>(instruction_types.size() - 1);
 
     for (int data_index = 0; data_index < message.data_size(); ++data_index) {
       append_instruction_data(message.data(data_index),
@@ -511,9 +505,10 @@ struct FlatMessageBuilder {
 };
 
 template <typename MessageType, typename TypeAccessor>
-FlattenInstructionsResult flatten_messages(
-    const std::vector<std::vector<MessageType>> &instruction_likes,
-    const TypeAccessor &type_accessor, const TensorBuildOptions &options) {
+FlattenInstructionsResult
+flatten_messages(const std::vector<std::vector<MessageType>> &instruction_likes,
+                 const TypeAccessor &type_accessor,
+                 const TensorBuildOptions &options) {
   FlatMessageBuilder<MessageType, TypeAccessor> builder(type_accessor);
 
   for (size_t batch_index = 0; batch_index < instruction_likes.size();
@@ -536,17 +531,6 @@ torch::Tensor move_tensor_if_defined(const torch::Tensor &tensor,
 }
 
 } // namespace
-
-std::string group_index_key(const GroupIndex &group_index) {
-  std::ostringstream oss;
-  for (size_t i = 0; i < group_index.size(); ++i) {
-    if (i > 0) {
-      oss << ".";
-    }
-    oss << group_index[i];
-  }
-  return oss.str();
-}
 
 bool is_prefix(const GroupIndex &prefix, const GroupIndex &test) {
   if (prefix.size() > test.size()) {
@@ -668,14 +652,11 @@ FilterBatchTensors move_filter_batch_to_device(const FilterBatchTensors &batch,
   moved.node_depth = move_tensor_if_defined(batch.node_depth, device);
   moved.child_ptr = move_tensor_if_defined(batch.child_ptr, device);
   moved.child_idx = move_tensor_if_defined(batch.child_idx, device);
-  moved.leaf_node_index =
-      move_tensor_if_defined(batch.leaf_node_index, device);
+  moved.leaf_node_index = move_tensor_if_defined(batch.leaf_node_index, device);
   moved.leaf_field = move_tensor_if_defined(batch.leaf_field, device);
-  moved.leaf_compare_op =
-      move_tensor_if_defined(batch.leaf_compare_op, device);
+  moved.leaf_compare_op = move_tensor_if_defined(batch.leaf_compare_op, device);
   moved.leaf_value = move_tensor_if_defined(batch.leaf_value, device);
-  moved.root_node_index =
-      move_tensor_if_defined(batch.root_node_index, device);
+  moved.root_node_index = move_tensor_if_defined(batch.root_node_index, device);
   return moved;
 }
 
