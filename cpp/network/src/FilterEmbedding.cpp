@@ -1,8 +1,29 @@
 #include "../include/FilterEmbedding.h"
-#include "../include/TensorUtils.h"
+#include "../include/AttentionUtils.h"
+#include "../include/Nesting.h"
 #include <algorithm>
 
-using torch::indexing::Slice;
+namespace serialization = gamecore::serialization;
+
+namespace {
+
+bool has_filter_roots(const nesting::FilterBatchTensors &filter_batch) {
+  return filter_batch.root_node_index.defined() &&
+         filter_batch.root_node_index.numel() > 0;
+}
+
+bool has_leaf_nodes(const nesting::FilterBatchTensors &filter_batch) {
+  return filter_batch.leaf_node_index.defined() &&
+         filter_batch.leaf_node_index.numel() > 0;
+}
+
+torch::Tensor empty_filter_embeddings(torch::Device device, torch::Dtype dtype,
+                                      int64_t dimension_out) {
+  return torch::zeros({0, dimension_out},
+                      torch::TensorOptions().device(device).dtype(dtype));
+}
+
+} // namespace
 
 FilterEmbeddingImpl::FilterEmbeddingImpl(
     std::shared_ptr<SharedEmbeddingHolderImpl> shared_embedding_holder,
@@ -24,68 +45,105 @@ FilterEmbeddingImpl::FilterEmbeddingImpl(
   to(device_, dtype_);
 }
 
-torch::Tensor FilterEmbeddingImpl::combine_condition(
-    const std::vector<torch::Tensor> &filter_conditions,
-    std::optional<int64_t> op) {
-  if (filter_conditions.size() == 1) {
-    return filter_conditions[0];
-  }
-
-  const int64_t operator_value = op.value_or(0);
-  if (operator_tensor_cache_.find(operator_value) ==
-      operator_tensor_cache_.end()) {
-    operator_tensor_cache_[operator_value] = torch::tensor(
-        operator_value,
-        torch::TensorOptions().device(device_).dtype(torch::kLong));
-  }
-
-  auto embedded_operator =
-      logical_operator_embedding_(operator_tensor_cache_[operator_value])
-          .unsqueeze(0);
-  auto filter_conditions_stacked = torch::stack(filter_conditions, 0);
-  auto query = torch::cat({filter_conditions_stacked, embedded_operator}, 0)
-                   .unsqueeze(0);
-  auto updated_query =
-      (multi_head_attention_(query, query, query) + query).squeeze(0);
-  return updated_query.sum(0);
-}
-
-torch::Tensor
-FilterEmbeddingImpl::forward(const std::vector<nesting::FilterNode> &filter) {
+torch::Tensor FilterEmbeddingImpl::forward(
+    const std::vector<serialization::ProtoBufFilter> &filter) {
   if (filter.empty()) {
     return torch::zeros({dimension_out_},
                         torch::TensorOptions().device(device_).dtype(dtype_));
   }
+  return forward_batch(
+      nesting::compile_filter_batch({filter}, device_, torch::kLong));
+}
 
-  auto traverse_entries = nesting::traverse_filter(filter);
-  auto flat = nesting::flatten(traverse_entries);
-
-  std::vector<std::vector<int64_t>> flattened = flat.flattened_input;
-  auto flattened_tensor =
-      tensor_utils::tensor_from_2d_int64(flattened, device_, torch::kLong);
-  auto field_type = flattened_tensor.index({Slice(), 0});
-  auto comparison_operator = flattened_tensor.index({Slice(), 1});
-  auto value = flattened_tensor.index({Slice(), 2});
-
-  auto embedded_conditions = filter_condition_embedding_->forward(
-      field_type, comparison_operator, value);
-
-  std::vector<torch::Tensor> embedded_condition_list;
-  embedded_condition_list.reserve(embedded_conditions.size(0));
-  for (int64_t i = 0; i < embedded_conditions.size(0); ++i) {
-    embedded_condition_list.push_back(embedded_conditions[i]);
+torch::Tensor FilterEmbeddingImpl::forward_batch(
+    const nesting::FilterBatchTensors &filter_batch) {
+  if (!has_filter_roots(filter_batch)) {
+    return empty_filter_embeddings(device_, dtype_, dimension_out_);
   }
 
-  auto reduced =
-      nesting::reduce(embedded_condition_list, flat.groups, flat.operators,
-                      [this](const std::vector<torch::Tensor> &conditions,
-                             std::optional<int64_t> op) {
-                        return combine_condition(conditions, op);
-                      });
+  const auto num_nodes = filter_batch.node_is_leaf.size(0);
+  auto node_embeddings =
+      torch::zeros({num_nodes, dimension_out_},
+                   torch::TensorOptions().device(device_).dtype(dtype_));
 
-  if (reduced.empty()) {
-    return torch::zeros({0, dimension_out_},
-                        torch::TensorOptions().device(device_).dtype(dtype_));
+  if (has_leaf_nodes(filter_batch)) {
+    auto embedded_conditions = filter_condition_embedding_->forward(
+        filter_batch.leaf_field, filter_batch.leaf_compare_op,
+        filter_batch.leaf_value);
+    node_embeddings.index_copy_(0, filter_batch.leaf_node_index,
+                                embedded_conditions);
   }
-  return torch::stack(reduced, 0);
+
+  auto internal_mask = torch::logical_not(filter_batch.node_is_leaf);
+  if (internal_mask.any().item<bool>()) {
+    const auto max_depth = filter_batch.node_depth.max().item<int64_t>();
+    for (int64_t depth = max_depth; depth >= 0; --depth) {
+      auto depth_mask =
+          torch::logical_and(internal_mask, filter_batch.node_depth.eq(depth));
+      auto depth_nodes = torch::nonzero(depth_mask).squeeze(1);
+      if (depth_nodes.numel() == 0) {
+        continue;
+      }
+
+      auto child_start = filter_batch.child_ptr.index_select(0, depth_nodes);
+      auto child_end = filter_batch.child_ptr.index_select(0, depth_nodes + 1);
+      auto child_count = child_end - child_start;
+
+      auto passthrough_mask = child_count.eq(1);
+      if (passthrough_mask.any().item<bool>()) {
+        auto passthrough_nodes = depth_nodes.index({passthrough_mask});
+        auto passthrough_start = child_start.index({passthrough_mask});
+        auto passthrough_children =
+            filter_batch.child_idx.index_select(0, passthrough_start);
+        auto passthrough_embeddings =
+            node_embeddings.index_select(0, passthrough_children);
+        node_embeddings.index_copy_(0, passthrough_nodes,
+                                    passthrough_embeddings);
+      }
+
+      auto reduce_mask = child_count.gt(1);
+      if (!reduce_mask.any().item<bool>()) {
+        continue;
+      }
+
+      auto reduce_nodes = depth_nodes.index({reduce_mask});
+      auto reduce_start = child_start.index({reduce_mask});
+      auto reduce_count = child_count.index({reduce_mask});
+      const auto max_children = reduce_count.max().item<int64_t>();
+      auto positions = torch::arange(
+          max_children,
+          torch::TensorOptions().device(device_).dtype(torch::kLong));
+      auto valid_children = positions.unsqueeze(0) < reduce_count.unsqueeze(1);
+      auto gather_positions =
+          reduce_start.unsqueeze(1) + positions.unsqueeze(0);
+      auto safe_positions =
+          gather_positions.masked_fill(torch::logical_not(valid_children), 0)
+              .reshape(-1);
+      auto child_indices =
+          filter_batch.child_idx.index_select(0, safe_positions)
+              .view({reduce_nodes.size(0), max_children});
+      auto child_embeddings =
+          node_embeddings.index_select(0, child_indices.reshape(-1))
+              .view({reduce_nodes.size(0), max_children, dimension_out_});
+      child_embeddings = child_embeddings * valid_children.unsqueeze(-1).to(
+                                                child_embeddings.dtype());
+
+      auto operator_embeddings =
+          logical_operator_embedding_(
+              filter_batch.node_logical_operator.index_select(0, reduce_nodes))
+              .unsqueeze(1);
+      auto query = torch::cat({child_embeddings, operator_embeddings}, 1);
+      auto valid_token_mask =
+          torch::cat({valid_children,
+                      torch::ones({reduce_nodes.size(0), 1},
+                                  torch::TensorOptions().device(device_).dtype(
+                                      torch::kBool))},
+                     1);
+      auto reduced = attention_utils::masked_self_attention_reduce(
+          multi_head_attention_, query, valid_token_mask);
+      node_embeddings.index_copy_(0, reduce_nodes, reduced);
+    }
+  }
+
+  return node_embeddings.index_select(0, filter_batch.root_node_index);
 }

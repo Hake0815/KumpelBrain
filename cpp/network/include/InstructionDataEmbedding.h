@@ -5,13 +5,12 @@
 #include "../include/CardAmountDataEmbedding.h"
 #include "../include/DiscardDataEmbedding.h"
 #include "../include/FilterEmbedding.h"
+#include "../include/Nesting.h"
 #include "../include/PlayerTargetDataEmbedding.h"
 #include "../include/ReturnToDeckTypeDataEmbedding.h"
 #include "../include/SaveLoadMixin.h"
 #include "../include/SharedEmbeddingHolder.h"
 #include <array>
-#include <tuple>
-#include <vector>
 
 struct InstructionDataEmbeddingImpl
     : torch::nn::Module, SaveLoadMixin<InstructionDataEmbeddingImpl> {
@@ -20,21 +19,15 @@ struct InstructionDataEmbeddingImpl
       int64_t dimension_out, torch::Device device = torch::kCPU,
       torch::Dtype dtype = torch::kFloat);
 
-  torch::Tensor forward(
-      const torch::Tensor &instruction_indices,
-      const torch::Tensor &instruction_data_types,
-      const torch::Tensor &instruction_data_type_indices,
-      const std::array<std::vector<torch::Tensor>, 6> &instruction_data,
-      const std::vector<std::vector<nesting::FilterNode>> &filter_data,
-      const std::array<std::vector<std::tuple<int64_t, int64_t, int64_t>>, 6>
-          &instruction_data_indices,
-      int64_t batch_size);
+  torch::Tensor forward(const nesting::FlattenInstructionsResult &flat);
 
 private:
-  torch::Tensor sort_tensors_with_respect_to_index(
-      const std::array<torch::Tensor, 6> &tensors,
-      const std::array<std::vector<std::tuple<int64_t, int64_t, int64_t>>, 6>
-          &indices) const;
+  torch::Tensor embed_dense_payloads(
+      const torch::Tensor &instruction_data_types,
+      const std::array<torch::Tensor, nesting::kNumInstructionDataTypes>
+          &instruction_data_tensors,
+      const nesting::FilterBatchTensors &filter_batch,
+      const torch::Tensor &instruction_data_reorder);
 
   int64_t dimension_out_;
   torch::Device device_;

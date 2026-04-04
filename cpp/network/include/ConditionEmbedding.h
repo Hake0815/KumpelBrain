@@ -3,46 +3,38 @@
 
 #include "../include/InstructionDataEmbedding.h"
 #include "../include/MultiHeadAttention.h"
-#include "../include/Nesting.h"
 #include "../include/SaveLoadMixin.h"
 #include "../include/SharedEmbeddingHolder.h"
+#include "../src/serialization/gamecore_serialization.pb.h"
 
-struct ConditionEmbeddingImpl : torch::nn::Module,
-                                SaveLoadMixin<ConditionEmbeddingImpl> {
-  ConditionEmbeddingImpl(
-      std::shared_ptr<InstructionDataEmbeddingImpl> instruction_data_embedding,
-      std::shared_ptr<SharedEmbeddingHolderImpl> shared_embedding_holder,
-      int64_t dimension_out, torch::Device device = torch::kCPU,
-      torch::Dtype dtype = torch::kFloat);
+using ProtoBufCondition = gamecore::serialization::ProtoBufCondition;
 
-  torch::Tensor
-  forward(const std::vector<std::vector<nesting::Instruction>> &conditions_batch);
+struct ConditionEmbeddingImpl : torch::nn::Module, SaveLoadMixin<ConditionEmbeddingImpl> {
+    ConditionEmbeddingImpl(std::shared_ptr<InstructionDataEmbeddingImpl> instruction_data_embedding,
+                           std::shared_ptr<SharedEmbeddingHolderImpl> shared_embedding_holder, int64_t dimension_out,
+                           torch::Device device = torch::kCPU, torch::Dtype dtype = torch::kFloat);
 
-private:
-  torch::Tensor compute_data_tensors(
-      const torch::Tensor &condition_indices,
-      const torch::Tensor &instruction_data_types,
-      const torch::Tensor &instruction_data_type_indices,
-      const std::array<std::vector<torch::Tensor>, 6> &instruction_data,
-      const std::vector<std::vector<nesting::FilterNode>> &filter_data,
-      const std::array<std::vector<std::tuple<int64_t, int64_t, int64_t>>, 6>
-          &instruction_data_indices,
-      int64_t batch_size);
+    torch::Tensor forward(const std::vector<std::vector<ProtoBufCondition>>& conditions_batch);
 
-  torch::Tensor compute_condition_embeddings(
-      const torch::Tensor &condition_types, const torch::Tensor &condition_indices,
-      const torch::Tensor &instruction_data_type_indices,
-      const torch::Tensor &data_tensors);
+    torch::Tensor forward_flattened(const nesting::FlattenInstructionsResult& flat, int64_t batch_size);
 
-  int64_t dimension_out_;
-  torch::Device device_;
-  torch::Dtype dtype_;
+   private:
+    int64_t dimension_out_;
+    torch::Device device_;
+    torch::Dtype dtype_;
 
-  InstructionDataEmbedding instruction_data_embedding_{nullptr};
-  torch::nn::Embedding condition_type_embedding_{nullptr};
-  MultiHeadAttention data_multi_head_attention_{nullptr};
-  PositionalEmbedding position_embedding_{nullptr};
-  MultiHeadAttention conditions_multi_head_attention_{nullptr};
+    InstructionDataEmbedding instruction_data_embedding_{nullptr};
+    torch::nn::Embedding condition_type_embedding_{nullptr};
+    MultiHeadAttention data_multi_head_attention_{nullptr};
+    PositionalEmbedding position_embedding_{nullptr};
+    MultiHeadAttention conditions_multi_head_attention_{nullptr};
+
+    torch::Tensor compute_data_tensors(const nesting::FlattenInstructionsResult& flat);
+
+    torch::Tensor compute_condition_embeddings(const torch::Tensor& condition_indices,
+                                               const torch::Tensor& instruction_data_parent_rows,
+                                               const torch::Tensor& embedded_condition_types,
+                                               const torch::Tensor& embedded_instruction_data);
 };
 
 TORCH_MODULE(ConditionEmbedding);

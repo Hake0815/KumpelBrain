@@ -536,18 +536,13 @@ class InstructionEmbedding(nn.Module, SaveLoadMixin):
             data_tensors,
         )
 
-        batched_instructions = batch_instructions(
+        return reduce_batched_instruction_embeddings(
             self._position_embedding,
+            self.instructions_multi_head_attention,
             instruction_indices,
             instruction_embeddings,
             batch_size,
         )
-        return (
-            batched_instructions
-            + self.instructions_multi_head_attention(
-                batched_instructions, batched_instructions, batched_instructions
-            )
-        ).sum(1)
 
 
 class ConditionEmbedding(nn.Module, SaveLoadMixin):
@@ -620,18 +615,13 @@ class ConditionEmbedding(nn.Module, SaveLoadMixin):
             data_tensors,
         )
 
-        batched_conditions = batch_instructions(
+        return reduce_batched_instruction_embeddings(
             self._position_embedding,
+            self.conditions_multi_head_attention,
             condition_indices,
             condition_embeddings,
             batch_size,
         )
-        return (
-            batched_conditions
-            + self.conditions_multi_head_attention(
-                batched_conditions, batched_conditions, batched_conditions
-            )
-        ).sum(1)
 
 
 def embed_instruction_data(
@@ -653,27 +643,140 @@ def embed_instruction_data(
             ]
         )
         query_list.append(unbatched_query)
-    query_tensor = torch.nested.nested_tensor(query_list, layout=torch.jagged)
-    return (
-        query_tensor
-        + data_multi_head_attention(query_tensor, query_tensor, query_tensor)
-    ).sum(1)
+
+    if not query_list:
+        return torch.empty(
+            (0, instruction_type_embeddings.shape[-1]),
+            device=instruction_type_embeddings.device,
+            dtype=instruction_type_embeddings.dtype,
+        )
+
+    if _use_nested_tensor_attention(instruction_type_embeddings.device):
+        query_tensor = torch.nested.nested_tensor(query_list, layout=torch.jagged)
+        return (
+            query_tensor
+            + data_multi_head_attention(query_tensor, query_tensor, query_tensor)
+        ).sum(1)
+
+    padded_query, valid_token_mask = pad_sequence_list(
+        query_list, instruction_type_embeddings.shape[-1]
+    )
+    return masked_self_attention_reduce(
+        data_multi_head_attention, padded_query, valid_token_mask
+    )
 
 
-def batch_instructions(
+def reduce_batched_instruction_embeddings(
     position_embedding: positional_embedding.PositionalEmbedding,
+    instruction_multi_head_attention: MultiHeadAttention,
     instruction_indices: torch.Tensor,
     instruction_embeddings: torch.Tensor,
     batch_size: int,
 ) -> torch.Tensor:
-    return torch.nested.nested_tensor(
-        [
-            position_embedding(
-                (
-                    instruction_embeddings[instruction_indices[:, 0] == batch_index]
-                ).unsqueeze(0)
-            ).squeeze(0)
-            for batch_index in range(batch_size)
-        ],
-        layout=torch.jagged,
+    if batch_size == 0:
+        return torch.empty(
+            (0, instruction_embeddings.shape[-1]),
+            device=instruction_embeddings.device,
+            dtype=instruction_embeddings.dtype,
+        )
+
+    batched_embeddings = []
+    for batch_index in range(batch_size):
+        per_batch = instruction_embeddings[instruction_indices[:, 0] == batch_index]
+        positioned_batch = position_embedding(per_batch.unsqueeze(0)).squeeze(0)
+        batched_embeddings.append(positioned_batch)
+
+    if _use_nested_tensor_attention(instruction_embeddings.device):
+        batched_instructions = torch.nested.nested_tensor(
+            batched_embeddings, layout=torch.jagged
+        )
+        return (
+            batched_instructions
+            + instruction_multi_head_attention(
+                batched_instructions, batched_instructions, batched_instructions
+            )
+        ).sum(1)
+
+    padded_batch, valid_token_mask = pad_sequence_list(
+        batched_embeddings, instruction_embeddings.shape[-1]
     )
+    return masked_self_attention_reduce(
+        instruction_multi_head_attention, padded_batch, valid_token_mask
+    )
+
+
+def _use_nested_tensor_attention(device: torch.device) -> bool:
+    return device.type == "cuda"
+
+
+def pad_sequence_list(
+    sequence_list: list[torch.Tensor], dimension_out: int
+) -> tuple[torch.Tensor, torch.Tensor]:
+    if not sequence_list:
+        raise ValueError("pad_sequence_list requires at least one sequence")
+
+    batch_size = len(sequence_list)
+    max_sequence_length = max(sequence.shape[0] for sequence in sequence_list)
+    device = sequence_list[0].device
+    dtype = sequence_list[0].dtype
+
+    padded_sequences = torch.zeros(
+        (batch_size, max_sequence_length, dimension_out), device=device, dtype=dtype
+    )
+    valid_token_mask = torch.zeros(
+        (batch_size, max_sequence_length), device=device, dtype=torch.bool
+    )
+
+    for batch_index, sequence in enumerate(sequence_list):
+        sequence_length = sequence.shape[0]
+        if sequence_length == 0:
+            continue
+        padded_sequences[batch_index, :sequence_length] = sequence
+        valid_token_mask[batch_index, :sequence_length] = True
+
+    return padded_sequences, valid_token_mask
+
+
+def masked_self_attention_reduce(
+    multi_head_attention: MultiHeadAttention,
+    padded_sequences: torch.Tensor,
+    valid_token_mask: torch.Tensor,
+) -> torch.Tensor:
+    if padded_sequences.shape[1] == 0:
+        return torch.zeros(
+            (padded_sequences.shape[0], padded_sequences.shape[-1]),
+            device=padded_sequences.device,
+            dtype=padded_sequences.dtype,
+        )
+
+    attention_mask = make_padding_attention_mask(
+        valid_token_mask, padded_sequences.dtype
+    )
+    attended_sequences = padded_sequences + multi_head_attention(
+        padded_sequences,
+        padded_sequences,
+        padded_sequences,
+        attn_mask=attention_mask,
+    )
+    return masked_sequence_sum(attended_sequences, valid_token_mask)
+
+
+def make_padding_attention_mask(
+    valid_token_mask: torch.Tensor, dtype: torch.dtype
+) -> torch.Tensor:
+    sequence_length = valid_token_mask.shape[1]
+    attention_mask = torch.zeros(
+        (valid_token_mask.shape[0], sequence_length, sequence_length),
+        device=valid_token_mask.device,
+        dtype=dtype,
+    )
+    invalid_key_mask = (~valid_token_mask).unsqueeze(1).expand(-1, sequence_length, -1)
+    return attention_mask.masked_fill(invalid_key_mask, torch.finfo(dtype).min)
+
+
+def masked_sequence_sum(
+    sequence_tensor: torch.Tensor, valid_token_mask: torch.Tensor
+) -> torch.Tensor:
+    return (
+        sequence_tensor * valid_token_mask.unsqueeze(-1).to(sequence_tensor.dtype)
+    ).sum(1)
