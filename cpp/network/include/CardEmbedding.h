@@ -2,6 +2,7 @@
 #define CARD_EMBEDDING_H
 
 #include <ATen/core/TensorBody.h>
+#include <torch/nn/modules/embedding.h>
 
 #include <utility>
 
@@ -13,6 +14,7 @@
 #include "../src/serialization/gamecore_serialization.pb.h"
 #include "network/include/AbilityEmbedding.h"
 #include "network/include/AttackEmbedding.h"
+#include "network/include/MultiHeadAttention.h"
 
 using ProtoBufCard = gamecore::serialization::ProtoBufCard;
 
@@ -27,7 +29,6 @@ struct InstructionsAndConditions {
     std::vector<int64_t> condition_card_indices;
     std::vector<int64_t> condition_ability_indices;
     std::vector<torch::Tensor> attack_energy_costs;
-    std::vector<std::pair<int, int>> attack_energy_cost_parent_indices;
 };
 
 struct CardEmbeddingImpl : torch::nn::Module, SaveLoadMixin<CardEmbeddingImpl> {
@@ -46,6 +47,13 @@ struct CardEmbeddingImpl : torch::nn::Module, SaveLoadMixin<CardEmbeddingImpl> {
     ConditionEmbedding condition_embedding_{nullptr};
     SharedEmbeddingHolder shared_embedding_holder_{nullptr};
     InstructionDataEmbedding instruction_data_embedding_{nullptr};
+    MultiHeadAttention card_instructions_multi_head_attention_{nullptr};
+    torch::nn::Embedding card_instruction_query_embedding_{nullptr};
+    MultiHeadAttention card_conditions_multi_head_attention_{nullptr};
+    torch::nn::Embedding card_condition_query_embedding_{nullptr};
+
+    MultiHeadAttention card_token_multi_head_attention_{nullptr};
+    torch::nn::Embedding card_token_query_embedding_{nullptr};
 
     InstructionsAndConditions collect_instructions_and_conditions(const std::vector<ProtoBufCard>& card_batch);
     std::pair<torch::Tensor, torch::Tensor> embed_instructions_and_conditions(
@@ -58,7 +66,21 @@ struct CardEmbeddingImpl : torch::nn::Module, SaveLoadMixin<CardEmbeddingImpl> {
         const std::pair<torch::Tensor, torch::Tensor>& embedded_instructions_pair,
         const std::vector<int64_t>& instruction_ability_indices,
         const std::pair<torch::Tensor, torch::Tensor>& embedded_conditions_pair,
-        const std::vector<int64_t>& condition_ability_indices);
+        const std::vector<int64_t>& condition_ability_indices,
+        const std::vector<std::pair<int, int>>& instruction_card_parent_indices, int batch_size);
+
+    std::pair<torch::Tensor, torch::Tensor> pad_to_batch(const std::vector<int64_t>& card_indices,
+                                                         const std::vector<std::pair<int, int>>& card_parent_indices,
+                                                         int batch_size, const torch::Tensor& pooled_instructions);
+
+    std::pair<torch::Tensor, torch::Tensor> embed_card_instructions(
+        const std::pair<torch::Tensor, torch::Tensor>& embedded_instructions_pair,
+        const std::vector<int64_t>& instruction_card_indices,
+        const std::vector<std::pair<int, int>>& instruction_card_parent_indices, int batch_size);
+    std::pair<torch::Tensor, torch::Tensor> embed_card_conditions(
+        const std::pair<torch::Tensor, torch::Tensor>& embedded_conditions_pair,
+        const std::vector<int64_t>& condition_card_indices,
+        const std::vector<std::pair<int, int>>& condition_card_parent_indices, int batch_size);
 };
 
 TORCH_MODULE(CardEmbedding);
