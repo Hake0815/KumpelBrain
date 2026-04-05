@@ -156,6 +156,10 @@ std::pair<torch::Tensor, torch::Tensor> CardEmbeddingImpl::embed_attacks(
     const std::pair<torch::Tensor, torch::Tensor>& embedded_instructions_pair,
     const std::vector<int64_t>& instruction_attack_indices, const std::vector<torch::Tensor>& attack_energy_costs,
     const std::vector<std::pair<int, int>>& instruction_card_parent_indices, int batch_size) {
+    if (attack_energy_costs.empty()) {
+        return {torch::zeros({batch_size, 0, dimension_out_}, torch::TensorOptions().device(device_).dtype(dtype_)),
+                torch::zeros({batch_size, 0}, torch::TensorOptions().device(device_).dtype(torch::kBool))};
+    }
     auto tensorOptions = torch::TensorOptions().device(device_).dtype(torch::kLong);
     auto embedded_instruction_attacks =
         embedded_instructions_pair.first.index_select(0, torch::tensor(instruction_attack_indices, tensorOptions));
