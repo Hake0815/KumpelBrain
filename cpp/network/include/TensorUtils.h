@@ -21,6 +21,13 @@ torch::Tensor build_contiguous_offsets(const torch::Tensor &group_indices,
 torch::Tensor local_positions_from_batch_offsets(const torch::Tensor &batch_offsets,
                                                  int64_t num_rows);
 
+/// Splits ``x`` along dimension 0 using cumulative ``batch_offsets`` of shape
+/// ``(batch_size + 1,)``. Segment lengths are computed on device; one CPU copy of
+/// lengths drives ``split_with_sizes`` (avoids ``batch_size`` GPU syncs from ``.item()``).
+std::vector<torch::Tensor> split_by_batch_offsets(const torch::Tensor &x,
+                                                  const torch::Tensor &batch_offsets,
+                                                  int64_t batch_size);
+
 torch::Tensor build_parent_offsets(const torch::Tensor &parent_row_ids,
                                    int64_t num_parents);
 

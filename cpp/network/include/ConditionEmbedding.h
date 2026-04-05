@@ -27,7 +27,6 @@ struct ConditionEmbeddingImpl : torch::nn::Module, SaveLoadMixin<ConditionEmbedd
     torch::nn::Embedding condition_type_embedding_{nullptr};
     MultiHeadAttention data_multi_head_attention_{nullptr};
     PositionalEmbedding position_embedding_{nullptr};
-    MultiHeadAttention conditions_multi_head_attention_{nullptr};
 
     torch::Tensor compute_data_tensors(const nesting::FlattenInstructionsResult& flat);
 

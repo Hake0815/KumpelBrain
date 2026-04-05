@@ -1,6 +1,7 @@
 #include "../include/TensorUtils.h"
 
 #include <ATen/Context.h>
+#include <c10/util/ArrayRef.h>
 #include <limits>
 #include <stdexcept>
 
@@ -116,6 +117,26 @@ torch::Tensor local_positions_from_batch_offsets(const torch::Tensor &batch_offs
       torch::searchsorted(end_offsets, row_ids, /*out_int32=*/false,
                           /*right=*/true);
   return row_ids - batch_offsets.index_select(0, group_ids);
+}
+
+std::vector<torch::Tensor> split_by_batch_offsets(const torch::Tensor &x,
+                                                  const torch::Tensor &batch_offsets,
+                                                  int64_t batch_size) {
+  if (batch_size <= 0) {
+    return {};
+  }
+  auto lengths =
+      batch_offsets.slice(0, 1, batch_size + 1) - batch_offsets.slice(0, 0, batch_size);
+  auto lengths_cpu = lengths.contiguous().to(torch::kCPU);
+  std::vector<int64_t> sizes(static_cast<size_t>(batch_size));
+  {
+    auto acc = lengths_cpu.accessor<int64_t, 1>();
+    for (int64_t i = 0; i < batch_size; ++i) {
+      sizes[static_cast<size_t>(i)] = acc[i];
+    }
+  }
+  auto chunks = x.split_with_sizes(c10::IntArrayRef(sizes.data(), sizes.size()), 0);
+  return std::vector<torch::Tensor>(chunks.begin(), chunks.end());
 }
 
 torch::Tensor build_parent_offsets(const torch::Tensor &parent_row_ids,

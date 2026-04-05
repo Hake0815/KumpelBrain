@@ -27,7 +27,6 @@ struct InstructionEmbeddingImpl : torch::nn::Module, SaveLoadMixin<InstructionEm
     torch::nn::Embedding instruction_type_embedding_{nullptr};
     MultiHeadAttention data_multi_head_attention_{nullptr};
     PositionalEmbedding position_embedding_{nullptr};
-    MultiHeadAttention instructions_multi_head_attention_{nullptr};
 
     torch::Tensor compute_data_tensors(const nesting::FlattenInstructionsResult& flat);
 
