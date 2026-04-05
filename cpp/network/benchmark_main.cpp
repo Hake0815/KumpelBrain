@@ -310,10 +310,8 @@ void run_embedding_benchmarks(const torch::Device& device, const std::string& la
     }
 
     benchmark_ms(label + " instruction_forward", device, warmup_runs, measured_runs, [&]() {
-        auto embeddings = instruction_embedding->forward(instructions);
-        for (const auto &t : embeddings) {
-            benchmark_sink += t.numel();
-        }
+        auto [embedded, mask] = instruction_embedding->forward(instructions);
+        benchmark_sink += embedded.numel() + mask.numel();
     });
 
     if (device.is_cpu()) {
@@ -324,10 +322,8 @@ void run_embedding_benchmarks(const torch::Device& device, const std::string& la
     }
 
     benchmark_ms(label + " condition_forward", device, warmup_runs, measured_runs, [&]() {
-        auto embeddings = condition_embedding->forward(conditions);
-        for (const auto &t : embeddings) {
-            benchmark_sink += t.numel();
-        }
+        auto [embedded, mask] = condition_embedding->forward(conditions);
+        benchmark_sink += embedded.numel() + mask.numel();
     });
 }
 

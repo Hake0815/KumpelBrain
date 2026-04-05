@@ -154,12 +154,8 @@ def test_instruction_embedding_parity(
 
     py_out = py_instruction.forward(instructions_batch)
     cpp_out = cpp_instruction.forward(serialized_instructions_batch)
-    if len(py_out) != len(cpp_out):
-        raise AssertionError(
-            f"InstructionEmbedding batch length mismatch: py={len(py_out)} cpp={len(cpp_out)}"
-        )
-    for i, (a, b) in enumerate(zip(py_out, cpp_out)):
-        _assert_close(f"InstructionEmbedding[{i}]", a, b)
+    _assert_close("InstructionEmbedding", py_out[0], cpp_out[0])
+    _assert_close("InstructionEmbedding valid token mask", py_out[1], cpp_out[1])
 
     if not benchmark:
         return None, None

@@ -14,9 +14,11 @@ struct ConditionEmbeddingImpl : torch::nn::Module, SaveLoadMixin<ConditionEmbedd
                            std::shared_ptr<SharedEmbeddingHolderImpl> shared_embedding_holder, int64_t dimension_out,
                            torch::Device device = torch::kCPU, torch::Dtype dtype = torch::kFloat);
 
-    std::vector<torch::Tensor> forward(const std::vector<std::vector<ProtoBufCondition>>& conditions_batch);
+    std::pair<torch::Tensor, torch::Tensor> forward(
+        const std::vector<std::vector<ProtoBufCondition>>& conditions_batch);
 
-    std::vector<torch::Tensor> forward_flattened(const nesting::FlattenInstructionsResult& flat, int64_t batch_size);
+    std::pair<torch::Tensor, torch::Tensor> forward_flattened(const nesting::FlattenInstructionsResult& flat,
+                                                              int64_t batch_size);
 
    private:
     int64_t dimension_out_;

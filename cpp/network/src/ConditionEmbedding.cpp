@@ -3,14 +3,17 @@
 #include "../include/AttentionUtils.h"
 #include "../include/Nesting.h"
 #include "../include/TensorUtils.h"
+#include "network/include/InstructionDataEmbedding.h"
 
 namespace serialization = gamecore::serialization;
 
 ConditionEmbeddingImpl::ConditionEmbeddingImpl(std::shared_ptr<InstructionDataEmbeddingImpl> instruction_data_embedding,
                                                std::shared_ptr<SharedEmbeddingHolderImpl> shared_embedding_holder,
                                                int64_t dimension_out, torch::Device device, torch::Dtype dtype)
-    : dimension_out_(dimension_out), device_(device), dtype_(dtype) {
-    instruction_data_embedding_ = register_module("instruction_data_embedding", instruction_data_embedding);
+    : instruction_data_embedding_(instruction_data_embedding),
+      dimension_out_(dimension_out),
+      device_(device),
+      dtype_(dtype) {
     condition_type_embedding_ =
         register_module("condition_type_embedding",
                         torch::nn::Embedding(torch::nn::EmbeddingOptions(8, dimension_out_).padding_idx(0)));
@@ -22,7 +25,7 @@ ConditionEmbeddingImpl::ConditionEmbeddingImpl(std::shared_ptr<InstructionDataEm
     to(device_, dtype_);
 }
 
-std::vector<torch::Tensor> ConditionEmbeddingImpl::forward(
+std::pair<torch::Tensor, torch::Tensor> ConditionEmbeddingImpl::forward(
     const std::vector<std::vector<serialization::ProtoBufCondition>>& conditions_batch) {
     const int64_t batch_size = static_cast<int64_t>(conditions_batch.size());
 
@@ -31,8 +34,8 @@ std::vector<torch::Tensor> ConditionEmbeddingImpl::forward(
     return forward_flattened(flat, batch_size);
 }
 
-std::vector<torch::Tensor> ConditionEmbeddingImpl::forward_flattened(const nesting::FlattenInstructionsResult& flat,
-                                                                     int64_t batch_size) {
+std::pair<torch::Tensor, torch::Tensor> ConditionEmbeddingImpl::forward_flattened(
+    const nesting::FlattenInstructionsResult& flat, int64_t batch_size) {
     auto embedded_condition_types = condition_type_embedding_(flat.instruction_types.to(torch::kLong));
 
     auto embedded_instruction_data = instruction_data_embedding_->forward(flat).to(device_);
@@ -45,10 +48,10 @@ std::vector<torch::Tensor> ConditionEmbeddingImpl::forward_flattened(const nesti
 
     const auto num_conditions = condition_embeddings.size(0);
     auto local_pos = tensor_utils::local_positions_from_batch_offsets(batch_offsets, num_conditions);
-
     auto positioned_flat = position_embedding_->forward_packed(condition_embeddings, local_pos);
-
-    return tensor_utils::split_by_batch_offsets(positioned_flat, batch_offsets, batch_size);
+    auto [padded_batch, valid_token_mask] =
+        tensor_utils::pad_by_offsets(positioned_flat, batch_offsets, dimension_out_);
+    return {padded_batch, valid_token_mask};
 }
 
 torch::Tensor ConditionEmbeddingImpl::compute_data_tensors(const nesting::FlattenInstructionsResult& flat) {

@@ -23,6 +23,7 @@ set(KUMPEL_CORE_SOURCES
     network/src/AttentionUtils.cpp
     network/src/AttackDataEmbedding.cpp
     network/src/CardAmountDataEmbedding.cpp
+    network/src/CardEmbedding.cpp
     network/src/ConditionEmbedding.cpp
     network/src/DiscardDataEmbedding.cpp
     network/src/FilterConditionEmbedding.cpp

@@ -107,12 +107,8 @@ def run_condition_parity(
 
     py_out = py_condition.forward(conditions_batch)
     cpp_out = cpp_condition.forward(serialized_conditions_batch)
-    if len(py_out) != len(cpp_out):
-        raise AssertionError(
-            f"ConditionEmbedding batch length mismatch: py={len(py_out)} cpp={len(cpp_out)}"
-        )
-    for i, (a, b) in enumerate(zip(py_out, cpp_out)):
-        _assert_close(f"ConditionEmbedding[{i}]", a, b)
+    _assert_close("ConditionEmbedding", py_out[0], cpp_out[0])
+    _assert_close("ConditionEmbedding valid token mask", py_out[1], cpp_out[1])
 
     if not benchmark:
         return None, None

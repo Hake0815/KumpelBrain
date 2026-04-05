@@ -46,6 +46,8 @@ class SharedEmbeddingHolder(nn.Module, SaveLoadMixin):
         self.position_embedding = positional_embedding.PositionalEmbedding(
             dimension_out, **factory_kwargs
         )
+        self.damage_embedding = NormalizedLinear(1, dimension_out, 400.0, **factory_kwargs)
+        self.energy_type_embedding = nn.Embedding(11, dimension_out, **factory_kwargs)
 
 
 class FilterConditionEmbedding(nn.Module, SaveLoadMixin):
@@ -220,8 +222,11 @@ class FilterEmbedding(nn.Module, SaveLoadMixin):
 
 
 class AttackDataEmbedding(nn.Module, SaveLoadMixin):
+    _damage_embedding: NormalizedLinear
+
     def __init__(
         self,
+        shared_embedding_holder: SharedEmbeddingHolder,
         dimension_out: int,
         device: torch.device | None = None,
         dtype: torch.dtype | None = None,
@@ -232,14 +237,16 @@ class AttackDataEmbedding(nn.Module, SaveLoadMixin):
         self.device = device
         self.dtype = dtype
         self.attack_target_embedding = nn.Embedding(1, dimension_out, **factory_kwargs)
-        self.self_damage_embedding = NormalizedLinear(
-            1, dimension_out, **factory_kwargs
+        object.__setattr__(
+            self,
+            "_damage_embedding",
+            shared_embedding_holder.damage_embedding,
         )
 
     def forward(self, attack_data: torch.Tensor) -> torch.Tensor:
         attack_target = attack_data[:, 0]
         damage = attack_data[:, 1].unsqueeze(1)
-        return self.attack_target_embedding(attack_target) + self.self_damage_embedding(
+        return self.attack_target_embedding(attack_target) + self._damage_embedding(
             damage
         )
 
@@ -362,7 +369,7 @@ class InstructionDataEmbedding(nn.Module, SaveLoadMixin):
         super().__init__()
         self.dimension_out = dimension_out
         self.attack_data_embedding = AttackDataEmbedding(
-            dimension_out, **self.factory_kwargs
+            shared_embedding_holder, dimension_out, **self.factory_kwargs
         )
         self.discard_data_embedding = DiscardDataEmbedding(
             dimension_out, **self.factory_kwargs
@@ -467,6 +474,7 @@ class InstructionDataEmbedding(nn.Module, SaveLoadMixin):
 
 
 class InstructionEmbedding(nn.Module, SaveLoadMixin):
+    _instruction_data_embedding: InstructionDataEmbedding
     _position_embedding: positional_embedding.PositionalEmbedding
 
     def __init__(
@@ -480,7 +488,11 @@ class InstructionEmbedding(nn.Module, SaveLoadMixin):
         self.factory_kwargs = {"device": device, "dtype": dtype}
         super().__init__()
         self.dimension_out = dimension_out
-        self.instruction_data_embedding = instruction_data_embedding
+        object.__setattr__(
+            self,
+            "_instruction_data_embedding",
+            instruction_data_embedding,
+        )
         self.instruction_type_embedding = nn.Embedding(
             8, dimension_out, padding_idx=0, **self.factory_kwargs
         )
@@ -498,8 +510,8 @@ class InstructionEmbedding(nn.Module, SaveLoadMixin):
             shared_embedding_holder.position_embedding,
         )
 
-    # Returns a list Tensors of batch_size length. Each list element has dimension (L_i, dimension_out), where L_i is the number of Conditions in the i-th batch element.
-    def forward(self, instructions_batch: list[list[dict]]) -> list[torch.Tensor]:
+    # Returns a list Tensors of batch_size length. Each list element has dimension (L_i, dimension_out), where L_i is the number of instructions in the i-th batch element.
+    def forward(self, instructions_batch: list[list[dict]]) -> tuple[torch.Tensor, torch.Tensor]:
         batch_size = len(instructions_batch)
         (
             instruction_types,
@@ -512,7 +524,7 @@ class InstructionEmbedding(nn.Module, SaveLoadMixin):
             "InstructionType", instructions_batch, **self.factory_kwargs
         )
         instruction_type_embeddings = self.instruction_type_embedding(instruction_types)
-        data_tensors = self.instruction_data_embedding(
+        data_tensors = self._instruction_data_embedding(
             instruction_indices,
             instruction_data_types,
             instruction_data_type_indices,
@@ -539,7 +551,7 @@ class InstructionEmbedding(nn.Module, SaveLoadMixin):
 
 class ConditionEmbedding(nn.Module, SaveLoadMixin):
     _position_embedding: positional_embedding.PositionalEmbedding
-
+    _instruction_data_embedding: InstructionDataEmbedding
     def __init__(
         self,
         instruction_data_embedding: InstructionDataEmbedding,
@@ -551,7 +563,11 @@ class ConditionEmbedding(nn.Module, SaveLoadMixin):
         self.factory_kwargs = {"device": device, "dtype": dtype}
         super().__init__()
         self.dimension_out = dimension_out
-        self.instruction_data_embedding = instruction_data_embedding
+        object.__setattr__(
+            self,
+            "_instruction_data_embedding",
+            instruction_data_embedding,
+        )
         self.condition_type_embedding = nn.Embedding(
             8, dimension_out, padding_idx=0, **self.factory_kwargs
         )
@@ -570,7 +586,7 @@ class ConditionEmbedding(nn.Module, SaveLoadMixin):
         )
 
     # Returns a list Tensors of batch_size length. Each list element has dimension (L_i, dimension_out), where L_i is the number of Conditions in the i-th batch element.
-    def forward(self, conditions_batch: list[list[dict]]) -> list[torch.Tensor]:
+    def forward(self, conditions_batch: list[list[dict]]) -> tuple[torch.Tensor, torch.Tensor]:
         batch_size = len(conditions_batch)
         (
             condition_types,
@@ -583,7 +599,7 @@ class ConditionEmbedding(nn.Module, SaveLoadMixin):
             "ConditionType", conditions_batch, **self.factory_kwargs
         )
         instruction_type_embeddings = self.condition_type_embedding(condition_types)
-        data_tensors = self.instruction_data_embedding(
+        data_tensors = self._instruction_data_embedding(
             condition_indices,
             instruction_data_types,
             instruction_data_type_indices,
@@ -634,9 +650,9 @@ def reduce_batched_instruction_embeddings(
     instruction_indices: torch.Tensor,
     instruction_embeddings: torch.Tensor,
     batch_size: int,
-) -> list[torch.Tensor]:
+) -> tuple[torch.Tensor, torch.Tensor]:
     if batch_size == 0:
-        return []
+        return (torch.empty(0, 0, instruction_embeddings.shape[-1]), torch.empty(0, 0))
 
     batched_embeddings = []
     for batch_index in range(batch_size):
@@ -644,5 +660,35 @@ def reduce_batched_instruction_embeddings(
         positioned_batch = position_embedding(per_batch.unsqueeze(0)).squeeze(0)
         batched_embeddings.append(positioned_batch)
 
-    return batched_embeddings
+    return pad_sequence_list(
+        batched_embeddings, instruction_embeddings.shape[-1]
+    )
+
+
+def pad_sequence_list(
+    sequence_list: list[torch.Tensor], dimension_out: int
+) -> tuple[torch.Tensor, torch.Tensor]:
+    if not sequence_list:
+        raise ValueError("pad_sequence_list requires at least one sequence")
+
+    batch_size = len(sequence_list)
+    max_sequence_length = max(sequence.shape[0] for sequence in sequence_list)
+    device = sequence_list[0].device
+    dtype = sequence_list[0].dtype
+
+    padded_sequences = torch.zeros(
+        (batch_size, max_sequence_length, dimension_out), device=device, dtype=dtype
+    )
+    valid_token_mask = torch.zeros(
+        (batch_size, max_sequence_length), device=device, dtype=torch.bool
+    )
+
+    for batch_index, sequence in enumerate(sequence_list):
+        sequence_length = sequence.shape[0]
+        if sequence_length == 0:
+            continue
+        padded_sequences[batch_index, :sequence_length] = sequence
+        valid_token_mask[batch_index, :sequence_length] = True
+
+    return padded_sequences, valid_token_mask
 
