@@ -45,3 +45,18 @@ torch::Tensor PositionalEmbeddingImpl::forward(const torch::Tensor &x) {
 
   return dropout_(x + positional_embedding_slice);
 }
+
+torch::Tensor
+PositionalEmbeddingImpl::forward_packed(const torch::Tensor &x,
+                                        const torch::Tensor &local_positions) {
+  if (x.size(0) == 0) {
+    return x;
+  }
+  TORCH_CHECK(x.dim() == 2, "forward_packed: x must be [N, d_model]");
+  TORCH_CHECK(local_positions.dim() == 1 &&
+                  local_positions.size(0) == x.size(0),
+              "forward_packed: local_positions must be [N] matching x.size(0)");
+  auto pos = local_positions.to(torch::kLong);
+  auto pe_rows = positional_embedding_.index({0, pos, Slice()});
+  return dropout_(x + pe_rows);
+}

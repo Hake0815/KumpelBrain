@@ -14,13 +14,13 @@ torch::Tensor build_offsets_from_counts(const torch::Tensor &counts) {
 }
 
 torch::Tensor make_long_options_like(const torch::Tensor &tensor) {
-  return tensor.to(torch::TensorOptions()
-                       .device(tensor.device())
-                       .dtype(torch::kInt64));
+  return tensor.to(
+      torch::TensorOptions().device(tensor.device()).dtype(torch::kInt64));
 }
 
-torch::Tensor build_offsets_from_sorted_group_ids(const torch::Tensor &group_ids,
-                                                  int64_t num_groups) {
+torch::Tensor
+build_offsets_from_sorted_group_ids(const torch::Tensor &group_ids,
+                                    int64_t num_groups) {
   auto options =
       torch::TensorOptions().device(group_ids.device()).dtype(torch::kInt64);
   if (num_groups <= 0) {
@@ -29,9 +29,9 @@ torch::Tensor build_offsets_from_sorted_group_ids(const torch::Tensor &group_ids
 
   auto flattened_group_ids =
       make_long_options_like(group_ids).contiguous().view({-1});
-  auto group_starts = torch::searchsorted(
-      flattened_group_ids, torch::arange(num_groups, options),
-      /*out_int32=*/false, /*right=*/false);
+  auto group_starts = torch::searchsorted(flattened_group_ids,
+                                          torch::arange(num_groups, options),
+                                          /*out_int32=*/false, /*right=*/false);
   auto total_count = torch::full({1}, flattened_group_ids.size(0), options);
   return torch::cat({group_starts, total_count});
 }
@@ -97,6 +97,27 @@ torch::Tensor build_contiguous_offsets(const torch::Tensor &group_indices,
   return build_offsets_from_group_ids(group_indices, num_groups);
 }
 
+torch::Tensor local_positions_from_batch_offsets(const torch::Tensor &batch_offsets,
+                                                 int64_t num_rows) {
+  if (num_rows <= 0) {
+    return torch::empty(
+        {0}, torch::TensorOptions()
+                 .device(batch_offsets.device())
+                 .dtype(torch::kInt64));
+  }
+  const int64_t batch_size = batch_offsets.size(0) - 1;
+  auto row_ids =
+      torch::arange(num_rows, torch::TensorOptions()
+                                  .device(batch_offsets.device())
+                                  .dtype(torch::kInt64));
+  auto end_offsets =
+      batch_offsets.slice(0, 1, batch_size + 1).contiguous();
+  auto group_ids =
+      torch::searchsorted(end_offsets, row_ids, /*out_int32=*/false,
+                          /*right=*/true);
+  return row_ids - batch_offsets.index_select(0, group_ids);
+}
+
 torch::Tensor build_parent_offsets(const torch::Tensor &parent_row_ids,
                                    int64_t num_parents) {
   return build_offsets_from_group_ids(parent_row_ids, num_parents);
@@ -106,18 +127,20 @@ std::pair<torch::Tensor, torch::Tensor>
 pad_by_offsets(const torch::Tensor &flat_sequences,
                const torch::Tensor &offsets, int64_t dimension_out) {
   const auto batch_size = offsets.size(0) == 0 ? 0 : offsets.size(0) - 1;
-  const auto options =
-      torch::TensorOptions().device(flat_sequences.device()).dtype(flat_sequences.dtype());
-  auto mask_options =
-      torch::TensorOptions().device(flat_sequences.device()).dtype(torch::kBool);
+  const auto options = torch::TensorOptions()
+                           .device(flat_sequences.device())
+                           .dtype(flat_sequences.dtype());
+  auto mask_options = torch::TensorOptions()
+                          .device(flat_sequences.device())
+                          .dtype(torch::kBool);
 
   if (batch_size == 0) {
     return {torch::empty({0, 0, dimension_out}, options),
             torch::empty({0, 0}, mask_options)};
   }
 
-  auto lengths = offsets.slice(0, 1, batch_size + 1) -
-                 offsets.slice(0, 0, batch_size);
+  auto lengths =
+      offsets.slice(0, 1, batch_size + 1) - offsets.slice(0, 0, batch_size);
   const auto max_sequence_length = lengths.max().item<int64_t>();
 
   auto padded =
@@ -142,16 +165,16 @@ pad_by_offsets(const torch::Tensor &flat_sequences,
 }
 
 torch::Tensor make_padding_attention_mask(const torch::Tensor &valid_token_mask,
+                                          int64_t query_seq_len,
                                           torch::Dtype dtype) {
   const auto sequence_length = valid_token_mask.size(1);
   auto attention_mask = torch::zeros(
-      {valid_token_mask.size(0), 1, sequence_length, sequence_length},
+      {valid_token_mask.size(0), 1, query_seq_len, sequence_length},
       torch::TensorOptions().device(valid_token_mask.device()).dtype(dtype));
-  auto invalid_key_mask =
-      (~valid_token_mask)
-          .unsqueeze(1)
-          .unsqueeze(1)
-          .expand({-1, 1, sequence_length, -1});
+  auto invalid_key_mask = (~valid_token_mask)
+                              .unsqueeze(1)
+                              .unsqueeze(1)
+                              .expand({-1, 1, query_seq_len, -1});
   return attention_mask.masked_fill(
       invalid_key_mask,
       static_cast<double>(std::numeric_limits<float>::lowest()));

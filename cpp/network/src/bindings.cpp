@@ -176,7 +176,8 @@ PYBIND11_MODULE(kumpel_embedding, m) {
            pybind11::arg("max_len") = 5000,
            pybind11::arg("device") = torch::Device(torch::kCPU),
            pybind11::arg("dtype") = torch::Dtype(torch::kFloat))
-      .def("forward", &PositionalEmbeddingImpl::forward);
+      .def("forward", &PositionalEmbeddingImpl::forward)
+      .def("forward_packed", &PositionalEmbeddingImpl::forward_packed);
   pybind11::class_<MultiHeadAttentionImpl, torch::nn::Module,
                    std::shared_ptr<MultiHeadAttentionImpl>>(
       m, "MultiHeadAttention")

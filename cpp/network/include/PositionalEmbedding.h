@@ -10,6 +10,12 @@ struct PositionalEmbeddingImpl : torch::nn::Module {
                           torch::Dtype dtype = torch::kFloat);
   torch::Tensor forward(const torch::Tensor &x);
 
+  /// Applies the same sinusoidal positions as ``forward``, but for a packed ``[N, d_model]``
+  /// sequence. ``local_positions`` must be int64 of shape ``[N]`` (per-row index within
+  /// its own batch group, starting at 0 for each group).
+  torch::Tensor forward_packed(const torch::Tensor &x,
+                               const torch::Tensor &local_positions);
+
 private:
   torch::nn::Dropout dropout_{nullptr};
   torch::Tensor positional_embedding_;

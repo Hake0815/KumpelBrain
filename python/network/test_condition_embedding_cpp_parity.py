@@ -4,7 +4,7 @@ from pathlib import Path
 import sys
 import tempfile
 import time
-from typing import Callable
+from typing import Any, Callable
 
 import torch
 
@@ -41,7 +41,7 @@ def _with_loaded_weights(py_model, cpp_model) -> None:
 
 
 def _benchmark_forward(
-    forward_fn: Callable[[], torch.Tensor],
+    forward_fn: Callable[[], Any],
     device: torch.device,
     warmup_runs: int = 20,
     runs: int = 200,
@@ -107,7 +107,12 @@ def run_condition_parity(
 
     py_out = py_condition.forward(conditions_batch)
     cpp_out = cpp_condition.forward(serialized_conditions_batch)
-    _assert_close("ConditionEmbedding", py_out, cpp_out)
+    if len(py_out) != len(cpp_out):
+        raise AssertionError(
+            f"ConditionEmbedding batch length mismatch: py={len(py_out)} cpp={len(cpp_out)}"
+        )
+    for i, (a, b) in enumerate(zip(py_out, cpp_out)):
+        _assert_close(f"ConditionEmbedding[{i}]", a, b)
 
     if not benchmark:
         return None, None
