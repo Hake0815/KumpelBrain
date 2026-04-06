@@ -4,6 +4,7 @@
 
 #include "../include/AttackDataEmbedding.h"
 #include "../include/CardAmountDataEmbedding.h"
+#include "../include/CardEmbedding.h"
 #include "../include/ConditionEmbedding.h"
 #include "../include/DiscardDataEmbedding.h"
 #include "../include/FilterConditionEmbedding.h"
@@ -109,34 +110,28 @@ std::vector<serialization::ProtoBufFilter> parse_filter_list(const pybind11::ite
     return parsed;
 }
 
-std::vector<std::vector<serialization::ProtoBufInstruction>> parse_instruction_batch_serialized(
-    const pybind11::iterable& instructions_batch) {
-    std::vector<std::vector<serialization::ProtoBufInstruction>> parsed;
-    for (auto batch_item : instructions_batch) {
+template <typename MessageType>
+std::vector<std::vector<MessageType>> parse_nested_serialized_batch(const pybind11::iterable& batch,
+                                                                    const char* message_label) {
+    std::vector<std::vector<MessageType>> parsed;
+    for (auto batch_item : batch) {
         auto batch_list = pybind11::cast<pybind11::list>(batch_item.cast<pybind11::object>());
-        std::vector<serialization::ProtoBufInstruction> batch;
-        batch.reserve(batch_list.size());
-        for (auto instruction_item : batch_list) {
-            batch.push_back(parse_serialized_message<serialization::ProtoBufInstruction>(
-                instruction_item.cast<pybind11::object>(), "ProtoBufInstruction"));
+        std::vector<MessageType> inner;
+        inner.reserve(batch_list.size());
+        for (auto item : batch_list) {
+            inner.push_back(
+                parse_serialized_message<MessageType>(item.cast<pybind11::object>(), message_label));
         }
-        parsed.push_back(std::move(batch));
+        parsed.push_back(std::move(inner));
     }
     return parsed;
 }
 
-std::vector<std::vector<serialization::ProtoBufCondition>> parse_condition_batch_serialized(
-    const pybind11::iterable& conditions_batch) {
-    std::vector<std::vector<serialization::ProtoBufCondition>> parsed;
-    for (auto batch_item : conditions_batch) {
-        auto batch_list = pybind11::cast<pybind11::list>(batch_item.cast<pybind11::object>());
-        std::vector<serialization::ProtoBufCondition> batch;
-        batch.reserve(batch_list.size());
-        for (auto condition_item : batch_list) {
-            batch.push_back(parse_serialized_message<serialization::ProtoBufCondition>(
-                condition_item.cast<pybind11::object>(), "ProtoBufCondition"));
-        }
-        parsed.push_back(std::move(batch));
+std::vector<serialization::ProtoBufCard> parse_card_batch_serialized(const pybind11::iterable& card_batch) {
+    std::vector<serialization::ProtoBufCard> parsed;
+    for (auto item : card_batch) {
+        parsed.push_back(
+            parse_serialized_message<serialization::ProtoBufCard>(item.cast<pybind11::object>(), "ProtoBufCard"));
     }
     return parsed;
 }
@@ -238,7 +233,8 @@ PYBIND11_MODULE(kumpel_embedding, m) {
              pybind11::arg("device") = torch::Device(torch::kCPU), pybind11::arg("dtype") = torch::Dtype(torch::kFloat))
         .def("forward",
              [](InstructionDataEmbeddingImpl& self, const pybind11::iterable& instructions_batch) {
-                 auto parsed = parse_instruction_batch_serialized(instructions_batch);
+                 auto parsed = parse_nested_serialized_batch<serialization::ProtoBufInstruction>(
+                     instructions_batch, "ProtoBufInstruction");
                  auto flat = nesting::flatten_instructions(parsed, std::nullopt, torch::kInt64);
                  flat = nesting::move_flattened_result_to_device(flat, self.parameters()[0].device());
                  return self.forward(flat);
@@ -254,7 +250,8 @@ PYBIND11_MODULE(kumpel_embedding, m) {
              pybind11::arg("dtype") = torch::Dtype(torch::kFloat))
         .def("forward",
              [](InstructionEmbeddingImpl& self, const pybind11::iterable& instructions_batch) {
-                 auto parsed = parse_instruction_batch_serialized(instructions_batch);
+                 auto parsed = parse_nested_serialized_batch<serialization::ProtoBufInstruction>(
+                     instructions_batch, "ProtoBufInstruction");
                  return self.forward(parsed);
              })
         .def("save_weights", &InstructionEmbeddingImpl::save_weights)
@@ -268,10 +265,21 @@ PYBIND11_MODULE(kumpel_embedding, m) {
              pybind11::arg("dtype") = torch::Dtype(torch::kFloat))
         .def("forward",
              [](ConditionEmbeddingImpl& self, const pybind11::iterable& conditions_batch) {
-                 return self.forward(parse_condition_batch_serialized(conditions_batch));
+                 auto parsed = parse_nested_serialized_batch<serialization::ProtoBufCondition>(
+                     conditions_batch, "ProtoBufCondition");
+                 return self.forward(parsed);
              })
         .def("save_weights", &ConditionEmbeddingImpl::save_weights)
         .def("load_weights", &ConditionEmbeddingImpl::load_weights);
+    pybind11::class_<CardEmbeddingImpl, torch::nn::Module, std::shared_ptr<CardEmbeddingImpl>>(m, "CardEmbedding")
+        .def(pybind11::init<int64_t, torch::Device, torch::Dtype>(), pybind11::arg("dimension_out"),
+             pybind11::arg("device") = torch::Device(torch::kCPU), pybind11::arg("dtype") = torch::Dtype(torch::kFloat))
+        .def("forward",
+             [](CardEmbeddingImpl& self, const pybind11::iterable& cards) {
+                 return self.forward(parse_card_batch_serialized(cards));
+             })
+        .def("save_weights", &CardEmbeddingImpl::save_weights)
+        .def("load_weights", &CardEmbeddingImpl::load_weights);
 
     m.def("nesting_traverse_filter", [](const pybind11::iterable& nested_input) {
         auto nodes = parse_filter_list(nested_input);

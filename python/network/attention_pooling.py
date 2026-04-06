@@ -2,6 +2,19 @@ import torch
 from multi_head_attention import MultiHeadAttention
 
 
+def query_sum_attention_pooling(
+    multi_head_attention: MultiHeadAttention,
+    query: torch.Tensor,
+    tokens: list[torch.Tensor],
+) -> torch.Tensor:
+    if len(tokens) == 0:
+        return torch.empty(
+            (0, query.shape[-1]),
+            device=query.device,
+            dtype=query.dtype,
+        )
+    return attention_pooling(multi_head_attention, query, tokens)+query.squeeze(1)
+
 def attention_pooling(
     multi_head_attention: MultiHeadAttention,
     query: torch.Tensor,
@@ -59,13 +72,15 @@ def masked_attention_pooling(
             dtype=padded_sequences.dtype,
         )
 
-    attention_mask = make_padding_attention_mask(valid_token_mask, padded_sequences.dtype, query.shape[1])
+    attention_mask = make_padding_attention_mask(valid_token_mask, padded_sequences.dtype, query.shape[1]) 
+    has_any_valid_token = valid_token_mask.any(dim=1).unsqueeze(1)
+
     return multi_head_attention(
         query,
         padded_sequences,
         padded_sequences,
         attn_mask=attention_mask,
-    ).squeeze(1)
+    ).squeeze(1) * has_any_valid_token
 
 def make_padding_attention_mask(
     valid_token_mask: torch.Tensor,

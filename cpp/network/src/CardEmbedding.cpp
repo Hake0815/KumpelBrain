@@ -68,7 +68,7 @@ InstructionsAndConditions CardEmbeddingImpl::collect_instructions_and_conditions
     std::vector<int64_t> instruction_ability_indices;
     std::vector<int64_t> instruction_attack_indices;
     std::vector<int64_t> condition_card_indices;
-    std::vector<int64_t> condition_ability_indices;
+    std::vector<int64_t> ability_condition_row_for_instruction_ability;
     std::vector<torch::Tensor> attack_energy_costs;
     for (int card_index = 0; card_index < card_batch.size(); ++card_index) {
         const auto& card = card_batch[card_index];
@@ -84,15 +84,17 @@ InstructionsAndConditions CardEmbeddingImpl::collect_instructions_and_conditions
         }
         if (card.has_ability()) {
             auto ability = card.ability();
+            int64_t ability_condition_row = -1;
+            if (ability.conditions_size() > 0) {
+                conditions.push_back(toVector<>(ability.conditions()));
+                condition_card_parent_indices.push_back({card_index, 0});
+                ability_condition_row = static_cast<int64_t>(conditions.size() - 1);
+            }
             if (ability.instructions_size() > 0) {
                 instructions.push_back(toVector<>(ability.instructions()));
                 instruction_card_parent_indices.push_back({card_index, 0});
                 instruction_ability_indices.push_back(instructions.size() - 1);
-            }
-            if (ability.conditions_size() > 0) {
-                conditions.push_back(toVector<>(ability.conditions()));
-                condition_card_parent_indices.push_back({card_index, 0});
-                condition_ability_indices.push_back(conditions.size() - 1);
+                ability_condition_row_for_instruction_ability.push_back(ability_condition_row);
             }
         }
         if (card.attacks_size() > 0) {
@@ -125,7 +127,7 @@ InstructionsAndConditions CardEmbeddingImpl::collect_instructions_and_conditions
                                      instruction_ability_indices,
                                      instruction_attack_indices,
                                      condition_card_indices,
-                                     condition_ability_indices,
+                                     ability_condition_row_for_instruction_ability,
                                      attack_energy_costs};
 }
 
@@ -138,10 +140,10 @@ std::pair<torch::Tensor, torch::Tensor> CardEmbeddingImpl::embed_instructions_an
         embed_attacks(embedded_instructions_pair, instructions_and_conditions.instruction_attack_indices,
                       instructions_and_conditions.attack_energy_costs,
                       instructions_and_conditions.instruction_card_parent_indices, batch_size);
-    auto [embedded_abilities, mask_abilities] =
-        embed_ability(embedded_instructions_pair, instructions_and_conditions.instruction_ability_indices,
-                      embedded_conditions_pair, instructions_and_conditions.condition_ability_indices,
-                      instructions_and_conditions.instruction_card_parent_indices, batch_size);
+    auto [embedded_abilities, mask_abilities] = embed_ability(
+        embedded_instructions_pair, instructions_and_conditions.instruction_ability_indices, embedded_conditions_pair,
+        instructions_and_conditions.ability_condition_row_for_instruction_ability,
+        instructions_and_conditions.instruction_card_parent_indices, batch_size);
     auto [embedded_card_instructions, mask_card_instructions] =
         embed_card_instructions(embedded_instructions_pair, instructions_and_conditions.instruction_card_indices,
                                 instructions_and_conditions.instruction_card_parent_indices, batch_size);
@@ -192,28 +194,60 @@ std::pair<torch::Tensor, torch::Tensor> CardEmbeddingImpl::embed_ability(
     const std::pair<torch::Tensor, torch::Tensor>& embedded_instructions_pair,
     const std::vector<int64_t>& instruction_ability_indices,
     const std::pair<torch::Tensor, torch::Tensor>& embedded_conditions_pair,
-    const std::vector<int64_t>& condition_ability_indices,
+    const std::vector<int64_t>& ability_condition_row_for_instruction_ability,
     const std::vector<std::pair<int, int>>& instruction_card_parent_indices, int batch_size) {
-    auto tensorOptions = torch::TensorOptions().device(device_).dtype(torch::kLong);
-    auto embedded_instruction_abilities =
-        embedded_instructions_pair.first.index_select(0, torch::tensor(instruction_ability_indices, tensorOptions));
-    auto embedded_instruction_abilities_mask =
-        embedded_instructions_pair.second.index_select(0, torch::tensor(instruction_ability_indices, tensorOptions));
-    auto embedded_instruction_conditions =
-        embedded_conditions_pair.first.index_select(0, torch::tensor(condition_ability_indices, tensorOptions));
-    auto embedded_instruction_conditions_mask =
-        embedded_conditions_pair.second.index_select(0, torch::tensor(condition_ability_indices, tensorOptions));
-    auto embedded_abilities =
-        ability_embedding_->forward(embedded_instruction_abilities, embedded_instruction_abilities_mask,
-                                    embedded_instruction_conditions, embedded_instruction_conditions_mask);
+    auto out_options = torch::TensorOptions().device(device_).dtype(dtype_);
+    auto mask_options = torch::TensorOptions().device(device_).dtype(torch::kBool);
+    if (instruction_ability_indices.empty()) {
+        auto empty_slot = torch::zeros({batch_size, 1, dimension_out_}, out_options);
+        auto empty_mask = torch::zeros({batch_size, 1}, mask_options);
+        return {empty_slot, empty_mask};
+    }
 
-    // ability must have instructions but may have conditions
+    auto tensorOptions = torch::TensorOptions().device(device_).dtype(torch::kLong);
+    auto instruction_index_tensor = torch::tensor(instruction_ability_indices, tensorOptions);
+    auto embedded_instruction_abilities = embedded_instructions_pair.first.index_select(0, instruction_index_tensor);
+    auto embedded_instruction_abilities_mask =
+        embedded_instructions_pair.second.index_select(0, instruction_index_tensor);
+
+    const int64_t number_of_abilities = static_cast<int64_t>(instruction_ability_indices.size());
+    int64_t max_number_of_conditions = 0;
+    for (int64_t condition_index : ability_condition_row_for_instruction_ability) {
+        if (condition_index >= 0 && embedded_conditions_pair.first.size(0) > 0) {
+            max_number_of_conditions = embedded_conditions_pair.first.size(1);
+            break;
+        }
+    }
+
+    torch::Tensor cond_vals;
+    torch::Tensor cond_mask;
+    cond_vals = torch::zeros({number_of_abilities, max_number_of_conditions, dimension_out_}, out_options);
+    cond_mask = torch::zeros({number_of_abilities, max_number_of_conditions}, mask_options);
+    if (max_number_of_conditions > 0) {
+        for (int64_t i = 0; i < number_of_abilities; ++i) {
+            const int64_t cidx = ability_condition_row_for_instruction_ability[static_cast<size_t>(i)];
+            if (cidx >= 0) {
+                cond_vals[i].copy_(embedded_conditions_pair.first[cidx]);
+                cond_mask[i].copy_(embedded_conditions_pair.second[cidx]);
+            }
+        }
+    }
+
+    auto embedded_abilities = ability_embedding_->forward(embedded_instruction_abilities,
+                                                          embedded_instruction_abilities_mask, cond_vals, cond_mask);
+
     return pad_to_batch(instruction_ability_indices, instruction_card_parent_indices, batch_size, embedded_abilities);
 }
 std::pair<torch::Tensor, torch::Tensor> CardEmbeddingImpl::embed_card_instructions(
     const std::pair<torch::Tensor, torch::Tensor>& embedded_instructions_pair,
     const std::vector<int64_t>& instruction_card_indices,
     const std::vector<std::pair<int, int>>& instruction_card_parent_indices, int batch_size) {
+    if (instruction_card_indices.empty()) {
+        auto empty_slot =
+            torch::zeros({batch_size, 1, dimension_out_}, torch::TensorOptions().device(device_).dtype(dtype_));
+        auto empty_mask = torch::zeros({batch_size, 1}, torch::TensorOptions().device(device_).dtype(torch::kBool));
+        return {empty_slot, empty_mask};
+    }
     auto tensorOptions = torch::TensorOptions().device(device_).dtype(torch::kLong);
     auto embedded_instructions =
         embedded_instructions_pair.first.index_select(0, torch::tensor(instruction_card_indices, tensorOptions));
@@ -235,6 +269,12 @@ std::pair<torch::Tensor, torch::Tensor> CardEmbeddingImpl::embed_card_conditions
     const std::pair<torch::Tensor, torch::Tensor>& embedded_conditions_pair,
     const std::vector<int64_t>& condition_card_indices,
     const std::vector<std::pair<int, int>>& condition_card_parent_indices, int batch_size) {
+    if (condition_card_indices.empty()) {
+        auto empty_slot =
+            torch::zeros({batch_size, 1, dimension_out_}, torch::TensorOptions().device(device_).dtype(dtype_));
+        auto empty_mask = torch::zeros({batch_size, 1}, torch::TensorOptions().device(device_).dtype(torch::kBool));
+        return {empty_slot, empty_mask};
+    }
     auto tensorOptions = torch::TensorOptions().device(device_).dtype(torch::kLong);
     auto embedded_conditions =
         embedded_conditions_pair.first.index_select(0, torch::tensor(condition_card_indices, tensorOptions));

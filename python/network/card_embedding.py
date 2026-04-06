@@ -5,7 +5,7 @@ import nesting
 import positional_embedding
 from itertools import chain
 from save_load_mixin import SaveLoadMixin
-from attention_pooling import attention_pooling
+from attention_pooling import query_sum_attention_pooling
 
 
 class NormalizedLinear(nn.Module, SaveLoadMixin):
@@ -642,7 +642,7 @@ def embed_instruction_data(
             ]
         )
         query_list.append(unbatched_query)
-    return attention_pooling(data_multi_head_attention, instruction_type_embeddings.unsqueeze(1), query_list)
+    return query_sum_attention_pooling(data_multi_head_attention, instruction_type_embeddings.unsqueeze(1), query_list)
 
 
 def reduce_batched_instruction_embeddings(

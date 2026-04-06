@@ -36,6 +36,17 @@ std::pair<torch::Tensor, torch::Tensor> ConditionEmbeddingImpl::forward(
 
 std::pair<torch::Tensor, torch::Tensor> ConditionEmbeddingImpl::forward_flattened(
     const nesting::FlattenInstructionsResult& flat, int64_t batch_size) {
+    auto options = torch::TensorOptions().device(device_).dtype(dtype_);
+    auto mask_options = torch::TensorOptions().device(device_).dtype(torch::kBool);
+    if (batch_size <= 0) {
+        return {torch::empty({0, 0, dimension_out_}, options), torch::empty({0, 0}, mask_options)};
+    }
+    if (flat.instruction_indices.size(0) == 0) {
+        auto zeros_off = torch::zeros({batch_size + 1}, torch::TensorOptions().device(device_).dtype(torch::kInt64));
+        auto empty_rows = torch::empty({0, dimension_out_}, options);
+        return tensor_utils::pad_by_offsets(empty_rows, zeros_off, dimension_out_);
+    }
+
     auto embedded_condition_types = condition_type_embedding_(flat.instruction_types.to(torch::kLong));
 
     auto embedded_instruction_data = instruction_data_embedding_->forward(flat).to(device_);
@@ -71,6 +82,6 @@ torch::Tensor ConditionEmbeddingImpl::compute_condition_embeddings(const torch::
     auto data_offsets = tensor_utils::build_parent_offsets(instruction_data_parent_rows, num_conditions);
     auto [padded_data, data_token_mask] =
         tensor_utils::pad_by_offsets(embedded_instruction_data, data_offsets, dimension_out_);
-    return attention_utils::masked_attention_pooling(data_multi_head_attention_, embedded_condition_types.unsqueeze(1),
-                                                     padded_data, data_token_mask);
+    return attention_utils::query_sum_attention_pooling(
+        data_multi_head_attention_, embedded_condition_types.unsqueeze(1), padded_data, data_token_mask);
 }

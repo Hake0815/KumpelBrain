@@ -4,12 +4,14 @@
 
 #include <chrono>
 #include <cstdint>
+#include <cstdlib>
 #include <functional>
 #include <iostream>
 #include <memory>
 #include <string>
 #include <vector>
 
+#include "../network/include/CardEmbedding.h"
 #include "../network/include/ConditionEmbedding.h"
 #include "../network/include/InstructionDataEmbedding.h"
 #include "../network/include/InstructionEmbedding.h"
@@ -219,9 +221,235 @@ std::vector<std::vector<serialization::ProtoBufCondition>> build_condition_batch
     return batches;
 }
 
+/// One ability per card max. Twelve distinct shapes for coverage (indexed by `variant % 12`).
+/// Several variants omit card-level instructions and/or conditions while still using ability- or attack-level
+/// content. Empty global instruction or condition lists are supported by `CardEmbedding::forward`.
+serialization::ProtoBufCard make_card_for_variant(int variant, int64_t seed) {
+    serialization::ProtoBufCard card;
+    switch (variant % 12) {
+        case 0:
+            *card.add_instructions() = make_instruction(serialization::INSTRUCTION_TYPE_SHOW_CARDS, {});
+            *card.add_conditions() = make_condition(serialization::CONDITION_TYPE_ABILITY_NOT_USED, {});
+            break;
+        case 1:
+            *card.add_instructions() = make_instruction(
+                serialization::INSTRUCTION_TYPE_DEAL_DAMAGE,
+                {make_attack_data(7 + static_cast<int>(seed % 50))});
+            *card.add_conditions() = make_condition(serialization::CONDITION_TYPE_ABILITY_NOT_USED, {});
+            break;
+        case 2:
+            *card.add_instructions() = make_instruction(
+                serialization::INSTRUCTION_TYPE_DEAL_DAMAGE,
+                {make_attack_data(10 + static_cast<int>(seed % 40))});
+            *card.add_conditions() =
+                make_condition(serialization::CONDITION_TYPE_HAS_CARDS,
+                               {make_card_amount_data(1, 4, serialization::CARD_POSITION_DECK),
+                                make_filter_data(make_nested_filter(seed, 0))});
+            break;
+        case 3: {
+            *card.add_conditions() = make_condition(serialization::CONDITION_TYPE_ABILITY_NOT_USED, {});
+            auto* ability = card.mutable_ability();
+            *ability->add_instructions() =
+                make_instruction(serialization::INSTRUCTION_TYPE_DEAL_DAMAGE,
+                                 {make_attack_data(15 + static_cast<int>(seed % 30))});
+            break;
+        }
+        case 4: {
+            auto* ability = card.mutable_ability();
+            *ability->add_conditions() = make_condition(serialization::CONDITION_TYPE_ABILITY_NOT_USED, {});
+            *ability->add_instructions() =
+                make_instruction(serialization::INSTRUCTION_TYPE_DISCARD, {make_discard_data(0)});
+            auto* attack = card.add_attacks();
+            attack->add_energy_cost(static_cast<serialization::ProtoBufEnergyType>(1));
+            *attack->add_instructions() =
+                make_instruction(serialization::INSTRUCTION_TYPE_DEAL_DAMAGE,
+                                 {make_attack_data(20 + static_cast<int>(seed % 25))});
+            break;
+        }
+        case 5:
+            *card.add_instructions() = make_instruction(serialization::INSTRUCTION_TYPE_SHOW_CARDS, {});
+            *card.add_conditions() =
+                make_condition(serialization::CONDITION_TYPE_HAS_CARDS,
+                               {make_card_amount_data(1, 8, serialization::CARD_POSITION_HAND),
+                                make_filter_data(make_leaf_filter(serialization::FILTER_TYPE_CARD_TYPE,
+                                                                  serialization::FILTER_OPERATION_EQUALS, 1))});
+            break;
+        case 6: {
+            auto* ability = card.mutable_ability();
+            *ability->add_conditions() =
+                make_condition(serialization::CONDITION_TYPE_HAS_CARDS,
+                               {make_card_amount_data(1, 3, serialization::CARD_POSITION_DECK),
+                                make_filter_data(make_nested_filter(seed, 1))});
+            *ability->add_instructions() = make_instruction(serialization::INSTRUCTION_TYPE_SHOW_CARDS, {});
+            break;
+        }
+        case 7:
+            *card.add_conditions() = make_condition(serialization::CONDITION_TYPE_ABILITY_NOT_USED, {});
+            for (int a = 0; a < 2; ++a) {
+                auto* attack = card.add_attacks();
+                attack->add_energy_cost(static_cast<serialization::ProtoBufEnergyType>((seed + a) % 3 + 1));
+                *attack->add_instructions() =
+                    make_instruction(serialization::INSTRUCTION_TYPE_DEAL_DAMAGE,
+                                     {make_attack_data(12 + a + static_cast<int>(seed % 20))});
+            }
+            break;
+        case 8:
+            *card.add_instructions() = make_instruction(
+                serialization::INSTRUCTION_TYPE_SELECT_CARDS,
+                {make_card_amount_data(1, 2, serialization::CARD_POSITION_HAND),
+                 make_filter_data(make_nested_filter(seed, 2))});
+            *card.add_conditions() = make_condition(serialization::CONDITION_TYPE_ABILITY_NOT_USED, {});
+            {
+                auto* ability = card.mutable_ability();
+                *ability->add_instructions() =
+                    make_instruction(serialization::INSTRUCTION_TYPE_SHUFFLE_DECK,
+                                     {make_player_target_data(static_cast<int>(seed % 2))});
+            }
+            break;
+        case 9:
+            *card.add_instructions() = make_instruction(serialization::INSTRUCTION_TYPE_PUT_IN_DECK,
+                                                          {make_return_to_deck_type_data(
+                                                              static_cast<int>(seed % 2), serialization::CARD_POSITION_DISCARD_PILE)});
+            *card.add_conditions() = make_condition(serialization::CONDITION_TYPE_ABILITY_NOT_USED, {});
+            {
+                auto* ability = card.mutable_ability();
+                *ability->add_conditions() = make_condition(serialization::CONDITION_TYPE_ABILITY_NOT_USED, {});
+                *ability->add_instructions() =
+                    make_instruction(serialization::INSTRUCTION_TYPE_REVEAL_CARDS,
+                                     {make_card_amount_data(1, 2, serialization::CARD_POSITION_SELECTED_CARDS),
+                                      make_filter_data(make_leaf_filter(serialization::FILTER_TYPE_EXCLUDE_SOURCE,
+                                                                        serialization::FILTER_OPERATION_NONE, 0))});
+            }
+            break;
+        case 10:
+            *card.add_instructions() = make_instruction(
+                serialization::INSTRUCTION_TYPE_DEAL_DAMAGE,
+                {make_attack_data(5 + static_cast<int>(seed % 50))});
+            *card.add_instructions() = make_instruction(
+                serialization::INSTRUCTION_TYPE_DISCARD,
+                {make_discard_data(static_cast<int>(seed % 3))});
+            *card.add_instructions() = make_instruction(
+                serialization::INSTRUCTION_TYPE_TAKE_TO_HAND,
+                {make_card_amount_data(1, 1, serialization::CARD_POSITION_DECK)});
+            *card.add_conditions() = make_condition(serialization::CONDITION_TYPE_ABILITY_NOT_USED, {});
+            break;
+        case 11:
+            *card.add_conditions() = make_condition(serialization::CONDITION_TYPE_ABILITY_NOT_USED, {});
+            {
+                auto* attack = card.add_attacks();
+                *attack->add_instructions() =
+                    make_instruction(serialization::INSTRUCTION_TYPE_DEAL_DAMAGE,
+                                     {make_attack_data(30 + static_cast<int>(seed % 40))});
+            }
+            break;
+        default:
+            break;
+    }
+    return card;
+}
+
+std::vector<serialization::ProtoBufCard> build_card_batch(int64_t batch_size) {
+    std::vector<serialization::ProtoBufCard> cards;
+    cards.reserve(static_cast<size_t>(batch_size));
+    for (int64_t i = 0; i < batch_size; ++i) {
+        cards.push_back(make_card_for_variant(static_cast<int>(i % 12), i));
+    }
+    return cards;
+}
+
+serialization::ProtoBufCard make_card_empty_global_instructions_one_condition() {
+    serialization::ProtoBufCard card;
+    *card.add_conditions() = make_condition(serialization::CONDITION_TYPE_ABILITY_NOT_USED, {});
+    return card;
+}
+
+serialization::ProtoBufCard make_card_empty_global_conditions_one_instruction() {
+    serialization::ProtoBufCard card;
+    *card.add_instructions() = make_instruction(serialization::INSTRUCTION_TYPE_SHOW_CARDS, {});
+    return card;
+}
+
+serialization::ProtoBufCard make_card_empty_globals_attack_only() {
+    serialization::ProtoBufCard card;
+    auto* attack = card.add_attacks();
+    attack->add_energy_cost(static_cast<serialization::ProtoBufEnergyType>(1));
+    *attack->add_instructions() =
+        make_instruction(serialization::INSTRUCTION_TYPE_DEAL_DAMAGE, {make_attack_data(42)});
+    return card;
+}
+
+serialization::ProtoBufCard make_card_completely_empty() { return serialization::ProtoBufCard{}; }
+
+/// `torch::Device(kCUDA)` uses index -1 (unspecified); tensors use an explicit index (e.g. 0). Treat -1 as 0.
+bool tensor_device_matches_module(const torch::Tensor& tensor, const torch::Device& module_device) {
+    const torch::Device& tdev = tensor.device();
+    if (tdev.type() != module_device.type()) {
+        return false;
+    }
+    if (tdev.is_cuda()) {
+        const int ti = tdev.index() < 0 ? 0 : tdev.index();
+        const int mi = module_device.index() < 0 ? 0 : module_device.index();
+        return ti == mi;
+    }
+    return true;
+}
+
+void verify_card_embedding_output_shape(CardEmbeddingImpl& card_embedding, const torch::Device& device,
+                                        int64_t dimension_out, const std::string& label) {
+    auto check = [&](const std::vector<serialization::ProtoBufCard>& cards, const char* case_name) {
+        auto out = card_embedding.forward(cards);
+        const int64_t n = static_cast<int64_t>(cards.size());
+        if (out.dim() != 2 || out.size(0) != n || out.size(1) != dimension_out) {
+            std::cerr << label << " CardEmbedding::forward shape check failed [" << case_name << "]: expected (" << n
+                      << ", " << dimension_out << "), got (";
+            for (int64_t d = 0; d < out.dim(); ++d) {
+                std::cerr << out.size(d) << (d + 1 < out.dim() ? ", " : "");
+            }
+            std::cerr << ")\n";
+            std::abort();
+        }
+        if (!tensor_device_matches_module(out, device)) {
+            std::cerr << label << " CardEmbedding::forward device mismatch [" << case_name << "]: output ("
+                      << static_cast<int>(out.device().type()) << "," << out.device().index() << ") module ("
+                      << static_cast<int>(device.type()) << "," << device.index() << ")\n";
+            std::abort();
+        }
+        benchmark_sink += out.numel();
+    };
+
+    for (int v = 0; v < 12; ++v) {
+        const std::string tag = "single_variant_" + std::to_string(v);
+        check({make_card_for_variant(v, static_cast<int64_t>(v))}, tag.c_str());
+    }
+
+    std::vector<serialization::ProtoBufCard> one_of_each;
+    one_of_each.reserve(12);
+    for (int v = 0; v < 12; ++v) {
+        one_of_each.push_back(make_card_for_variant(v, static_cast<int64_t>(v)));
+    }
+    check(one_of_each, "batch_twelve_variants");
+
+    check(build_card_batch(1), "batch_1_mixed");
+    check(build_card_batch(7), "batch_7_mixed");
+    check(build_card_batch(64), "batch_64_mixed");
+    check(build_card_batch(static_cast<int64_t>(256)), "batch_256_mixed");
+
+    check({make_card_empty_global_instructions_one_condition()}, "empty_global_instructions_one_condition");
+    check({make_card_empty_global_conditions_one_instruction()}, "empty_global_conditions_one_instruction");
+    check({make_card_empty_globals_attack_only()}, "empty_globals_attack_only");
+    check({make_card_completely_empty()}, "completely_empty_card");
+    check({make_card_empty_global_instructions_one_condition(), make_card_empty_global_conditions_one_instruction(),
+           make_card_empty_globals_attack_only(), make_card_completely_empty()},
+          "batch_mixed_empty_global_and_empty_card");
+
+    std::cout << label << " CardEmbedding::forward shape checks passed (expected [num_cards, " << dimension_out
+              << "])\n";
+}
+
 void synchronize_device(const torch::Device& device) {
     if (device.is_cuda()) {
-        torch::cuda::synchronize(device.index());
+        const int idx = device.index() < 0 ? 0 : device.index();
+        torch::cuda::synchronize(idx);
     }
 }
 
@@ -280,11 +508,15 @@ void run_embedding_benchmarks(const torch::Device& device, const std::string& la
         std::make_shared<InstructionEmbeddingImpl>(instruction_data_embedding, shared, dimension, device, dtype);
     auto condition_embedding =
         std::make_shared<ConditionEmbeddingImpl>(instruction_data_embedding, shared, dimension, device, dtype);
+    auto card_embedding = std::make_shared<CardEmbeddingImpl>(dimension, device, dtype);
 
     shared->eval();
     instruction_data_embedding->eval();
     instruction_embedding->eval();
     condition_embedding->eval();
+    card_embedding->eval();
+
+    verify_card_embedding_output_shape(*card_embedding, device, dimension, label);
 
     const auto instruction_batch_size = static_cast<int64_t>(instructions.size());
     const auto condition_batch_size = static_cast<int64_t>(conditions.size());
@@ -325,6 +557,34 @@ void run_embedding_benchmarks(const torch::Device& device, const std::string& la
         auto [embedded, mask] = condition_embedding->forward(conditions);
         benchmark_sink += embedded.numel() + mask.numel();
     });
+
+    auto cards_large = build_card_batch(instruction_batch_size);
+    benchmark_ms(label + " card_embedding_forward_256", device, warmup_runs, measured_runs, [&]() {
+        auto out = card_embedding->forward(cards_large);
+        benchmark_sink += out.numel();
+    });
+
+    auto cards_32 = build_card_batch(32);
+    benchmark_ms(label + " card_embedding_forward_32", device, warmup_runs, measured_runs, [&]() {
+        auto out = card_embedding->forward(cards_32);
+        benchmark_sink += out.numel();
+    });
+
+    auto cards_128 = build_card_batch(128);
+    benchmark_ms(label + " card_embedding_forward_128", device, warmup_runs, measured_runs, [&]() {
+        auto out = card_embedding->forward(cards_128);
+        benchmark_sink += out.numel();
+    });
+
+    std::vector<serialization::ProtoBufCard> cards_homogeneous;
+    cards_homogeneous.reserve(static_cast<size_t>(instruction_batch_size));
+    for (int64_t i = 0; i < instruction_batch_size; ++i) {
+        cards_homogeneous.push_back(make_card_for_variant(4, i));
+    }
+    benchmark_ms(label + " card_embedding_forward_256_all_variant4", device, warmup_runs, measured_runs, [&]() {
+        auto out = card_embedding->forward(cards_homogeneous);
+        benchmark_sink += out.numel();
+    });
 }
 
 }  // namespace
@@ -333,9 +593,9 @@ int main() {
     torch::InferenceMode guard;
     run_embedding_benchmarks(torch::Device(torch::kCPU), "cpu");
     if (torch::cuda::is_available()) {
-        run_embedding_benchmarks(torch::Device(torch::kCUDA), "cuda");
-        with_deterministic_algorithms(
-            true, [&]() { run_embedding_benchmarks(torch::Device(torch::kCUDA), "cuda_deterministic"); });
+        const torch::Device cuda_dev(torch::kCUDA, 0);
+        run_embedding_benchmarks(cuda_dev, "cuda");
+        with_deterministic_algorithms(true, [&]() { run_embedding_benchmarks(cuda_dev, "cuda_deterministic"); });
     } else {
         std::cout << "\nCUDA benchmark skipped: CUDA is not available.\n";
     }
