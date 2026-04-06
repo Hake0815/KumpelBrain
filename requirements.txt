@@ -5,4 +5,5 @@ setuptools
 numpy
 pybind11
 pybind11_stubgen
+pytest
 # sympy
