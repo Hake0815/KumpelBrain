@@ -1382,260 +1382,261 @@ const char descriptor_table_protodef_gamecore_5fserialization_2eproto[] ABSL_ATT
     "lization.ProtoBufFilterInstructionDataH\000"
     "\022Y\n\022player_target_data\030\007 \001(\0132;.gamecore."
     "serialization.ProtoBufPlayerTargetInstru"
-    "ctionDataH\000B\t\n\007payload\"\266\n\n\014ProtoBufCard\022"
+    "ctionDataH\000B\t\n\007payload\"\361\n\n\014ProtoBufCard\022"
     "\014\n\004name\030\001 \001(\t\022;\n\tcard_type\030\002 \001(\0162(.gamec"
     "ore.serialization.ProtoBufCardType\022A\n\014ca"
     "rd_subtype\030\003 \001(\0162+.gamecore.serializatio"
-    "n.ProtoBufCardSubtype\022\?\n\013energy_type\030\004 \001"
+    "n.ProtoBufCardSubtype\022D\n\013energy_type\030\004 \001"
     "(\0162*.gamecore.serialization.ProtoBufEner"
-    "gyType\022\023\n\006max_hp\030\005 \001(\005H\000\210\001\001\022\031\n\014evolves_f"
-    "rom\030\006 \001(\tH\001\210\001\001\022<\n\010weakness\030\007 \001(\0162*.gamec"
-    "ore.serialization.ProtoBufEnergyType\022>\n\n"
-    "resistance\030\010 \001(\0162*.gamecore.serializatio"
-    "n.ProtoBufEnergyType\022\031\n\014retreat_cost\030\t \001"
-    "(\005H\002\210\001\001\022.\n!number_of_prize_cards_on_knoc"
-    "kout\030\n \001(\005H\003\210\001\001\0227\n\007attacks\030\013 \003(\0132&.gamec"
-    "ore.serialization.ProtoBufAttack\022=\n\007abil"
-    "ity\030\014 \001(\0132\'.gamecore.serialization.Proto"
-    "BufAbilityH\004\210\001\001\022J\n\017pokemon_effects\030\r \003(\016"
-    "21.gamecore.serialization.ProtoBufPokemo"
-    "nEffectType\022M\n\023pokemon_turn_traits\030\016 \003(\016"
-    "20.gamecore.serialization.ProtoBufPokemo"
-    "nTurnTrait\022A\n\014instructions\030\017 \003(\0132+.gamec"
-    "ore.serialization.ProtoBufInstruction\022=\n"
-    "\nconditions\030\020 \003(\0132).gamecore.serializati"
-    "on.ProtoBufCondition\022C\n\017provided_energy\030"
-    "\021 \003(\0162*.gamecore.serialization.ProtoBufE"
-    "nergyType\022\030\n\013attached_to\030\022 \001(\005H\005\210\001\001\022\024\n\007d"
-    "eck_id\030\023 \001(\005H\006\210\001\001\022\033\n\016current_damage\030\024 \001("
-    "\005H\007\210\001\001\022C\n\017attached_energy\030\025 \003(\0162*.gameco"
-    "re.serialization.ProtoBufEnergyType\022\035\n\025a"
-    "ttached_energy_cards\030\026 \003(\005\022\031\n\021pre_evolut"
-    "ion_ids\030\027 \003(\005\022\031\n\014evolved_into\030\030 \001(\005H\010\210\001\001"
-    "B\t\n\007_max_hpB\017\n\r_evolves_fromB\017\n\r_retreat"
-    "_costB$\n\"_number_of_prize_cards_on_knock"
-    "outB\n\n\010_abilityB\016\n\014_attached_toB\n\n\010_deck"
-    "_idB\021\n\017_current_damageB\017\n\r_evolved_into\""
-    "\203\001\n\021ProtoBufCardState\0222\n\004card\030\001 \001(\0132$.ga"
-    "mecore.serialization.ProtoBufCard\022:\n\010pos"
-    "ition\030\002 \001(\0132(.gamecore.serialization.Pro"
-    "toBufPosition\"\364\002\n\023ProtoBufPlayerState\022\021\n"
-    "\tis_active\030\001 \001(\010\022\024\n\014is_attacking\030\002 \001(\010\022\030"
-    "\n\020knows_his_prizes\030\003 \001(\010\022\022\n\nhand_count\030\004"
-    " \001(\005\022\022\n\ndeck_count\030\005 \001(\005\022\024\n\014prizes_count"
-    "\030\006 \001(\005\022\023\n\013bench_count\030\007 \001(\005\022\032\n\022discard_p"
-    "ile_count\030\010 \001(\005\022K\n\022player_turn_traits\030\t "
-    "\003(\0162/.gamecore.serialization.ProtoBufPla"
-    "yerTurnTrait\022\024\n\014turn_counter\030\n \001(\005\022H\n\016pl"
-    "ayer_effects\030\013 \003(\01620.gamecore.serializat"
-    "ion.ProtoBufPlayerEffectType\"\300\002\n\021ProtoBu"
-    "fGameState\022\023\n\013recreatable\030\001 \001(\010\022P\n\024techn"
-    "ical_game_state\030\002 \001(\01622.gamecore.seriali"
-    "zation.ProtoBufTechnicalGameState\022\?\n\nsel"
-    "f_state\030\003 \001(\0132+.gamecore.serialization.P"
-    "rotoBufPlayerState\022C\n\016opponent_state\030\004 \001"
-    "(\0132+.gamecore.serialization.ProtoBufPlay"
-    "erState\022>\n\013card_states\030\005 \003(\0132).gamecore."
-    "serialization.ProtoBufCardState\"\244\003\n\036Prot"
-    "oBufConditionalTargetQuery\022N\n\016nested_que"
-    "ries\030\001 \003(\01326.gamecore.serialization.Prot"
-    "oBufConditionalTargetQuery\022Y\n\026logical_qu"
-    "ery_operator\030\002 \001(\01624.gamecore.serializat"
-    "ion.ProtoBufLogicalQueryOperatorH\000\210\001\001\022@\n"
-    "\tint_range\030\003 \001(\0132(.gamecore.serializatio"
-    "n.ProtoBufIntRangeH\001\210\001\001\022T\n\023selection_qua"
-    "lifier\030\004 \001(\01622.gamecore.serialization.Pr"
-    "otoBufSelectionQualifierH\002\210\001\001B\031\n\027_logica"
-    "l_query_operatorB\014\n\n_int_rangeB\026\n\024_selec"
-    "tion_qualifier\"\220\001\n\024ProtoBufMulliganData\022"
-    ";\n\tmulligans\030\001 \003(\0132(.gamecore.serializat"
-    "ion.ProtoBufCardList\022;\n\006player\030\002 \001(\0132+.g"
-    "amecore.serialization.ProtoBufPlayerStat"
-    "e\"!\n\020ProtoBufCardList\022\r\n\005cards\030\001 \003(\005\"$\n\022"
-    "ProtoBufNumberData\022\016\n\006number\030\001 \001(\005\"\340\001\n\022P"
-    "rotoBufTargetData\022\031\n\021number_of_targets\030\001"
-    " \001(\005\022\030\n\020possible_targets\030\002 \003(\005\022H\n\rtarget"
+    "gyTypeH\000\210\001\001\022\023\n\006max_hp\030\005 \001(\005H\001\210\001\001\022\031\n\014evol"
+    "ves_from\030\006 \001(\tH\002\210\001\001\022A\n\010weakness\030\007 \001(\0162*."
+    "gamecore.serialization.ProtoBufEnergyTyp"
+    "eH\003\210\001\001\022C\n\nresistance\030\010 \001(\0162*.gamecore.se"
+    "rialization.ProtoBufEnergyTypeH\004\210\001\001\022\031\n\014r"
+    "etreat_cost\030\t \001(\005H\005\210\001\001\022.\n!number_of_priz"
+    "e_cards_on_knockout\030\n \001(\005H\006\210\001\001\0227\n\007attack"
+    "s\030\013 \003(\0132&.gamecore.serialization.ProtoBu"
+    "fAttack\022=\n\007ability\030\014 \001(\0132\'.gamecore.seri"
+    "alization.ProtoBufAbilityH\007\210\001\001\022J\n\017pokemo"
+    "n_effects\030\r \003(\01621.gamecore.serialization"
+    ".ProtoBufPokemonEffectType\022M\n\023pokemon_tu"
+    "rn_traits\030\016 \003(\01620.gamecore.serialization"
+    ".ProtoBufPokemonTurnTrait\022A\n\014instruction"
+    "s\030\017 \003(\0132+.gamecore.serialization.ProtoBu"
+    "fInstruction\022=\n\nconditions\030\020 \003(\0132).gamec"
+    "ore.serialization.ProtoBufCondition\022C\n\017p"
+    "rovided_energy\030\021 \003(\0162*.gamecore.serializ"
+    "ation.ProtoBufEnergyType\022\030\n\013attached_to\030"
+    "\022 \001(\005H\010\210\001\001\022\024\n\007deck_id\030\023 \001(\005H\t\210\001\001\022\033\n\016curr"
+    "ent_damage\030\024 \001(\005H\n\210\001\001\022C\n\017attached_energy"
+    "\030\025 \003(\0162*.gamecore.serialization.ProtoBuf"
+    "EnergyType\022\035\n\025attached_energy_cards\030\026 \003("
+    "\005\022\031\n\021pre_evolution_ids\030\027 \003(\005\022\031\n\014evolved_"
+    "into\030\030 \001(\005H\013\210\001\001B\016\n\014_energy_typeB\t\n\007_max_"
+    "hpB\017\n\r_evolves_fromB\013\n\t_weaknessB\r\n\013_res"
+    "istanceB\017\n\r_retreat_costB$\n\"_number_of_p"
+    "rize_cards_on_knockoutB\n\n\010_abilityB\016\n\014_a"
+    "ttached_toB\n\n\010_deck_idB\021\n\017_current_damag"
+    "eB\017\n\r_evolved_into\"\203\001\n\021ProtoBufCardState"
+    "\0222\n\004card\030\001 \001(\0132$.gamecore.serialization."
+    "ProtoBufCard\022:\n\010position\030\002 \001(\0132(.gamecor"
+    "e.serialization.ProtoBufPosition\"\364\002\n\023Pro"
+    "toBufPlayerState\022\021\n\tis_active\030\001 \001(\010\022\024\n\014i"
+    "s_attacking\030\002 \001(\010\022\030\n\020knows_his_prizes\030\003 "
+    "\001(\010\022\022\n\nhand_count\030\004 \001(\005\022\022\n\ndeck_count\030\005 "
+    "\001(\005\022\024\n\014prizes_count\030\006 \001(\005\022\023\n\013bench_count"
+    "\030\007 \001(\005\022\032\n\022discard_pile_count\030\010 \001(\005\022K\n\022pl"
+    "ayer_turn_traits\030\t \003(\0162/.gamecore.serial"
+    "ization.ProtoBufPlayerTurnTrait\022\024\n\014turn_"
+    "counter\030\n \001(\005\022H\n\016player_effects\030\013 \003(\01620."
+    "gamecore.serialization.ProtoBufPlayerEff"
+    "ectType\"\300\002\n\021ProtoBufGameState\022\023\n\013recreat"
+    "able\030\001 \001(\010\022P\n\024technical_game_state\030\002 \001(\016"
+    "22.gamecore.serialization.ProtoBufTechni"
+    "calGameState\022\?\n\nself_state\030\003 \001(\0132+.gamec"
+    "ore.serialization.ProtoBufPlayerState\022C\n"
+    "\016opponent_state\030\004 \001(\0132+.gamecore.seriali"
+    "zation.ProtoBufPlayerState\022>\n\013card_state"
+    "s\030\005 \003(\0132).gamecore.serialization.ProtoBu"
+    "fCardState\"\244\003\n\036ProtoBufConditionalTarget"
+    "Query\022N\n\016nested_queries\030\001 \003(\01326.gamecore"
+    ".serialization.ProtoBufConditionalTarget"
+    "Query\022Y\n\026logical_query_operator\030\002 \001(\01624."
+    "gamecore.serialization.ProtoBufLogicalQu"
+    "eryOperatorH\000\210\001\001\022@\n\tint_range\030\003 \001(\0132(.ga"
+    "mecore.serialization.ProtoBufIntRangeH\001\210"
+    "\001\001\022T\n\023selection_qualifier\030\004 \001(\01622.gameco"
+    "re.serialization.ProtoBufSelectionQualif"
+    "ierH\002\210\001\001B\031\n\027_logical_query_operatorB\014\n\n_"
+    "int_rangeB\026\n\024_selection_qualifier\"\220\001\n\024Pr"
+    "otoBufMulliganData\022;\n\tmulligans\030\001 \003(\0132(."
+    "gamecore.serialization.ProtoBufCardList\022"
+    ";\n\006player\030\002 \001(\0132+.gamecore.serialization"
+    ".ProtoBufPlayerState\"!\n\020ProtoBufCardList"
+    "\022\r\n\005cards\030\001 \003(\005\"$\n\022ProtoBufNumberData\022\016\n"
+    "\006number\030\001 \001(\005\"\340\001\n\022ProtoBufTargetData\022\031\n\021"
+    "number_of_targets\030\001 \001(\005\022\030\n\020possible_targ"
+    "ets\030\002 \003(\005\022H\n\rtarget_action\030\003 \001(\01621.gamec"
+    "ore.serialization.ProtoBufActionOnSelect"
+    "ion\022K\n\020remainder_action\030\004 \001(\01621.gamecore"
+    ".serialization.ProtoBufActionOnSelection"
+    "\"\252\002\n\035ProtoBufConditionalTargetData\022\030\n\020po"
+    "ssible_targets\030\001 \003(\005\022X\n\030conditional_targ"
+    "et_query\030\002 \001(\01326.gamecore.serialization."
+    "ProtoBufConditionalTargetQuery\022H\n\rtarget"
     "_action\030\003 \001(\01621.gamecore.serialization.P"
     "rotoBufActionOnSelection\022K\n\020remainder_ac"
     "tion\030\004 \001(\01621.gamecore.serialization.Prot"
-    "oBufActionOnSelection\"\252\002\n\035ProtoBufCondit"
-    "ionalTargetData\022\030\n\020possible_targets\030\001 \003("
-    "\005\022X\n\030conditional_target_query\030\002 \001(\01326.ga"
-    "mecore.serialization.ProtoBufConditional"
-    "TargetQuery\022H\n\rtarget_action\030\003 \001(\01621.gam"
-    "ecore.serialization.ProtoBufActionOnSele"
-    "ction\022K\n\020remainder_action\030\004 \001(\01621.gameco"
-    "re.serialization.ProtoBufActionOnSelecti"
-    "on\"+\n\033ProtoBufInteractionCardData\022\014\n\004car"
-    "d\030\001 \001(\005\"L\n\022ProtoBufAttackData\0226\n\006attack\030"
-    "\001 \001(\0132&.gamecore.serialization.ProtoBufA"
-    "ttack\"b\n\022ProtoBufWinnerData\022;\n\006winner\030\001 "
-    "\001(\0132+.gamecore.serialization.ProtoBufPla"
-    "yerState\022\017\n\007message\030\002 \001(\t\"s\n\026ProtoBufSel"
-    "ectFromData\022\?\n\013select_from\030\001 \001(\0162*.gamec"
-    "ore.serialization.ProtoBufSelectFrom\022\030\n\020"
-    "selection_source\030\002 \003(\005\"\303\005\n\033ProtoBufGameI"
-    "nteractionData\022J\n\tdata_type\030\001 \001(\01627.game"
+    "oBufActionOnSelection\"+\n\033ProtoBufInterac"
+    "tionCardData\022\014\n\004card\030\001 \001(\005\"L\n\022ProtoBufAt"
+    "tackData\0226\n\006attack\030\001 \001(\0132&.gamecore.seri"
+    "alization.ProtoBufAttack\"b\n\022ProtoBufWinn"
+    "erData\022;\n\006winner\030\001 \001(\0132+.gamecore.serial"
+    "ization.ProtoBufPlayerState\022\017\n\007message\030\002"
+    " \001(\t\"s\n\026ProtoBufSelectFromData\022\?\n\013select"
+    "_from\030\001 \001(\0162*.gamecore.serialization.Pro"
+    "toBufSelectFrom\022\030\n\020selection_source\030\002 \003("
+    "\005\"\303\005\n\033ProtoBufGameInteractionData\022J\n\tdat"
+    "a_type\030\001 \001(\01627.gamecore.serialization.Pr"
+    "otoBufGameInteractionDataType\022E\n\rmulliga"
+    "n_data\030\002 \001(\0132,.gamecore.serialization.Pr"
+    "otoBufMulliganDataH\000\022A\n\013number_data\030\003 \001("
+    "\0132*.gamecore.serialization.ProtoBufNumbe"
+    "rDataH\000\022A\n\013target_data\030\004 \001(\0132*.gamecore."
+    "serialization.ProtoBufTargetDataH\000\022X\n\027co"
+    "nditional_target_data\030\005 \001(\01325.gamecore.s"
+    "erialization.ProtoBufConditionalTargetDa"
+    "taH\000\022T\n\025interaction_card_data\030\006 \001(\01323.ga"
+    "mecore.serialization.ProtoBufInteraction"
+    "CardDataH\000\022A\n\013attack_data\030\007 \001(\0132*.gameco"
+    "re.serialization.ProtoBufAttackDataH\000\022A\n"
+    "\013winner_data\030\010 \001(\0132*.gamecore.serializat"
+    "ion.ProtoBufWinnerDataH\000\022J\n\020select_from_"
+    "data\030\t \001(\0132..gamecore.serialization.Prot"
+    "oBufSelectFromDataH\000B\t\n\007payload\"\237\001\n\027Prot"
+    "oBufGameInteraction\022A\n\004type\030\001 \001(\01623.game"
     "core.serialization.ProtoBufGameInteracti"
-    "onDataType\022E\n\rmulligan_data\030\002 \001(\0132,.game"
-    "core.serialization.ProtoBufMulliganDataH"
-    "\000\022A\n\013number_data\030\003 \001(\0132*.gamecore.serial"
-    "ization.ProtoBufNumberDataH\000\022A\n\013target_d"
-    "ata\030\004 \001(\0132*.gamecore.serialization.Proto"
-    "BufTargetDataH\000\022X\n\027conditional_target_da"
-    "ta\030\005 \001(\01325.gamecore.serialization.ProtoB"
-    "ufConditionalTargetDataH\000\022T\n\025interaction"
-    "_card_data\030\006 \001(\01323.gamecore.serializatio"
-    "n.ProtoBufInteractionCardDataH\000\022A\n\013attac"
-    "k_data\030\007 \001(\0132*.gamecore.serialization.Pr"
-    "otoBufAttackDataH\000\022A\n\013winner_data\030\010 \001(\0132"
-    "*.gamecore.serialization.ProtoBufWinnerD"
-    "ataH\000\022J\n\020select_from_data\030\t \001(\0132..gameco"
-    "re.serialization.ProtoBufSelectFromDataH"
-    "\000B\t\n\007payload\"\237\001\n\027ProtoBufGameInteraction"
-    "\022A\n\004type\030\001 \001(\01623.gamecore.serialization."
-    "ProtoBufGameInteractionType\022A\n\004data\030\002 \003("
-    "\01323.gamecore.serialization.ProtoBufGameI"
-    "nteractionData*m\n\020ProtoBufCardType\022\025\n\021CA"
-    "RD_TYPE_UNKNOWN\020\000\022\025\n\021CARD_TYPE_POKEMON\020\001"
-    "\022\025\n\021CARD_TYPE_TRAINER\020\002\022\024\n\020CARD_TYPE_ENE"
-    "RGY\020\003*\265\002\n\023ProtoBufCardSubtype\022\030\n\024CARD_SU"
-    "BTYPE_UNKNOWN\020\000\022\036\n\032CARD_SUBTYPE_BASIC_PO"
-    "KEMON\020\001\022\037\n\033CARD_SUBTYPE_STAGE1_POKEMON\020\002"
-    "\022\037\n\033CARD_SUBTYPE_STAGE2_POKEMON\020\003\022\032\n\026CAR"
-    "D_SUBTYPE_SUPPORTER\020\004\022\025\n\021CARD_SUBTYPE_IT"
-    "EM\020\005\022\025\n\021CARD_SUBTYPE_TOOL\020\006\022\030\n\024CARD_SUBT"
-    "YPE_STADIUM\020\007\022\035\n\031CARD_SUBTYPE_BASIC_ENER"
-    "GY\020\010\022\037\n\033CARD_SUBTYPE_SPECIAL_ENERGY\020\t*\240\002"
-    "\n\022ProtoBufEnergyType\022\024\n\020ENERGY_TYPE_NONE"
-    "\020\000\022\025\n\021ENERGY_TYPE_GRASS\020\001\022\024\n\020ENERGY_TYPE"
-    "_FIRE\020\002\022\025\n\021ENERGY_TYPE_WATER\020\003\022\031\n\025ENERGY"
-    "_TYPE_LIGHTNING\020\004\022\030\n\024ENERGY_TYPE_FIGHTIN"
-    "G\020\005\022\027\n\023ENERGY_TYPE_PSYCHIC\020\006\022\031\n\025ENERGY_T"
-    "YPE_COLORLESS\020\007\022\030\n\024ENERGY_TYPE_DARKNESS\020"
-    "\010\022\025\n\021ENERGY_TYPE_METAL\020\t\022\026\n\022ENERGY_TYPE_"
-    "DRAGON\020\n*\352\002\n\024ProtoBufCardPosition\022\"\n\036CAR"
-    "D_POSITION_ATTACHED_TO_CARD\020\000\022\027\n\023CARD_PO"
-    "SITION_BENCH\020\001\022\"\n\036CARD_POSITION_CURRENTL"
-    "Y_PLAYED\020\002\022\035\n\031CARD_POSITION_ACTIVE_SPOT\020"
-    "\003\022\032\n\026CARD_POSITION_FLOATING\020\004\022\036\n\032CARD_PO"
-    "SITION_DISCARD_PILE\020\005\022\030\n\024CARD_POSITION_P"
-    "RIZES\020\006\022\026\n\022CARD_POSITION_DECK\020\007\022\026\n\022CARD_"
-    "POSITION_HAND\020\010\022*\n&CARD_POSITION_SELECTE"
-    "D_CARDS_REMAINDER\020\t\022 \n\034CARD_POSITION_SEL"
-    "ECTED_CARDS\020\n*3\n\rProtoBufOwner\022\016\n\nOWNER_"
-    "SELF\020\000\022\022\n\016OWNER_OPPONENT\020\001*\250\002\n\027ProtoBufI"
-    "nstructionType\022 \n\034INSTRUCTION_TYPE_DEAL_"
-    "DAMAGE\020\000\022!\n\035INSTRUCTION_TYPE_SELECT_CARD"
-    "S\020\001\022\034\n\030INSTRUCTION_TYPE_DISCARD\020\002\022!\n\035INS"
-    "TRUCTION_TYPE_TAKE_TO_HAND\020\003\022 \n\034INSTRUCT"
-    "ION_TYPE_PUT_IN_DECK\020\004\022!\n\035INSTRUCTION_TY"
-    "PE_REVEAL_CARDS\020\005\022\037\n\033INSTRUCTION_TYPE_SH"
-    "OW_CARDS\020\006\022!\n\035INSTRUCTION_TYPE_SHUFFLE_D"
-    "ECK\020\007*Z\n\025ProtoBufConditionType\022#\n\037CONDIT"
-    "ION_TYPE_ABILITY_NOT_USED\020\000\022\034\n\030CONDITION"
-    "_TYPE_HAS_CARDS\020\001*\241\002\n\033ProtoBufInstructio"
-    "nDataType\022%\n!INSTRUCTION_DATA_TYPE_ATTAC"
-    "K_DATA\020\000\022&\n\"INSTRUCTION_DATA_TYPE_DISCAR"
-    "D_DATA\020\001\022*\n&INSTRUCTION_DATA_TYPE_CARD_A"
-    "MOUNT_DATA\020\002\0222\n.INSTRUCTION_DATA_TYPE_RE"
-    "TURN_TO_DECK_TYPE_DATA\020\003\022%\n!INSTRUCTION_"
-    "DATA_TYPE_FILTER_DATA\020\004\022,\n(INSTRUCTION_D"
-    "ATA_TYPE_PLAYER_TARGET_DATA\020\005*;\n\024ProtoBu"
-    "fAttackTarget\022#\n\037ATTACK_TARGET_DEFENDING"
-    "_POKEMON\020\000*J\n\024ProtoBufPlayerTarget\022\026\n\022PL"
-    "AYER_TARGET_SELF\020\000\022\032\n\026PLAYER_TARGET_OPPO"
-    "NENT\020\001*[\n\030ProtoBufReturnToDeckType\022\035\n\031RE"
-    "TURN_TO_DECK_TYPE_UNDER\020\000\022 \n\034RETURN_TO_D"
-    "ECK_TYPE_SHUFFLED\020\001*\202\001\n\035ProtoBufFilterLo"
-    "gicalOperator\022 \n\034FILTER_LOGICAL_OPERATOR"
-    "_NONE\020\000\022\037\n\033FILTER_LOGICAL_OPERATOR_AND\020\001"
-    "\022\036\n\032FILTER_LOGICAL_OPERATOR_OR\020\002*\255\001\n\022Pro"
-    "toBufFilterType\022\024\n\020FILTER_TYPE_NONE\020\000\022\024\n"
-    "\020FILTER_TYPE_TRUE\020\001\022\036\n\032FILTER_TYPE_EXCLU"
-    "DE_SOURCE\020\002\022\031\n\025FILTER_TYPE_CARD_TYPE\020\003\022\034"
-    "\n\030FILTER_TYPE_CARD_SUBTYPE\020\004\022\022\n\016FILTER_T"
-    "YPE_HP\020\005*\307\001\n\027ProtoBufFilterOperation\022\031\n\025"
-    "FILTER_OPERATION_NONE\020\000\022\033\n\027FILTER_OPERAT"
-    "ION_EQUALS\020\001\022\037\n\033FILTER_OPERATION_NOT_EQU"
-    "ALS\020\002\022\'\n#FILTER_OPERATION_LESS_THAN_OR_E"
-    "QUAL\020\003\022*\n&FILTER_OPERATION_GREATER_THAN_"
-    "OR_EQUAL\020\004*c\n\024ProtoBufTargetSource\022\026\n\022TA"
-    "RGET_SOURCE_HAND\020\000\022\026\n\022TARGET_SOURCE_SELF"
-    "\020\001\022\033\n\027TARGET_SOURCE_SELECTION\020\002*7\n\030Proto"
-    "BufPlayerEffectType\022\033\n\027PLAYER_EFFECT_TYP"
-    "E_NONE\020\000*9\n\031ProtoBufPokemonEffectType\022\034\n"
-    "\030POKEMON_EFFECT_TYPE_NONE\020\000*w\n\030ProtoBufP"
-    "okemonTurnTrait\022,\n(POKEMON_TURN_TRAIT_PU"
-    "T_IN_PLAY_THIS_TURN\020\000\022-\n)POKEMON_TURN_TR"
-    "AIT_ABILITY_USED_THIS_TURN\020\001*\306\001\n\027ProtoBu"
-    "fPlayerTurnTrait\022(\n$PLAYER_TURN_TRAIT_FI"
-    "RST_TURN_OF_GAME\020\000\022.\n*PLAYER_TURN_TRAIT_"
-    "ATTACHED_ENERGY_FOR_TURN\020\001\0220\n,PLAYER_TUR"
-    "N_TRAIT_PLAYED_SUPPORTER_THIS_TURN\020\002\022\037\n\033"
-    "PLAYER_TURN_TRAIT_RETREATED\020\003*\216\005\n\033ProtoB"
-    "ufGameInteractionType\022/\n+GAME_INTERACTIO"
-    "N_TYPE_SELECT_ACTIVE_POKEMON\020\000\022#\n\037GAME_I"
-    "NTERACTION_TYPE_PLAY_CARD\020\001\022\"\n\036GAME_INTE"
-    "RACTION_TYPE_END_TURN\020\002\022+\n\'GAME_INTERACT"
-    "ION_TYPE_CONFIRM_MULLIGANS\020\003\022*\n&GAME_INT"
-    "ERACTION_TYPE_SELECT_MULLIGANS\020\004\022!\n\035GAME"
-    "_INTERACTION_TYPE_CONFIRM\020\005\022)\n%GAME_INTE"
-    "RACTION_TYPE_SETUP_COMPLETED\020\006\0220\n,GAME_I"
-    "NTERACTION_TYPE_PLAY_CARD_WITH_TARGETS\020\007"
-    "\022(\n$GAME_INTERACTION_TYPE_PERFORM_ATTACK"
-    "\020\010\022#\n\037GAME_INTERACTION_TYPE_GAME_OVER\020\t\022"
-    "&\n\"GAME_INTERACTION_TYPE_SELECT_CARDS\020\n\022"
-    "!\n\035GAME_INTERACTION_TYPE_RETREAT\020\013\022)\n%GA"
-    "ME_INTERACTION_TYPE_PERFORM_ABILITY\020\014\022)\n"
-    "%GAME_INTERACTION_TYPE_SET_PRIZE_CARDS\020\r"
-    "\022,\n(GAME_INTERACTION_TYPE_REPLAY_NEXT_AC"
-    "TION\020\016*\236\003\n\037ProtoBufGameInteractionDataTy"
-    "pe\022,\n(GAME_INTERACTION_DATA_TYPE_MULLIGA"
-    "N_DATA\020\000\022*\n&GAME_INTERACTION_DATA_TYPE_N"
-    "UMBER_DATA\020\001\022*\n&GAME_INTERACTION_DATA_TY"
-    "PE_TARGET_DATA\020\002\0226\n2GAME_INTERACTION_DAT"
-    "A_TYPE_CONDITIONAL_TARGET_DATA\020\003\0224\n0GAME"
-    "_INTERACTION_DATA_TYPE_INTERACTION_CARD_"
-    "DATA\020\004\022*\n&GAME_INTERACTION_DATA_TYPE_ATT"
-    "ACK_DATA\020\005\022*\n&GAME_INTERACTION_DATA_TYPE"
-    "_WINNER_DATA\020\006\022/\n+GAME_INTERACTION_DATA_"
-    "TYPE_SELECT_FROM_DATA\020\007*\217\002\n\031ProtoBufActi"
-    "onOnSelection\022\037\n\033ACTION_ON_SELECTION_DIS"
-    "CARD\020\000\022$\n ACTION_ON_SELECTION_TAKE_TO_HA"
-    "ND\020\001\022\036\n\032ACTION_ON_SELECTION_EVOLVE\020\002\022!\n\035"
-    "ACTION_ON_SELECTION_ATTACH_TO\020\003\022\037\n\033ACTIO"
-    "N_ON_SELECTION_PROMOTE\020\004\022\037\n\033ACTION_ON_SE"
-    "LECTION_NOTHING\020\005\022&\n\"ACTION_ON_SELECTION"
-    "_PUT_UNDER_DECK\020\006*{\n\022ProtoBufSelectFrom\022"
-    "\027\n\023SELECT_FROM_IN_PLAY\020\000\022\030\n\024SELECT_FROM_"
-    "FLOATING\020\001\022\024\n\020SELECT_FROM_DECK\020\002\022\034\n\030SELE"
-    "CT_FROM_DISCARD_PILE\020\003*]\n\034ProtoBufLogica"
-    "lQueryOperator\022\036\n\032LOGICAL_QUERY_OPERATOR"
-    "_AND\020\000\022\035\n\031LOGICAL_QUERY_OPERATOR_OR\020\001*n\n"
-    "\032ProtoBufSelectionQualifier\022\'\n#SELECTION"
-    "_QUALIFIER_NUMBER_OF_CARDS\020\000\022\'\n#SELECTIO"
-    "N_QUALIFIER_PROVIDED_ENERGY\020\001*\370\002\n\032ProtoB"
-    "ufTechnicalGameState\022\030\n\024GAME_STATE_GAME_"
-    "OVER\020\000\022\037\n\033GAME_STATE_IDLE_PLAYER_TURN\020\001\022"
-    "#\n\037GAME_STATE_SELECT_BENCH_POKEMON\020\002\022\'\n#"
-    "GAME_STATE_SELECTING_MULLIGAN_CARDS\020\003\022%\n"
-    "!GAME_STATE_SETTING_ACTIVE_POKEMON\020\004\022\"\n\036"
-    "GAME_STATE_SETTING_PRIZE_CARDS\020\005\022\036\n\032GAME"
-    "_STATE_SETUP_COMPLETED\020\006\022\"\n\036GAME_STATE_S"
-    "HOW_FIRST_MULLIGAN\020\007\022#\n\037GAME_STATE_SHOW_"
-    "SECOND_MULLIGAN\020\010\022\035\n\031GAME_STATE_WAIT_FOR"
-    "_INPUT\020\t*|\n\031ProtoBufPositionKnowledge\022\036\n"
-    "\032POSITION_KNOWLEDGE_UNKNOWN\020\000\022!\n\035POSITIO"
-    "N_KNOWLEDGE_NOT_PRIZED\020\001\022\034\n\030POSITION_KNO"
-    "WLEDGE_KNOWN\020\002B\031\252\002\026gamecore.serializatio"
-    "nb\006proto3"
+    "onType\022A\n\004data\030\002 \003(\01323.gamecore.serializ"
+    "ation.ProtoBufGameInteractionData*m\n\020Pro"
+    "toBufCardType\022\025\n\021CARD_TYPE_UNKNOWN\020\000\022\025\n\021"
+    "CARD_TYPE_POKEMON\020\001\022\025\n\021CARD_TYPE_TRAINER"
+    "\020\002\022\024\n\020CARD_TYPE_ENERGY\020\003*\265\002\n\023ProtoBufCar"
+    "dSubtype\022\030\n\024CARD_SUBTYPE_UNKNOWN\020\000\022\036\n\032CA"
+    "RD_SUBTYPE_BASIC_POKEMON\020\001\022\037\n\033CARD_SUBTY"
+    "PE_STAGE1_POKEMON\020\002\022\037\n\033CARD_SUBTYPE_STAG"
+    "E2_POKEMON\020\003\022\032\n\026CARD_SUBTYPE_SUPPORTER\020\004"
+    "\022\025\n\021CARD_SUBTYPE_ITEM\020\005\022\025\n\021CARD_SUBTYPE_"
+    "TOOL\020\006\022\030\n\024CARD_SUBTYPE_STADIUM\020\007\022\035\n\031CARD"
+    "_SUBTYPE_BASIC_ENERGY\020\010\022\037\n\033CARD_SUBTYPE_"
+    "SPECIAL_ENERGY\020\t*\240\002\n\022ProtoBufEnergyType\022"
+    "\024\n\020ENERGY_TYPE_NONE\020\000\022\025\n\021ENERGY_TYPE_GRA"
+    "SS\020\001\022\024\n\020ENERGY_TYPE_FIRE\020\002\022\025\n\021ENERGY_TYP"
+    "E_WATER\020\003\022\031\n\025ENERGY_TYPE_LIGHTNING\020\004\022\030\n\024"
+    "ENERGY_TYPE_FIGHTING\020\005\022\027\n\023ENERGY_TYPE_PS"
+    "YCHIC\020\006\022\031\n\025ENERGY_TYPE_COLORLESS\020\007\022\030\n\024EN"
+    "ERGY_TYPE_DARKNESS\020\010\022\025\n\021ENERGY_TYPE_META"
+    "L\020\t\022\026\n\022ENERGY_TYPE_DRAGON\020\n*\352\002\n\024ProtoBuf"
+    "CardPosition\022\"\n\036CARD_POSITION_ATTACHED_T"
+    "O_CARD\020\000\022\027\n\023CARD_POSITION_BENCH\020\001\022\"\n\036CAR"
+    "D_POSITION_CURRENTLY_PLAYED\020\002\022\035\n\031CARD_PO"
+    "SITION_ACTIVE_SPOT\020\003\022\032\n\026CARD_POSITION_FL"
+    "OATING\020\004\022\036\n\032CARD_POSITION_DISCARD_PILE\020\005"
+    "\022\030\n\024CARD_POSITION_PRIZES\020\006\022\026\n\022CARD_POSIT"
+    "ION_DECK\020\007\022\026\n\022CARD_POSITION_HAND\020\010\022*\n&CA"
+    "RD_POSITION_SELECTED_CARDS_REMAINDER\020\t\022 "
+    "\n\034CARD_POSITION_SELECTED_CARDS\020\n*3\n\rProt"
+    "oBufOwner\022\016\n\nOWNER_SELF\020\000\022\022\n\016OWNER_OPPON"
+    "ENT\020\001*\250\002\n\027ProtoBufInstructionType\022 \n\034INS"
+    "TRUCTION_TYPE_DEAL_DAMAGE\020\000\022!\n\035INSTRUCTI"
+    "ON_TYPE_SELECT_CARDS\020\001\022\034\n\030INSTRUCTION_TY"
+    "PE_DISCARD\020\002\022!\n\035INSTRUCTION_TYPE_TAKE_TO"
+    "_HAND\020\003\022 \n\034INSTRUCTION_TYPE_PUT_IN_DECK\020"
+    "\004\022!\n\035INSTRUCTION_TYPE_REVEAL_CARDS\020\005\022\037\n\033"
+    "INSTRUCTION_TYPE_SHOW_CARDS\020\006\022!\n\035INSTRUC"
+    "TION_TYPE_SHUFFLE_DECK\020\007*Z\n\025ProtoBufCond"
+    "itionType\022#\n\037CONDITION_TYPE_ABILITY_NOT_"
+    "USED\020\000\022\034\n\030CONDITION_TYPE_HAS_CARDS\020\001*\241\002\n"
+    "\033ProtoBufInstructionDataType\022%\n!INSTRUCT"
+    "ION_DATA_TYPE_ATTACK_DATA\020\000\022&\n\"INSTRUCTI"
+    "ON_DATA_TYPE_DISCARD_DATA\020\001\022*\n&INSTRUCTI"
+    "ON_DATA_TYPE_CARD_AMOUNT_DATA\020\002\0222\n.INSTR"
+    "UCTION_DATA_TYPE_RETURN_TO_DECK_TYPE_DAT"
+    "A\020\003\022%\n!INSTRUCTION_DATA_TYPE_FILTER_DATA"
+    "\020\004\022,\n(INSTRUCTION_DATA_TYPE_PLAYER_TARGE"
+    "T_DATA\020\005*;\n\024ProtoBufAttackTarget\022#\n\037ATTA"
+    "CK_TARGET_DEFENDING_POKEMON\020\000*J\n\024ProtoBu"
+    "fPlayerTarget\022\026\n\022PLAYER_TARGET_SELF\020\000\022\032\n"
+    "\026PLAYER_TARGET_OPPONENT\020\001*[\n\030ProtoBufRet"
+    "urnToDeckType\022\035\n\031RETURN_TO_DECK_TYPE_UND"
+    "ER\020\000\022 \n\034RETURN_TO_DECK_TYPE_SHUFFLED\020\001*\202"
+    "\001\n\035ProtoBufFilterLogicalOperator\022 \n\034FILT"
+    "ER_LOGICAL_OPERATOR_NONE\020\000\022\037\n\033FILTER_LOG"
+    "ICAL_OPERATOR_AND\020\001\022\036\n\032FILTER_LOGICAL_OP"
+    "ERATOR_OR\020\002*\255\001\n\022ProtoBufFilterType\022\024\n\020FI"
+    "LTER_TYPE_NONE\020\000\022\024\n\020FILTER_TYPE_TRUE\020\001\022\036"
+    "\n\032FILTER_TYPE_EXCLUDE_SOURCE\020\002\022\031\n\025FILTER"
+    "_TYPE_CARD_TYPE\020\003\022\034\n\030FILTER_TYPE_CARD_SU"
+    "BTYPE\020\004\022\022\n\016FILTER_TYPE_HP\020\005*\307\001\n\027ProtoBuf"
+    "FilterOperation\022\031\n\025FILTER_OPERATION_NONE"
+    "\020\000\022\033\n\027FILTER_OPERATION_EQUALS\020\001\022\037\n\033FILTE"
+    "R_OPERATION_NOT_EQUALS\020\002\022\'\n#FILTER_OPERA"
+    "TION_LESS_THAN_OR_EQUAL\020\003\022*\n&FILTER_OPER"
+    "ATION_GREATER_THAN_OR_EQUAL\020\004*c\n\024ProtoBu"
+    "fTargetSource\022\026\n\022TARGET_SOURCE_HAND\020\000\022\026\n"
+    "\022TARGET_SOURCE_SELF\020\001\022\033\n\027TARGET_SOURCE_S"
+    "ELECTION\020\002*7\n\030ProtoBufPlayerEffectType\022\033"
+    "\n\027PLAYER_EFFECT_TYPE_NONE\020\000*9\n\031ProtoBufP"
+    "okemonEffectType\022\034\n\030POKEMON_EFFECT_TYPE_"
+    "NONE\020\000*w\n\030ProtoBufPokemonTurnTrait\022,\n(PO"
+    "KEMON_TURN_TRAIT_PUT_IN_PLAY_THIS_TURN\020\000"
+    "\022-\n)POKEMON_TURN_TRAIT_ABILITY_USED_THIS"
+    "_TURN\020\001*\306\001\n\027ProtoBufPlayerTurnTrait\022(\n$P"
+    "LAYER_TURN_TRAIT_FIRST_TURN_OF_GAME\020\000\022.\n"
+    "*PLAYER_TURN_TRAIT_ATTACHED_ENERGY_FOR_T"
+    "URN\020\001\0220\n,PLAYER_TURN_TRAIT_PLAYED_SUPPOR"
+    "TER_THIS_TURN\020\002\022\037\n\033PLAYER_TURN_TRAIT_RET"
+    "REATED\020\003*\216\005\n\033ProtoBufGameInteractionType"
+    "\022/\n+GAME_INTERACTION_TYPE_SELECT_ACTIVE_"
+    "POKEMON\020\000\022#\n\037GAME_INTERACTION_TYPE_PLAY_"
+    "CARD\020\001\022\"\n\036GAME_INTERACTION_TYPE_END_TURN"
+    "\020\002\022+\n\'GAME_INTERACTION_TYPE_CONFIRM_MULL"
+    "IGANS\020\003\022*\n&GAME_INTERACTION_TYPE_SELECT_"
+    "MULLIGANS\020\004\022!\n\035GAME_INTERACTION_TYPE_CON"
+    "FIRM\020\005\022)\n%GAME_INTERACTION_TYPE_SETUP_CO"
+    "MPLETED\020\006\0220\n,GAME_INTERACTION_TYPE_PLAY_"
+    "CARD_WITH_TARGETS\020\007\022(\n$GAME_INTERACTION_"
+    "TYPE_PERFORM_ATTACK\020\010\022#\n\037GAME_INTERACTIO"
+    "N_TYPE_GAME_OVER\020\t\022&\n\"GAME_INTERACTION_T"
+    "YPE_SELECT_CARDS\020\n\022!\n\035GAME_INTERACTION_T"
+    "YPE_RETREAT\020\013\022)\n%GAME_INTERACTION_TYPE_P"
+    "ERFORM_ABILITY\020\014\022)\n%GAME_INTERACTION_TYP"
+    "E_SET_PRIZE_CARDS\020\r\022,\n(GAME_INTERACTION_"
+    "TYPE_REPLAY_NEXT_ACTION\020\016*\236\003\n\037ProtoBufGa"
+    "meInteractionDataType\022,\n(GAME_INTERACTIO"
+    "N_DATA_TYPE_MULLIGAN_DATA\020\000\022*\n&GAME_INTE"
+    "RACTION_DATA_TYPE_NUMBER_DATA\020\001\022*\n&GAME_"
+    "INTERACTION_DATA_TYPE_TARGET_DATA\020\002\0226\n2G"
+    "AME_INTERACTION_DATA_TYPE_CONDITIONAL_TA"
+    "RGET_DATA\020\003\0224\n0GAME_INTERACTION_DATA_TYP"
+    "E_INTERACTION_CARD_DATA\020\004\022*\n&GAME_INTERA"
+    "CTION_DATA_TYPE_ATTACK_DATA\020\005\022*\n&GAME_IN"
+    "TERACTION_DATA_TYPE_WINNER_DATA\020\006\022/\n+GAM"
+    "E_INTERACTION_DATA_TYPE_SELECT_FROM_DATA"
+    "\020\007*\217\002\n\031ProtoBufActionOnSelection\022\037\n\033ACTI"
+    "ON_ON_SELECTION_DISCARD\020\000\022$\n ACTION_ON_S"
+    "ELECTION_TAKE_TO_HAND\020\001\022\036\n\032ACTION_ON_SEL"
+    "ECTION_EVOLVE\020\002\022!\n\035ACTION_ON_SELECTION_A"
+    "TTACH_TO\020\003\022\037\n\033ACTION_ON_SELECTION_PROMOT"
+    "E\020\004\022\037\n\033ACTION_ON_SELECTION_NOTHING\020\005\022&\n\""
+    "ACTION_ON_SELECTION_PUT_UNDER_DECK\020\006*{\n\022"
+    "ProtoBufSelectFrom\022\027\n\023SELECT_FROM_IN_PLA"
+    "Y\020\000\022\030\n\024SELECT_FROM_FLOATING\020\001\022\024\n\020SELECT_"
+    "FROM_DECK\020\002\022\034\n\030SELECT_FROM_DISCARD_PILE\020"
+    "\003*]\n\034ProtoBufLogicalQueryOperator\022\036\n\032LOG"
+    "ICAL_QUERY_OPERATOR_AND\020\000\022\035\n\031LOGICAL_QUE"
+    "RY_OPERATOR_OR\020\001*n\n\032ProtoBufSelectionQua"
+    "lifier\022\'\n#SELECTION_QUALIFIER_NUMBER_OF_"
+    "CARDS\020\000\022\'\n#SELECTION_QUALIFIER_PROVIDED_"
+    "ENERGY\020\001*\370\002\n\032ProtoBufTechnicalGameState\022"
+    "\030\n\024GAME_STATE_GAME_OVER\020\000\022\037\n\033GAME_STATE_"
+    "IDLE_PLAYER_TURN\020\001\022#\n\037GAME_STATE_SELECT_"
+    "BENCH_POKEMON\020\002\022\'\n#GAME_STATE_SELECTING_"
+    "MULLIGAN_CARDS\020\003\022%\n!GAME_STATE_SETTING_A"
+    "CTIVE_POKEMON\020\004\022\"\n\036GAME_STATE_SETTING_PR"
+    "IZE_CARDS\020\005\022\036\n\032GAME_STATE_SETUP_COMPLETE"
+    "D\020\006\022\"\n\036GAME_STATE_SHOW_FIRST_MULLIGAN\020\007\022"
+    "#\n\037GAME_STATE_SHOW_SECOND_MULLIGAN\020\010\022\035\n\031"
+    "GAME_STATE_WAIT_FOR_INPUT\020\t*|\n\031ProtoBufP"
+    "ositionKnowledge\022\036\n\032POSITION_KNOWLEDGE_U"
+    "NKNOWN\020\000\022!\n\035POSITION_KNOWLEDGE_NOT_PRIZE"
+    "D\020\001\022\034\n\030POSITION_KNOWLEDGE_KNOWN\020\002B\031\252\002\026ga"
+    "mecore.serializationb\006proto3"
 };
 static ::absl::once_flag descriptor_table_gamecore_5fserialization_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_gamecore_5fserialization_2eproto = {
     false,
     false,
-    12809,
+    12868,
     descriptor_table_protodef_gamecore_5fserialization_2eproto,
     "gamecore_serialization.proto",
     &descriptor_table_gamecore_5fserialization_2eproto_once,
@@ -7145,7 +7146,7 @@ ProtoBufCard::_table_ = {
     {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ProtoBufCard, _impl_.card_subtype_), 13>(),
      {24, 13, 0,
       PROTOBUF_FIELD_OFFSET(ProtoBufCard, _impl_.card_subtype_)}},
-    // .gamecore.serialization.ProtoBufEnergyType energy_type = 4;
+    // optional .gamecore.serialization.ProtoBufEnergyType energy_type = 4;
     {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ProtoBufCard, _impl_.energy_type_), 14>(),
      {32, 14, 0,
       PROTOBUF_FIELD_OFFSET(ProtoBufCard, _impl_.energy_type_)}},
@@ -7157,11 +7158,11 @@ ProtoBufCard::_table_ = {
     {::_pbi::TcParser::FastUS1,
      {50, 10, 0,
       PROTOBUF_FIELD_OFFSET(ProtoBufCard, _impl_.evolves_from_)}},
-    // .gamecore.serialization.ProtoBufEnergyType weakness = 7;
+    // optional .gamecore.serialization.ProtoBufEnergyType weakness = 7;
     {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ProtoBufCard, _impl_.weakness_), 16>(),
      {56, 16, 0,
       PROTOBUF_FIELD_OFFSET(ProtoBufCard, _impl_.weakness_)}},
-    // .gamecore.serialization.ProtoBufEnergyType resistance = 8;
+    // optional .gamecore.serialization.ProtoBufEnergyType resistance = 8;
     {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ProtoBufCard, _impl_.resistance_), 17>(),
      {64, 17, 0,
       PROTOBUF_FIELD_OFFSET(ProtoBufCard, _impl_.resistance_)}},
@@ -7245,15 +7246,15 @@ ProtoBufCard::_table_ = {
     {PROTOBUF_FIELD_OFFSET(ProtoBufCard, _impl_.card_type_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
     // .gamecore.serialization.ProtoBufCardSubtype card_subtype = 3;
     {PROTOBUF_FIELD_OFFSET(ProtoBufCard, _impl_.card_subtype_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
-    // .gamecore.serialization.ProtoBufEnergyType energy_type = 4;
+    // optional .gamecore.serialization.ProtoBufEnergyType energy_type = 4;
     {PROTOBUF_FIELD_OFFSET(ProtoBufCard, _impl_.energy_type_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
     // optional int32 max_hp = 5;
     {PROTOBUF_FIELD_OFFSET(ProtoBufCard, _impl_.max_hp_), _Internal::kHasBitsOffset + 15, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt32)},
     // optional string evolves_from = 6;
     {PROTOBUF_FIELD_OFFSET(ProtoBufCard, _impl_.evolves_from_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
-    // .gamecore.serialization.ProtoBufEnergyType weakness = 7;
+    // optional .gamecore.serialization.ProtoBufEnergyType weakness = 7;
     {PROTOBUF_FIELD_OFFSET(ProtoBufCard, _impl_.weakness_), _Internal::kHasBitsOffset + 16, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
-    // .gamecore.serialization.ProtoBufEnergyType resistance = 8;
+    // optional .gamecore.serialization.ProtoBufEnergyType resistance = 8;
     {PROTOBUF_FIELD_OFFSET(ProtoBufCard, _impl_.resistance_), _Internal::kHasBitsOffset + 17, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
     // optional int32 retreat_cost = 9;
     {PROTOBUF_FIELD_OFFSET(ProtoBufCard, _impl_.retreat_cost_), _Internal::kHasBitsOffset + 18, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt32)},
@@ -7411,13 +7412,11 @@ PROTOBUF_NOINLINE void ProtoBufCard::Clear() {
     }
   }
 
-  // .gamecore.serialization.ProtoBufEnergyType energy_type = 4;
+  // optional .gamecore.serialization.ProtoBufEnergyType energy_type = 4;
   if (CheckHasBit(cached_has_bits, 0x00004000U)) {
-    if (this_._internal_energy_type() != 0) {
-      target = stream->EnsureSpace(target);
-      target = ::_pbi::WireFormatLite::WriteEnumToArray(
-          4, this_._internal_energy_type(), target);
-    }
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteEnumToArray(
+        4, this_._internal_energy_type(), target);
   }
 
   // optional int32 max_hp = 5;
@@ -7435,22 +7434,18 @@ PROTOBUF_NOINLINE void ProtoBufCard::Clear() {
     target = stream->WriteStringMaybeAliased(6, _s, target);
   }
 
-  // .gamecore.serialization.ProtoBufEnergyType weakness = 7;
+  // optional .gamecore.serialization.ProtoBufEnergyType weakness = 7;
   if (CheckHasBit(cached_has_bits, 0x00010000U)) {
-    if (this_._internal_weakness() != 0) {
-      target = stream->EnsureSpace(target);
-      target = ::_pbi::WireFormatLite::WriteEnumToArray(
-          7, this_._internal_weakness(), target);
-    }
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteEnumToArray(
+        7, this_._internal_weakness(), target);
   }
 
-  // .gamecore.serialization.ProtoBufEnergyType resistance = 8;
+  // optional .gamecore.serialization.ProtoBufEnergyType resistance = 8;
   if (CheckHasBit(cached_has_bits, 0x00020000U)) {
-    if (this_._internal_resistance() != 0) {
-      target = stream->EnsureSpace(target);
-      target = ::_pbi::WireFormatLite::WriteEnumToArray(
-          8, this_._internal_resistance(), target);
-    }
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteEnumToArray(
+        8, this_._internal_resistance(), target);
   }
 
   // optional int32 retreat_cost = 9;
@@ -7721,12 +7716,10 @@ PROTOBUF_NOINLINE void ProtoBufCard::Clear() {
                       ::_pbi::WireFormatLite::EnumSize(this_._internal_card_subtype());
       }
     }
-    // .gamecore.serialization.ProtoBufEnergyType energy_type = 4;
+    // optional .gamecore.serialization.ProtoBufEnergyType energy_type = 4;
     if (CheckHasBit(cached_has_bits, 0x00004000U)) {
-      if (this_._internal_energy_type() != 0) {
-        total_size += 1 +
-                      ::_pbi::WireFormatLite::EnumSize(this_._internal_energy_type());
-      }
+      total_size += 1 +
+                    ::_pbi::WireFormatLite::EnumSize(this_._internal_energy_type());
     }
     // optional int32 max_hp = 5;
     if (CheckHasBit(cached_has_bits, 0x00008000U)) {
@@ -7735,19 +7728,15 @@ PROTOBUF_NOINLINE void ProtoBufCard::Clear() {
     }
   }
   if (BatchCheckHasBit(cached_has_bits, 0x00ff0000U)) {
-    // .gamecore.serialization.ProtoBufEnergyType weakness = 7;
+    // optional .gamecore.serialization.ProtoBufEnergyType weakness = 7;
     if (CheckHasBit(cached_has_bits, 0x00010000U)) {
-      if (this_._internal_weakness() != 0) {
-        total_size += 1 +
-                      ::_pbi::WireFormatLite::EnumSize(this_._internal_weakness());
-      }
+      total_size += 1 +
+                    ::_pbi::WireFormatLite::EnumSize(this_._internal_weakness());
     }
-    // .gamecore.serialization.ProtoBufEnergyType resistance = 8;
+    // optional .gamecore.serialization.ProtoBufEnergyType resistance = 8;
     if (CheckHasBit(cached_has_bits, 0x00020000U)) {
-      if (this_._internal_resistance() != 0) {
-        total_size += 1 +
-                      ::_pbi::WireFormatLite::EnumSize(this_._internal_resistance());
-      }
+      total_size += 1 +
+                    ::_pbi::WireFormatLite::EnumSize(this_._internal_resistance());
     }
     // optional int32 retreat_cost = 9;
     if (CheckHasBit(cached_has_bits, 0x00040000U)) {
@@ -7866,9 +7855,7 @@ void ProtoBufCard::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00004000U)) {
-      if (from._internal_energy_type() != 0) {
-        _this->_impl_.energy_type_ = from._impl_.energy_type_;
-      }
+      _this->_impl_.energy_type_ = from._impl_.energy_type_;
     }
     if (CheckHasBit(cached_has_bits, 0x00008000U)) {
       _this->_impl_.max_hp_ = from._impl_.max_hp_;
@@ -7876,14 +7863,10 @@ void ProtoBufCard::MergeImpl(::google::protobuf::MessageLite& to_msg,
   }
   if (BatchCheckHasBit(cached_has_bits, 0x00ff0000U)) {
     if (CheckHasBit(cached_has_bits, 0x00010000U)) {
-      if (from._internal_weakness() != 0) {
-        _this->_impl_.weakness_ = from._impl_.weakness_;
-      }
+      _this->_impl_.weakness_ = from._impl_.weakness_;
     }
     if (CheckHasBit(cached_has_bits, 0x00020000U)) {
-      if (from._internal_resistance() != 0) {
-        _this->_impl_.resistance_ = from._impl_.resistance_;
-      }
+      _this->_impl_.resistance_ = from._impl_.resistance_;
     }
     if (CheckHasBit(cached_has_bits, 0x00040000U)) {
       _this->_impl_.retreat_cost_ = from._impl_.retreat_cost_;
