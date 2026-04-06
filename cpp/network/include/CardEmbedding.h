@@ -65,6 +65,7 @@ struct CardFeatures {
     InstructionsAndConditions instructions_and_conditions;
 };
 
+/// Embeds a batch of `ProtoBufCard` into shape [batch, dimension_out]. Layout and hyperparameters: ../doc/card_embedding_math.md.
 struct CardEmbeddingImpl : torch::nn::Module, SaveLoadMixin<CardEmbeddingImpl> {
     CardEmbeddingImpl(int64_t dimension_out, torch::Device device = torch::kCPU, torch::Dtype dtype = torch::kFloat);
 

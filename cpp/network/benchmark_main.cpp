@@ -221,6 +221,98 @@ std::vector<std::vector<serialization::ProtoBufCondition>> build_condition_batch
     return batches;
 }
 
+/// Deterministic scalar and repeated fields consumed by `CardEmbedding::collect_card_features`.
+/// Optional proto fields are only set when their bitmask slot is active so mask paths stay covered.
+void apply_card_surface_features(serialization::ProtoBufCard& card, int variant, int64_t seed) {
+    const int v = variant % 12;
+    const int s = static_cast<int>(seed);
+
+    card.set_card_type(static_cast<serialization::ProtoBufCardType>(1 + (s % 3)));
+    card.set_card_subtype(static_cast<serialization::ProtoBufCardSubtype>(1 + ((s + v) % 9)));
+
+    const int opt_mask = (v * 17 + s) & 0x3f;
+    if (opt_mask & 1) {
+        card.set_energy_type(static_cast<serialization::ProtoBufEnergyType>(1 + (s % 10)));
+    }
+    if (opt_mask & 2) {
+        card.set_max_hp(30 + (s % 300));
+    }
+    if (opt_mask & 4) {
+        card.set_weakness(static_cast<serialization::ProtoBufEnergyType>(1 + ((s + 1) % 10)));
+    }
+    if (opt_mask & 8) {
+        card.set_resistance(static_cast<serialization::ProtoBufEnergyType>(1 + ((s + 2) % 10)));
+    }
+    if (opt_mask & 16) {
+        card.set_retreat_cost(1 + (s % 4));
+    }
+    if (opt_mask & 32) {
+        card.set_number_of_prize_cards_on_knockout(1 + (s % 3));
+    }
+    if (((v + s) % 5) != 0) {
+        card.set_current_damage(s % 200);
+    }
+
+    const int n_traits = 1 + (v % 2);
+    for (int i = 0; i < n_traits; ++i) {
+        card.add_pokemon_turn_traits(
+            static_cast<serialization::ProtoBufPokemonTurnTrait>((s + i) % 2));
+    }
+    const int n_provided = 2 + (v % 3);
+    for (int i = 0; i < n_provided; ++i) {
+        card.add_provided_energy(static_cast<serialization::ProtoBufEnergyType>(1 + ((s + i) % 10)));
+    }
+    const int n_attached = 3 + (v % 2);
+    for (int i = 0; i < n_attached; ++i) {
+        card.add_attached_energy(static_cast<serialization::ProtoBufEnergyType>(1 + ((s * 3 + i) % 10)));
+    }
+}
+
+/// All optional card-level scalars and repeated energies/traits set; no instructions, conditions, ability, or attacks.
+void apply_all_optional_card_fields(serialization::ProtoBufCard& card, int64_t seed) {
+    const int s = static_cast<int>(seed);
+    card.set_card_type(static_cast<serialization::ProtoBufCardType>(1 + (s % 3)));
+    card.set_card_subtype(static_cast<serialization::ProtoBufCardSubtype>(1 + (s % 9)));
+    card.set_energy_type(static_cast<serialization::ProtoBufEnergyType>(1 + (s % 10)));
+    card.set_max_hp(30 + (s % 300));
+    card.set_weakness(static_cast<serialization::ProtoBufEnergyType>(1 + ((s + 1) % 10)));
+    card.set_resistance(static_cast<serialization::ProtoBufEnergyType>(1 + ((s + 2) % 10)));
+    card.set_retreat_cost(1 + (s % 4));
+    card.set_number_of_prize_cards_on_knockout(1 + (s % 3));
+    card.set_current_damage(s % 200);
+    card.add_pokemon_turn_traits(serialization::POKEMON_TURN_TRAIT_PUT_IN_PLAY_THIS_TURN);
+    card.add_pokemon_turn_traits(serialization::POKEMON_TURN_TRAIT_ABILITY_USED_THIS_TURN);
+    for (int i = 0; i < 4; ++i) {
+        card.add_provided_energy(static_cast<serialization::ProtoBufEnergyType>(1 + (i % 10)));
+        card.add_attached_energy(static_cast<serialization::ProtoBufEnergyType>(1 + ((i + 5) % 10)));
+    }
+}
+
+serialization::ProtoBufCard make_card_high_repeat_lists() {
+    serialization::ProtoBufCard card;
+    card.set_card_type(serialization::CARD_TYPE_POKEMON);
+    card.set_card_subtype(serialization::CARD_SUBTYPE_BASIC_POKEMON);
+    card.set_max_hp(90);
+    card.set_energy_type(serialization::ENERGY_TYPE_WATER);
+    for (int i = 0; i < 8; ++i) {
+        card.add_pokemon_turn_traits(
+            static_cast<serialization::ProtoBufPokemonTurnTrait>(i % 2));
+    }
+    for (int i = 0; i < 12; ++i) {
+        card.add_attached_energy(static_cast<serialization::ProtoBufEnergyType>(1 + (i % 10)));
+    }
+    for (int i = 0; i < 6; ++i) {
+        card.add_provided_energy(static_cast<serialization::ProtoBufEnergyType>(1 + (i % 10)));
+    }
+    return card;
+}
+
+serialization::ProtoBufCard make_card_all_optionals_static_only() {
+    serialization::ProtoBufCard card;
+    apply_all_optional_card_fields(card, 1001);
+    return card;
+}
+
 /// One ability per card max. Twelve distinct shapes for coverage (indexed by `variant % 12`).
 /// Several variants omit card-level instructions and/or conditions while still using ability- or attack-level
 /// content. Empty global instruction or condition lists are supported by `CardEmbedding::forward`.
@@ -345,6 +437,7 @@ serialization::ProtoBufCard make_card_for_variant(int variant, int64_t seed) {
         default:
             break;
     }
+    apply_card_surface_features(card, variant % 12, seed);
     return card;
 }
 
@@ -360,12 +453,14 @@ std::vector<serialization::ProtoBufCard> build_card_batch(int64_t batch_size) {
 serialization::ProtoBufCard make_card_empty_global_instructions_one_condition() {
     serialization::ProtoBufCard card;
     *card.add_conditions() = make_condition(serialization::CONDITION_TYPE_ABILITY_NOT_USED, {});
+    apply_card_surface_features(card, 0, 2002);
     return card;
 }
 
 serialization::ProtoBufCard make_card_empty_global_conditions_one_instruction() {
     serialization::ProtoBufCard card;
     *card.add_instructions() = make_instruction(serialization::INSTRUCTION_TYPE_SHOW_CARDS, {});
+    apply_card_surface_features(card, 1, 2003);
     return card;
 }
 
@@ -375,6 +470,7 @@ serialization::ProtoBufCard make_card_empty_globals_attack_only() {
     attack->add_energy_cost(static_cast<serialization::ProtoBufEnergyType>(1));
     *attack->add_instructions() =
         make_instruction(serialization::INSTRUCTION_TYPE_DEAL_DAMAGE, {make_attack_data(42)});
+    apply_card_surface_features(card, 4, 2004);
     return card;
 }
 
@@ -441,6 +537,10 @@ void verify_card_embedding_output_shape(CardEmbeddingImpl& card_embedding, const
     check({make_card_empty_global_instructions_one_condition(), make_card_empty_global_conditions_one_instruction(),
            make_card_empty_globals_attack_only(), make_card_completely_empty()},
           "batch_mixed_empty_global_and_empty_card");
+
+    check({make_card_high_repeat_lists()}, "high_repeat_traits_and_energies");
+    check({make_card_all_optionals_static_only()}, "all_optionals_static_only");
+    check({make_card_high_repeat_lists(), make_card_all_optionals_static_only()}, "batch_high_repeat_and_static_only");
 
     std::cout << label << " CardEmbedding::forward shape checks passed (expected [num_cards, " << dimension_out
               << "])\n";

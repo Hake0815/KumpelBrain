@@ -135,6 +135,86 @@ def _make_condition(condition_type: int, data_entries: list):
     return cond
 
 
+def apply_card_surface_features(card, variant: int, seed: int) -> None:
+    """Match benchmark_main.cpp apply_card_surface_features."""
+    pb2 = _pb2_mod()
+    v = variant % 12
+    s = int(seed)
+
+    card.card_type = 1 + (s % 3)
+    card.card_subtype = 1 + ((s + v) % 9)
+
+    opt_mask = (v * 17 + s) & 0x3F
+    if opt_mask & 1:
+        card.energy_type = 1 + (s % 10)
+    if opt_mask & 2:
+        card.max_hp = 30 + (s % 300)
+    if opt_mask & 4:
+        card.weakness = 1 + ((s + 1) % 10)
+    if opt_mask & 8:
+        card.resistance = 1 + ((s + 2) % 10)
+    if opt_mask & 16:
+        card.retreat_cost = 1 + (s % 4)
+    if opt_mask & 32:
+        card.number_of_prize_cards_on_knockout = 1 + (s % 3)
+    if ((v + s) % 5) != 0:
+        card.current_damage = s % 200
+
+    n_traits = 1 + (v % 2)
+    for i in range(n_traits):
+        card.pokemon_turn_traits.append((s + i) % 2)
+    n_provided = 2 + (v % 3)
+    for i in range(n_provided):
+        card.provided_energy.append(1 + ((s + i) % 10))
+    n_attached = 3 + (v % 2)
+    for i in range(n_attached):
+        card.attached_energy.append(1 + ((s * 3 + i) % 10))
+
+
+def apply_all_optional_card_fields(card, seed: int) -> None:
+    """Match benchmark_main.cpp apply_all_optional_card_fields."""
+    s = int(seed)
+    card.card_type = 1 + (s % 3)
+    card.card_subtype = 1 + (s % 9)
+    card.energy_type = 1 + (s % 10)
+    card.max_hp = 30 + (s % 300)
+    card.weakness = 1 + ((s + 1) % 10)
+    card.resistance = 1 + ((s + 2) % 10)
+    card.retreat_cost = 1 + (s % 4)
+    card.number_of_prize_cards_on_knockout = 1 + (s % 3)
+    card.current_damage = s % 200
+    card.pokemon_turn_traits.append(0)  # PUT_IN_PLAY_THIS_TURN
+    card.pokemon_turn_traits.append(1)  # ABILITY_USED_THIS_TURN
+    for i in range(4):
+        card.provided_energy.append(1 + (i % 10))
+        card.attached_energy.append(1 + ((i + 5) % 10))
+
+
+def make_card_high_repeat_lists():
+    """Match benchmark_main.cpp make_card_high_repeat_lists."""
+    pb2 = _pb2_mod()
+    card = pb2.ProtoBufCard()
+    card.card_type = pb2.CARD_TYPE_POKEMON
+    card.card_subtype = pb2.CARD_SUBTYPE_BASIC_POKEMON
+    card.max_hp = 90
+    card.energy_type = pb2.ENERGY_TYPE_WATER
+    for i in range(8):
+        card.pokemon_turn_traits.append(i % 2)
+    for i in range(12):
+        card.attached_energy.append(1 + (i % 10))
+    for i in range(6):
+        card.provided_energy.append(1 + (i % 10))
+    return card
+
+
+def make_card_all_optionals_static_only():
+    """Match benchmark_main.cpp make_card_all_optionals_static_only."""
+    pb2 = _pb2_mod()
+    card = pb2.ProtoBufCard()
+    apply_all_optional_card_fields(card, 1001)
+    return card
+
+
 def make_card_for_variant(variant: int, seed: int):
     """Match benchmark_main.cpp make_card_for_variant(variant % 12, seed)."""
     pb2 = _pb2_mod()
@@ -336,6 +416,7 @@ def make_card_for_variant(variant: int, seed: int):
                 [_make_attack_data(30 + int(seed % 40))],
             )
         )
+    apply_card_surface_features(card, v, seed)
     return card
 
 
@@ -351,6 +432,7 @@ def make_card_empty_global_instructions_one_condition():
     card.conditions.add().CopyFrom(
         _make_condition(pb2.CONDITION_TYPE_ABILITY_NOT_USED, [])
     )
+    apply_card_surface_features(card, 0, 2002)
     return card
 
 
@@ -360,6 +442,7 @@ def make_card_empty_global_conditions_one_instruction():
     card.instructions.add().CopyFrom(
         _make_instruction(pb2.INSTRUCTION_TYPE_SHOW_CARDS, [])
     )
+    apply_card_surface_features(card, 1, 2003)
     return card
 
 
@@ -373,6 +456,7 @@ def make_card_empty_globals_attack_only():
             pb2.INSTRUCTION_TYPE_DEAL_DAMAGE, [_make_attack_data(42)]
         )
     )
+    apply_card_surface_features(card, 4, 2004)
     return card
 
 
@@ -411,6 +495,16 @@ def build_fixture_cases() -> dict[str, list[bytes]]:
         _ser(make_card_empty_global_conditions_one_instruction()),
         _ser(make_card_empty_globals_attack_only()),
         _ser(make_card_completely_empty()),
+    ]
+    cases["high_repeat_traits_and_energies"] = [
+        _ser(make_card_high_repeat_lists())
+    ]
+    cases["all_optionals_static_only"] = [
+        _ser(make_card_all_optionals_static_only())
+    ]
+    cases["batch_high_repeat_and_static_only"] = [
+        _ser(make_card_high_repeat_lists()),
+        _ser(make_card_all_optionals_static_only()),
     ]
     # Empty card batch is not supported: MultiHeadAttention broadcast fails for batch_size==0.
 
