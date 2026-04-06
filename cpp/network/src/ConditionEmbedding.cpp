@@ -44,7 +44,8 @@ std::pair<torch::Tensor, torch::Tensor> ConditionEmbeddingImpl::forward_flattene
     if (flat.instruction_indices.size(0) == 0) {
         auto zeros_off = torch::zeros({batch_size + 1}, torch::TensorOptions().device(device_).dtype(torch::kInt64));
         auto empty_rows = torch::empty({0, dimension_out_}, options);
-        return tensor_utils::pad_by_offsets(empty_rows, zeros_off, dimension_out_);
+        return tensor_utils::pad_by_offsets(empty_rows, zeros_off, dimension_out_,
+                                            flat.max_sequence_length_per_batch_item);
     }
 
     auto embedded_condition_types = condition_type_embedding_(flat.instruction_types.to(torch::kLong));
@@ -53,15 +54,16 @@ std::pair<torch::Tensor, torch::Tensor> ConditionEmbeddingImpl::forward_flattene
 
     auto condition_embeddings =
         compute_condition_embeddings(flat.instruction_indices, flat.instruction_data_parent_rows,
-                                     embedded_condition_types, embedded_instruction_data);
+                                     embedded_condition_types, embedded_instruction_data,
+                                     flat.max_sequence_length_per_parent_row);
 
     auto batch_offsets = tensor_utils::build_contiguous_offsets(flat.instruction_indices.select(1, 0), batch_size);
 
     const auto num_conditions = condition_embeddings.size(0);
     auto local_pos = tensor_utils::local_positions_from_batch_offsets(batch_offsets, num_conditions);
     auto positioned_flat = position_embedding_->forward_packed(condition_embeddings, local_pos);
-    auto [padded_batch, valid_token_mask] =
-        tensor_utils::pad_by_offsets(positioned_flat, batch_offsets, dimension_out_);
+    auto [padded_batch, valid_token_mask] = tensor_utils::pad_by_offsets(
+        positioned_flat, batch_offsets, dimension_out_, flat.max_sequence_length_per_batch_item);
     return {padded_batch, valid_token_mask};
 }
 
@@ -72,7 +74,8 @@ torch::Tensor ConditionEmbeddingImpl::compute_data_tensors(const nesting::Flatte
 torch::Tensor ConditionEmbeddingImpl::compute_condition_embeddings(const torch::Tensor& condition_indices,
                                                                    const torch::Tensor& instruction_data_parent_rows,
                                                                    const torch::Tensor& embedded_condition_types,
-                                                                   const torch::Tensor& embedded_instruction_data) {
+                                                                   const torch::Tensor& embedded_instruction_data,
+                                                                   int64_t max_data_sequence_length_per_parent) {
     const auto num_conditions = condition_indices.size(0);
 
     if (num_conditions == 0) {
@@ -80,8 +83,8 @@ torch::Tensor ConditionEmbeddingImpl::compute_condition_embeddings(const torch::
     }
 
     auto data_offsets = tensor_utils::build_parent_offsets(instruction_data_parent_rows, num_conditions);
-    auto [padded_data, data_token_mask] =
-        tensor_utils::pad_by_offsets(embedded_instruction_data, data_offsets, dimension_out_);
+    auto [padded_data, data_token_mask] = tensor_utils::pad_by_offsets(
+        embedded_instruction_data, data_offsets, dimension_out_, max_data_sequence_length_per_parent);
     return attention_utils::query_sum_attention_pooling(
         data_multi_head_attention_, embedded_condition_types.unsqueeze(1), padded_data, data_token_mask);
 }

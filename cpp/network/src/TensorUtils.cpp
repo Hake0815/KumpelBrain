@@ -102,7 +102,8 @@ torch::Tensor local_positions_from_batch_offsets(const torch::Tensor& batch_offs
 }
 
 std::pair<torch::Tensor, torch::Tensor> pad_by_offsets(const torch::Tensor& flat_sequences,
-                                                       const torch::Tensor& offsets, int64_t dimension_out) {
+                                                       const torch::Tensor& offsets, int64_t dimension_out,
+                                                       std::optional<int64_t> max_sequence_length_opt) {
     const auto batch_size = offsets.size(0) == 0 ? 0 : offsets.size(0) - 1;
     const auto options = torch::TensorOptions().device(flat_sequences.device()).dtype(flat_sequences.dtype());
     auto mask_options = torch::TensorOptions().device(flat_sequences.device()).dtype(torch::kBool);
@@ -112,7 +113,12 @@ std::pair<torch::Tensor, torch::Tensor> pad_by_offsets(const torch::Tensor& flat
     }
 
     auto lengths = offsets.slice(0, 1, batch_size + 1) - offsets.slice(0, 0, batch_size);
-    const auto max_sequence_length = lengths.max().item<int64_t>();
+    int64_t max_sequence_length;
+    if (max_sequence_length_opt.has_value()) {
+        max_sequence_length = *max_sequence_length_opt;
+    } else {
+        max_sequence_length = lengths.max().item<int64_t>();
+    }
 
     auto padded = torch::zeros({batch_size, max_sequence_length, dimension_out}, options);
     auto valid_token_mask = torch::zeros({batch_size, max_sequence_length}, mask_options);

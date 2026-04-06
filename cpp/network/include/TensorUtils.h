@@ -20,8 +20,10 @@ torch::Tensor local_positions_from_batch_offsets(const torch::Tensor& batch_offs
 
 torch::Tensor build_parent_offsets(const torch::Tensor& parent_row_ids, int64_t num_parents);
 
+/// When max_sequence_length is set (CPU precomputed), skips device sync from lengths.max().item().
 std::pair<torch::Tensor, torch::Tensor> pad_by_offsets(const torch::Tensor& flat_sequences,
-                                                       const torch::Tensor& offsets, int64_t dimension_out);
+                                                       const torch::Tensor& offsets, int64_t dimension_out,
+                                                       std::optional<int64_t> max_sequence_length = std::nullopt);
 
 torch::Tensor make_padding_attention_mask(const torch::Tensor& valid_token_mask, int64_t query_seq_len,
                                           torch::Dtype dtype);

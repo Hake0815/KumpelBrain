@@ -115,6 +115,11 @@ struct FlattenInstructionsResult {
 
   FilterBatchTensors filter_batch{}; // CSR-like tree layout for all filter
                                      // roots collected from type-4 payloads
+
+  /// CPU-only: max instructions (or conditions) in any batch slot; used for pad_by_offsets(batch_offsets).
+  int64_t max_sequence_length_per_batch_item = 0;
+  /// CPU-only: max data payloads per instruction row; used for pad_by_offsets(data_offsets).
+  int64_t max_sequence_length_per_parent_row = 0;
 };
 
 bool is_prefix(const GroupIndex &prefix, const GroupIndex &test);

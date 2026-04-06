@@ -35,7 +35,8 @@ struct ConditionEmbeddingImpl : torch::nn::Module, SaveLoadMixin<ConditionEmbedd
     torch::Tensor compute_condition_embeddings(const torch::Tensor& condition_indices,
                                                const torch::Tensor& instruction_data_parent_rows,
                                                const torch::Tensor& embedded_condition_types,
-                                               const torch::Tensor& embedded_instruction_data);
+                                               const torch::Tensor& embedded_instruction_data,
+                                               int64_t max_data_sequence_length_per_parent);
 };
 
 TORCH_MODULE(ConditionEmbedding);

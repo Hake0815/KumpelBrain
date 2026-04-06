@@ -30,7 +30,8 @@ struct InstructionsAndConditions {
     /// Same length as instruction_ability_indices: global condition row index for that ability's
     /// instructions, or -1 if the ability has no conditions.
     std::vector<int64_t> ability_condition_row_for_instruction_ability;
-    std::vector<torch::Tensor> attack_energy_costs;
+    /// Row i matches instruction_attack_indices[i]: sum of energy_type embeddings for that attack (zeros if no costs).
+    torch::Tensor attack_energy_sums{};
 };
 
 struct CardEmbeddingImpl : torch::nn::Module, SaveLoadMixin<CardEmbeddingImpl> {
@@ -62,7 +63,7 @@ struct CardEmbeddingImpl : torch::nn::Module, SaveLoadMixin<CardEmbeddingImpl> {
         const InstructionsAndConditions& instructions_and_conditions, int batch_size);
     std::pair<torch::Tensor, torch::Tensor> embed_attacks(
         const std::pair<torch::Tensor, torch::Tensor>& embedded_instructions_pair,
-        const std::vector<int64_t>& instruction_attack_indices, const std::vector<torch::Tensor>& attack_energy_costs,
+        const std::vector<int64_t>& instruction_attack_indices, const torch::Tensor& attack_energy_sums,
         const std::vector<std::pair<int, int>>& instruction_card_parent_indices, int batch_size);
     std::pair<torch::Tensor, torch::Tensor> embed_ability(
         const std::pair<torch::Tensor, torch::Tensor>& embedded_instructions_pair,
