@@ -1,7 +1,6 @@
 #include "../include/CardEmbedding.h"
 
-#include <torch/csrc/autograd/generated/variable_factories.h>
-
+#include <algorithm>
 #include <vector>
 
 #include "network/include/AttentionUtils.h"
@@ -295,27 +294,20 @@ std::pair<torch::Tensor, torch::Tensor> CardEmbeddingImpl::embed_flattened_card_
 
     auto embedded_feature = embedding(torch::tensor(flattened_card_feature, index_options));
 
-    int max_card_index_repetition = 0;
-    std::map<int, int> card_index_to_repetition;
-    for (int card_index : card_indices) {
-        int repetition = ++card_index_to_repetition[card_index];
-        if (repetition > max_card_index_repetition) {
-            max_card_index_repetition = repetition;
-        }
-    }
-    auto out = torch::zeros({batch_size, max_card_index_repetition, dimension_out_}, out_options);
-    auto mask = torch::zeros({batch_size, max_card_index_repetition}, mask_options);
-
     std::vector<int> next_slot(batch_size, 0);
-
-    const int total_number_of_features = card_indices.size();
+    const int total_number_of_features = static_cast<int>(card_indices.size());
 
     std::vector<int64_t> scatter_seq;
-    scatter_seq.reserve(total_number_of_features);
+    scatter_seq.reserve(static_cast<size_t>(total_number_of_features));
+    int max_card_index_repetition = 0;
     for (int card_index : card_indices) {
         const int64_t sequence_index = next_slot[card_index]++;
         scatter_seq.push_back(sequence_index);
+        max_card_index_repetition = std::max(max_card_index_repetition, next_slot[card_index]);
     }
+
+    auto out = torch::zeros({batch_size, max_card_index_repetition, dimension_out_}, out_options);
+    auto mask = torch::zeros({batch_size, max_card_index_repetition}, mask_options);
     auto scatter_batch_tensor = int64_vector_to_tensor(card_indices, device_);
     auto scatter_seq_tensor = int64_vector_to_tensor(scatter_seq, device_);
     out.index_put_({scatter_batch_tensor, scatter_seq_tensor}, embedded_feature);
