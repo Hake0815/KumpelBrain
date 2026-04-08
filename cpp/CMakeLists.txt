@@ -21,8 +21,11 @@ find_package(pybind11 CONFIG REQUIRED)
 
 set(KUMPEL_CORE_SOURCES
     network/src/AttentionUtils.cpp
+    network/src/AbilityEmbedding.cpp
     network/src/AttackDataEmbedding.cpp
+    network/src/AttackEmbedding.cpp
     network/src/CardAmountDataEmbedding.cpp
+    network/src/CardEmbedding.cpp
     network/src/ConditionEmbedding.cpp
     network/src/DiscardDataEmbedding.cpp
     network/src/FilterConditionEmbedding.cpp

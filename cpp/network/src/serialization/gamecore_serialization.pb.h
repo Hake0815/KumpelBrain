@@ -7367,7 +7367,8 @@ class ProtoBufCard final : public ::google::protobuf::Message
   void _internal_set_card_subtype(::gamecore::serialization::ProtoBufCardSubtype value);
 
   public:
-  // .gamecore.serialization.ProtoBufEnergyType energy_type = 4;
+  // optional .gamecore.serialization.ProtoBufEnergyType energy_type = 4;
+  bool has_energy_type() const;
   void clear_energy_type() ;
   ::gamecore::serialization::ProtoBufEnergyType energy_type() const;
   void set_energy_type(::gamecore::serialization::ProtoBufEnergyType value);
@@ -7388,7 +7389,8 @@ class ProtoBufCard final : public ::google::protobuf::Message
   void _internal_set_max_hp(::int32_t value);
 
   public:
-  // .gamecore.serialization.ProtoBufEnergyType weakness = 7;
+  // optional .gamecore.serialization.ProtoBufEnergyType weakness = 7;
+  bool has_weakness() const;
   void clear_weakness() ;
   ::gamecore::serialization::ProtoBufEnergyType weakness() const;
   void set_weakness(::gamecore::serialization::ProtoBufEnergyType value);
@@ -7398,7 +7400,8 @@ class ProtoBufCard final : public ::google::protobuf::Message
   void _internal_set_weakness(::gamecore::serialization::ProtoBufEnergyType value);
 
   public:
-  // .gamecore.serialization.ProtoBufEnergyType resistance = 8;
+  // optional .gamecore.serialization.ProtoBufEnergyType resistance = 8;
+  bool has_resistance() const;
   void clear_resistance() ;
   ::gamecore::serialization::ProtoBufEnergyType resistance() const;
   void set_resistance(::gamecore::serialization::ProtoBufEnergyType value);
@@ -10904,7 +10907,11 @@ inline void ProtoBufCard::_internal_set_card_subtype(::gamecore::serialization::
   _impl_.card_subtype_ = value;
 }
 
-// .gamecore.serialization.ProtoBufEnergyType energy_type = 4;
+// optional .gamecore.serialization.ProtoBufEnergyType energy_type = 4;
+inline bool ProtoBufCard::has_energy_type() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00004000U);
+  return value;
+}
 inline void ProtoBufCard::clear_energy_type() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.energy_type_ = 0;
@@ -11027,7 +11034,11 @@ inline void ProtoBufCard::set_allocated_evolves_from(::std::string* PROTOBUF_NUL
   // @@protoc_insertion_point(field_set_allocated:gamecore.serialization.ProtoBufCard.evolves_from)
 }
 
-// .gamecore.serialization.ProtoBufEnergyType weakness = 7;
+// optional .gamecore.serialization.ProtoBufEnergyType weakness = 7;
+inline bool ProtoBufCard::has_weakness() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00010000U);
+  return value;
+}
 inline void ProtoBufCard::clear_weakness() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.weakness_ = 0;
@@ -11052,7 +11063,11 @@ inline void ProtoBufCard::_internal_set_weakness(::gamecore::serialization::Prot
   _impl_.weakness_ = value;
 }
 
-// .gamecore.serialization.ProtoBufEnergyType resistance = 8;
+// optional .gamecore.serialization.ProtoBufEnergyType resistance = 8;
+inline bool ProtoBufCard::has_resistance() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00020000U);
+  return value;
+}
 inline void ProtoBufCard::clear_resistance() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.resistance_ = 0;

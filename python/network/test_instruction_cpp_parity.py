@@ -4,7 +4,7 @@ from pathlib import Path
 import sys
 import tempfile
 import time
-from typing import Callable
+from typing import Any, Callable
 
 import torch
 
@@ -48,7 +48,7 @@ def _set_constant_parameters(model, value: float = 0.01) -> None:
 
 
 def _benchmark_forward(
-    forward_fn: Callable[[], torch.Tensor],
+    forward_fn: Callable[[], Any],
     device: torch.device,
     warmup_runs: int = 20,
     runs: int = 200,
@@ -154,7 +154,8 @@ def test_instruction_embedding_parity(
 
     py_out = py_instruction.forward(instructions_batch)
     cpp_out = cpp_instruction.forward(serialized_instructions_batch)
-    _assert_close("InstructionEmbedding", py_out, cpp_out)
+    _assert_close("InstructionEmbedding", py_out[0], cpp_out[0])
+    _assert_close("InstructionEmbedding valid token mask", py_out[1], cpp_out[1])
 
     if not benchmark:
         return None, None

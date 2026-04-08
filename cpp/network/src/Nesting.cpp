@@ -1,6 +1,7 @@
 #include "../include/Nesting.h"
 #include "../include/TensorUtils.h"
 
+#include <algorithm>
 #include <stdexcept>
 
 namespace nesting {
@@ -476,9 +477,34 @@ struct FlatMessageBuilder {
     }
   }
 
-  FlattenInstructionsResult build(const TensorBuildOptions &options) {
+  FlattenInstructionsResult build(const TensorBuildOptions &options, int64_t batch_size) {
     FlattenInstructionsResult result;
     const auto tensor_options = make_options(options.device, options.dtype);
+
+    if (batch_size > 0) {
+      std::vector<int64_t> per_batch(static_cast<size_t>(batch_size), 0);
+      for (const auto &idx : instruction_indices) {
+        const int64_t b = idx[0];
+        if (b >= 0 && b < batch_size) {
+          per_batch[static_cast<size_t>(b)] += 1;
+        }
+      }
+      result.max_sequence_length_per_batch_item =
+          *std::max_element(per_batch.begin(), per_batch.end());
+    }
+
+    const size_t n_instr = instruction_types.size();
+    if (n_instr > 0) {
+      std::vector<int64_t> per_parent(n_instr, 0);
+      for (int64_t p : instruction_data_parent_rows) {
+        if (p >= 0 && static_cast<size_t>(p) < n_instr) {
+          per_parent[static_cast<size_t>(p)] += 1;
+        }
+      }
+      result.max_sequence_length_per_parent_row =
+          *std::max_element(per_parent.begin(), per_parent.end());
+    }
+
     result.instruction_types = torch::tensor(instruction_types, tensor_options);
     result.instruction_indices = tensor_utils::tensor_from_2d_int64(
         instruction_indices, options.device, options.dtype);
@@ -522,7 +548,7 @@ flatten_messages(const std::vector<std::vector<MessageType>> &instruction_likes,
     }
   }
 
-  return builder.build(options);
+  return builder.build(options, static_cast<int64_t>(instruction_likes.size()));
 }
 
 torch::Tensor move_tensor_if_defined(const torch::Tensor &tensor,
@@ -625,6 +651,8 @@ FlattenInstructionsResult
 move_flattened_result_to_device(const FlattenInstructionsResult &result,
                                 torch::Device device) {
   FlattenInstructionsResult moved;
+  moved.max_sequence_length_per_batch_item = result.max_sequence_length_per_batch_item;
+  moved.max_sequence_length_per_parent_row = result.max_sequence_length_per_parent_row;
   moved.instruction_types = result.instruction_types.to(device);
   moved.instruction_indices = result.instruction_indices.to(device);
   moved.instruction_data_types = result.instruction_data_types.to(device);

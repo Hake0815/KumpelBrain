@@ -1,8 +1,13 @@
 {
-    "cmake.sourceDirectory": "/home/felix/ai/KumpelBrain/cpp",
-    "cmake.buildDirectory": "/home/felix/ai/KumpelBrain/cpp/build",
-    "cmake.configureSettings": {
-        "Python_EXECUTABLE": "/home/felix/ai/KumpelBrain/.venv/bin/python",
-        "Torch_DIR": "/home/felix/ai/KumpelBrain/.venv/lib/python3.13/site-packages/torch/share/cmake/Torch"
-    }
+  "C_Cpp.formatting": "clangFormat",
+  "C_Cpp.clang_format_path": "clang-format",
+  "[cpp]": {
+    "editor.defaultFormatter": "llvm-vs-code-extensions.vscode-clangd"
+  },
+  "cmake.sourceDirectory": "/home/felix/ai/KumpelBrain/cpp",
+  "cmake.buildDirectory": "/home/felix/ai/KumpelBrain/cpp/build",
+  "cmake.configureSettings": {
+    "Python_EXECUTABLE": "/home/felix/ai/KumpelBrain/.venv/bin/python",
+    "Torch_DIR": "/home/felix/ai/KumpelBrain/.venv/lib/python3.13/site-packages/torch/share/cmake/Torch"
+  }
 }
