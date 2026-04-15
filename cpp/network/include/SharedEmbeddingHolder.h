@@ -3,6 +3,7 @@
 
 #include <torch/torch.h>
 
+#include "../include/EnergyTypeEmbedding.h"
 #include "../include/NormalizedLinear.h"
 #include "../include/PositionalEmbedding.h"
 #include "../include/SaveLoadMixin.h"
@@ -20,6 +21,8 @@ struct SharedEmbeddingHolderImpl : torch::nn::Module, SaveLoadMixin<SharedEmbedd
     PositionalEmbedding position_embedding_{nullptr};
     NormalizedLinear damage_embedding_{nullptr};
     torch::nn::Embedding energy_type_embedding_{nullptr};
+
+    // EnergyTypeEmbedding energy_type_embedding_{nullptr};
 };
 
 TORCH_MODULE(SharedEmbeddingHolder);

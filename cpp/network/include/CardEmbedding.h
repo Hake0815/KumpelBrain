@@ -5,6 +5,7 @@
 #include <torch/nn/modules/embedding.h>
 
 #include <cstdint>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -41,6 +42,7 @@ struct CardFeatures {
     std::vector<int64_t> card_type;
     std::vector<int64_t> card_subtype;
     std::vector<int64_t> energy_type;
+    std::vector<int64_t> energy_type_context;
     std::vector<uint8_t> energy_type_mask;
     std::vector<int64_t> max_hp;
     std::vector<uint8_t> max_hp_mask;
@@ -65,7 +67,8 @@ struct CardFeatures {
     InstructionsAndConditions instructions_and_conditions;
 };
 
-/// Embeds a batch of `ProtoBufCard` into shape [batch, dimension_out]. Layout and hyperparameters: ../doc/card_embedding_math.md.
+/// Embeds a batch of `ProtoBufCard` into shape [batch, dimension_out]. Layout and hyperparameters:
+/// ../doc/card_embedding_math.md.
 struct CardEmbeddingImpl : torch::nn::Module, SaveLoadMixin<CardEmbeddingImpl> {
     CardEmbeddingImpl(int64_t dimension_out, torch::Device device = torch::kCPU, torch::Dtype dtype = torch::kFloat);
 
@@ -75,6 +78,9 @@ struct CardEmbeddingImpl : torch::nn::Module, SaveLoadMixin<CardEmbeddingImpl> {
     int64_t dimension_out_;
     torch::Device device_;
     torch::Dtype dtype_;
+    torch::TensorOptions mask_tensor_options_;
+    torch::TensorOptions index_tensor_options_;
+    torch::TensorOptions float_tensor_options_;
     AbilityEmbedding ability_embedding_{nullptr};
     AttackEmbedding attack_embedding_{nullptr};
     NormalizedLinear retreat_cost_embedding_{nullptr};
@@ -101,14 +107,16 @@ struct CardEmbeddingImpl : torch::nn::Module, SaveLoadMixin<CardEmbeddingImpl> {
                                              InstructionsAndConditions& instructions_and_conditions, int card_index);
 
     std::pair<torch::Tensor, torch::Tensor> embed_card_features(const CardFeatures& card_features, int batch_size);
-    std::pair<torch::Tensor, torch::Tensor> embed_flattened_card_feature(
-        torch::nn::Embedding& embedding, const std::vector<int64_t>& flattened_card_feature,
-        const std::vector<int64_t>& card_indices, int batch_size);
+    std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> embed_energy_type_features(
+        const CardFeatures& card_features, int batch_size);
+    std::pair<torch::Tensor, torch::Tensor> combine_flat_embedded_card_feature(
+        const torch::Tensor& flat_embedded_feature, const std::vector<int64_t>& card_indices, int batch_size);
     std::pair<torch::Tensor, torch::Tensor> embed_instructions_and_conditions(
-        const InstructionsAndConditions& instructions_and_conditions, int batch_size);
+        const InstructionsAndConditions& instructions_and_conditions, const torch::Tensor& attack_energy_costs,
+        int batch_size);
     std::pair<torch::Tensor, torch::Tensor> embed_attacks(
         const std::pair<torch::Tensor, torch::Tensor>& embedded_instructions_pair,
-        const std::vector<int64_t>& instruction_attack_indices, const std::vector<int64_t>& energy_flat,
+        const std::vector<int64_t>& instruction_attack_indices, const torch::Tensor& attack_energy_costs,
         const std::vector<int64_t>& energy_slot_per_token,
         const std::vector<std::pair<int, int>>& instruction_card_parent_indices, int batch_size);
     std::pair<torch::Tensor, torch::Tensor> embed_ability(
