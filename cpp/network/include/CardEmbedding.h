@@ -43,6 +43,9 @@ struct InstructionsAndConditions {
     std::vector<int64_t> energy_slot_per_token;
 };
 
+struct AdjacencyMatrices {
+    torch::Tensor evolves_from_adjacency;
+};
 struct CardFeatures {
     std::vector<int64_t> card_type;
     std::vector<int64_t> card_subtype;
@@ -69,6 +72,7 @@ struct CardFeatures {
     std::vector<int64_t> flattened_attached_energies;
     std::vector<int64_t> attached_energy_card_indices;
 
+    AdjacencyMatrices adjacency_matrices;
     InstructionsAndConditions instructions_and_conditions;
 };
 
@@ -103,7 +107,7 @@ struct StagedTensors {
 struct CardEmbeddingImpl : torch::nn::Module, SaveLoadMixin<CardEmbeddingImpl> {
     CardEmbeddingImpl(int64_t dimension_out, torch::Device device = torch::kCPU, torch::Dtype dtype = torch::kFloat);
 
-    torch::Tensor forward(const std::vector<ProtoBufCard>& card_batch);
+    std::pair<torch::Tensor, AdjacencyMatrices> forward(const std::vector<ProtoBufCard>& card_batch);
 
    private:
     int64_t dimension_out_;

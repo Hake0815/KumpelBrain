@@ -5,11 +5,21 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <memory>
 #include <vector>
 
 #include "../include/AttentionUtils.h"
 
 namespace {
+
+std::shared_ptr<std::vector<int64_t>> get_batch_indices_from_map(
+    std::unordered_map<std::string, std::shared_ptr<std::vector<int64_t>>>& map, const std::string& key) {
+    auto& batch_indices = map[key];
+    if (!batch_indices) {
+        batch_indices = std::make_shared<std::vector<int64_t>>();
+    }
+    return batch_indices;
+}
 
 template <typename T>
 void append_proto_list(std::vector<T>& dst, const google::protobuf::RepeatedPtrField<T>& src) {
@@ -107,7 +117,7 @@ CardEmbeddingImpl::CardEmbeddingImpl(int64_t dimension_out, torch::Device device
     to(device, dtype);
 }
 
-torch::Tensor CardEmbeddingImpl::forward(const std::vector<ProtoBufCard>& card_batch) {
+std::pair<torch::Tensor, AdjacencyMatrices> CardEmbeddingImpl::forward(const std::vector<ProtoBufCard>& card_batch) {
     const int64_t batch_size = static_cast<int64_t>(card_batch.size());
     auto card_features = collect_card_features(card_batch);
     auto staged = stage_features(card_features);
@@ -117,7 +127,8 @@ torch::Tensor CardEmbeddingImpl::forward(const std::vector<ProtoBufCard>& card_b
 
     auto query =
         card_pooling_query_embedding_->weight.view({1, 1, dimension_out_}).expand({batch_size, 1, dimension_out_});
-    return attention_utils::masked_attention_pooling(card_pooling_multi_head_attention_, query, self_attended, mask);
+    return {attention_utils::masked_attention_pooling(card_pooling_multi_head_attention_, query, self_attended, mask),
+            card_features.adjacency_matrices};
 }
 
 void CardEmbeddingImpl::append_card_instructions_and_conditions(const std::vector<ProtoBufCard>& card_batch,
@@ -182,9 +193,28 @@ void CardEmbeddingImpl::append_card_instructions_and_conditions(const std::vecto
 CardFeatures CardEmbeddingImpl::collect_card_features(const std::vector<ProtoBufCard>& card_batch) {
     CardFeatures card_features;
     reserve_card_features(card_features, static_cast<int64_t>(card_batch.size()));
+    std::unordered_map<int64_t, std::shared_ptr<std::vector<int64_t>>> evolves_from_matrix;
+    std::unordered_map<std::string, std::shared_ptr<std::vector<int64_t>>> name_to_batch_index;
+    std::string player_prefix;
     for (int64_t card_index = 0; card_index < static_cast<int64_t>(card_batch.size()); ++card_index) {
-        append_card_instructions_and_conditions(card_batch, card_features.instructions_and_conditions, card_index);
         const auto& card = card_batch[static_cast<size_t>(card_index)];
+
+        if (card.deck_id() < 60) {
+            player_prefix = "player1_";
+        } else {
+            player_prefix = "player2_";
+        }
+        auto batch_indices_of_cards_with_same_name =
+            get_batch_indices_from_map(name_to_batch_index, player_prefix + card.name());
+        batch_indices_of_cards_with_same_name->push_back(card_index);
+
+        if (card.has_evolves_from()) {
+            const auto& pre_evolution = player_prefix + card.evolves_from();
+            auto batch_indices_of_pre_evolution = get_batch_indices_from_map(name_to_batch_index, pre_evolution);
+            evolves_from_matrix[card_index] = batch_indices_of_pre_evolution;
+        }
+
+        append_card_instructions_and_conditions(card_batch, card_features.instructions_and_conditions, card_index);
         card_features.card_type.push_back(static_cast<int64_t>(card.card_type()));
 
         card_features.card_subtype.push_back(static_cast<int64_t>(card.card_subtype()));
@@ -239,6 +269,24 @@ CardFeatures CardEmbeddingImpl::collect_card_features(const std::vector<ProtoBuf
         }
     }
 
+    const int64_t num_cards = static_cast<int64_t>(card_batch.size());
+    std::vector<int64_t> row_indices;
+    std::vector<int64_t> col_indices;
+    for (const auto& [card_index, pre_evolution_indices] : evolves_from_matrix) {
+        for (const int64_t pre_index : *pre_evolution_indices) {
+            row_indices.push_back(card_index);
+            col_indices.push_back(pre_index);
+        }
+    }
+    card_features.adjacency_matrices.evolves_from_adjacency =
+        torch::zeros({num_cards, num_cards}, torch::TensorOptions().dtype(dtype_).device(device_));
+    if (!row_indices.empty()) {
+        auto rows =
+            torch::from_blob(row_indices.data(), {static_cast<int64_t>(row_indices.size())}, torch::kInt64).clone();
+        auto cols =
+            torch::from_blob(col_indices.data(), {static_cast<int64_t>(col_indices.size())}, torch::kInt64).clone();
+        card_features.adjacency_matrices.evolves_from_adjacency.index_put_({rows, cols}, 1.0f);
+    }
     return card_features;
 }
 
