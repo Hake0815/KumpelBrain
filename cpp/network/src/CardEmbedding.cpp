@@ -1,5 +1,7 @@
 #include "../include/CardEmbedding.h"
 
+#include <ATen/ops/cat.h>
+#include <ATen/ops/repeat_interleave.h>
 #include <torch/csrc/autograd/generated/variable_factories.h>
 
 #include <algorithm>
@@ -288,9 +290,23 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> CardEmbeddingImpl::embed
         {card_features.energy_type, card_features.weakness, card_features.resistance,
          card_features.flattened_provided_energies, card_features.flattened_attached_energies,
          card_features.instructions_and_conditions.energy_flat});
+    auto energy_type_contexts = torch::cat(
+        {torch::tensor(card_features.energy_type_context, index_tensor_options_),
+         torch::repeat_interleave(
+             torch::tensor(
+                 {EnergyTypeContext::WEAKNESS, EnergyTypeContext::RESISTANCE, EnergyTypeContext::ENERGY_PROVIDED,
+                  EnergyTypeContext::ENERGY_ATTACHED, EnergyTypeContext::ATTACK_COST},
+                 index_tensor_options_),
+             torch::tensor({static_cast<int64_t>(card_features.weakness.size()),
+                            static_cast<int64_t>(card_features.resistance.size()),
+                            static_cast<int64_t>(card_features.flattened_provided_energies.size()),
+                            static_cast<int64_t>(card_features.flattened_attached_energies.size()),
+                            static_cast<int64_t>(card_features.instructions_and_conditions.energy_flat.size())},
+                           index_tensor_options_))});
 
     auto energy_type_indices = torch::tensor(flat_energy_type_features, index_tensor_options_);
-    auto embedded_energy_types = shared_embedding_holder_->energy_type_embedding_(energy_type_indices);
+    auto embedded_energy_types =
+        shared_embedding_holder_->energy_type_embedding_->forward(energy_type_indices, energy_type_contexts);
 
     int64_t current_offset = 0;
 

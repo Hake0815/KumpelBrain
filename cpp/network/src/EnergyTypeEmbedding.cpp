@@ -1,6 +1,6 @@
 #include "../include/EnergyTypeEmbedding.h"
 
-#include <ATen/ops/full_like.h>
+#include <cstdint>
 
 EnergyTypeEmbeddingImpl::EnergyTypeEmbeddingImpl(int64_t dimension_out, torch::Device device, torch::Dtype dtype)
     : dimension_out_(dimension_out), device_(device), dtype_(dtype) {
@@ -10,13 +10,7 @@ EnergyTypeEmbeddingImpl::EnergyTypeEmbeddingImpl(int64_t dimension_out, torch::D
     to(device, dtype);
 }
 
-torch::Tensor EnergyTypeEmbeddingImpl::forward(const std::vector<int64_t>& energy_type_batch,
-                                               const EnergyTypeContext& energy_type_context) {
-    const auto index_options = torch::TensorOptions().device(device_).dtype(torch::kLong);
-
-    auto energy_type_batch_tensor = torch::tensor(energy_type_batch, index_options);
-    auto energy_type_context_tensor =
-        torch::full_like(energy_type_batch_tensor, static_cast<int64_t>(energy_type_context), index_options);
-
-    return energy_type_embedding_(energy_type_batch_tensor) + context_embedding_(energy_type_context_tensor);
+torch::Tensor EnergyTypeEmbeddingImpl::forward(const torch::Tensor& energy_type_batch,
+                                               const torch::Tensor& energy_type_contexts) {
+    return energy_type_embedding_(energy_type_batch) + context_embedding_(energy_type_contexts);
 }

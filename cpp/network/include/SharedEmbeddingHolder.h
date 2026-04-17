@@ -20,9 +20,7 @@ struct SharedEmbeddingHolderImpl : torch::nn::Module, SaveLoadMixin<SharedEmbedd
     torch::nn::Embedding player_target_embedding_{nullptr};
     PositionalEmbedding position_embedding_{nullptr};
     NormalizedLinear damage_embedding_{nullptr};
-    torch::nn::Embedding energy_type_embedding_{nullptr};
-
-    // EnergyTypeEmbedding energy_type_embedding_{nullptr};
+    EnergyTypeEmbedding energy_type_embedding_{nullptr};
 };
 
 TORCH_MODULE(SharedEmbeddingHolder);
