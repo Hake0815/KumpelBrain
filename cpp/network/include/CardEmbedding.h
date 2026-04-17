@@ -47,6 +47,9 @@ struct AdjacencyMatrices {
     /// Sparse COO float tensor of shape [num_cards, num_cards]; nonzero at (child, parent) when child evolves from
     /// parent name in the same player's deck.
     torch::Tensor evolves_from_adjacency;
+    /// Sparse COO float tensor of shape [num_cards, num_cards]; nonzero at (host, energy_batch_index) when the host
+    /// lists that energy card's deck_id in attached_energy_cards (resolved after one pass over the batch).
+    torch::Tensor attached_energy_adjacency;
 };
 struct CardFeatures {
     std::vector<int64_t> card_type;

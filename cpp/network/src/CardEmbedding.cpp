@@ -35,6 +35,26 @@ void append_values(std::vector<T>& dst, const std::vector<T>& src) {
     dst.insert(dst.end(), src.begin(), src.end());
 }
 
+torch::Tensor sparse_adjacency_from_row_col(std::vector<int64_t>& row_indices, std::vector<int64_t>& col_indices,
+                                            int64_t num_cards, torch::Dtype dtype, torch::Device device) {
+    torch::Tensor indices_cpu;
+    torch::Tensor values_cpu;
+    if (row_indices.empty()) {
+        indices_cpu = torch::empty({2, 0}, torch::TensorOptions().dtype(torch::kInt64));
+        values_cpu = torch::empty({0}, torch::TensorOptions().dtype(dtype));
+    } else {
+        const int64_t nnz = static_cast<int64_t>(row_indices.size());
+        auto rows = torch::from_blob(row_indices.data(), {nnz}, torch::kInt64).clone();
+        auto cols = torch::from_blob(col_indices.data(), {nnz}, torch::kInt64).clone();
+        indices_cpu = torch::stack({rows, cols}, 0);
+        values_cpu = torch::ones({nnz}, torch::TensorOptions().dtype(dtype));
+    }
+    return torch::sparse_coo_tensor(indices_cpu, values_cpu, {num_cards, num_cards},
+                                    torch::TensorOptions().dtype(dtype).device(torch::kCPU))
+        .coalesce()
+        .to(device);
+}
+
 void reserve_card_features(CardFeatures& f, int64_t batch_size) {
     const auto n = static_cast<size_t>(batch_size);
     f.card_type.reserve(n);
@@ -199,6 +219,7 @@ CardFeatures CardEmbeddingImpl::collect_card_features(const std::vector<ProtoBuf
     std::string player_prefix;
 
     std::unordered_map<int64_t, std::vector<std::shared_ptr<int64_t>>> attached_energy_cards_matrix;
+    /// Last batch index seen for each deck_id; assumes at most one card per deck_id in the batch.
     std::unordered_map<int64_t, std::shared_ptr<int64_t>> deck_id_to_card_index;
 
     for (int64_t card_index = 0; card_index < static_cast<int64_t>(card_batch.size()); ++card_index) {
@@ -228,7 +249,8 @@ CardFeatures CardEmbeddingImpl::collect_card_features(const std::vector<ProtoBuf
 
         if (card.attached_energy_cards_size() > 0) {
             for (const auto& attached_energy_card : card.attached_energy_cards()) {
-                auto& batch_index_of_attached_energy_card = deck_id_to_card_index[attached_energy_card];
+                const int64_t energy_deck_id = static_cast<int64_t>(attached_energy_card);
+                auto& batch_index_of_attached_energy_card = deck_id_to_card_index[energy_deck_id];
                 if (!batch_index_of_attached_energy_card) {
                     batch_index_of_attached_energy_card = std::make_shared<int64_t>(-1);
                 }
@@ -303,23 +325,31 @@ CardFeatures CardEmbeddingImpl::collect_card_features(const std::vector<ProtoBuf
         }
     }
 
-    torch::Tensor indices_cpu;
-    torch::Tensor values_cpu;
-    if (evolves_from_row_indices.empty()) {
-        indices_cpu = torch::empty({2, 0}, torch::TensorOptions().dtype(torch::kInt64));
-        values_cpu = torch::empty({0}, torch::TensorOptions().dtype(dtype_));
-    } else {
-        const int64_t nnz = static_cast<int64_t>(evolves_from_row_indices.size());
-        auto rows = torch::from_blob(evolves_from_row_indices.data(), {nnz}, torch::kInt64).clone();
-        auto cols = torch::from_blob(evolves_from_col_indices.data(), {nnz}, torch::kInt64).clone();
-        indices_cpu = torch::stack({rows, cols}, 0);
-        values_cpu = torch::ones({nnz}, torch::TensorOptions().dtype(dtype_));
-    }
     card_features.adjacency_matrices.evolves_from_adjacency =
-        torch::sparse_coo_tensor(indices_cpu, values_cpu, {num_cards, num_cards},
-                                 torch::TensorOptions().dtype(dtype_).device(torch::kCPU))
-            .coalesce()
-            .to(device_);
+        sparse_adjacency_from_row_col(evolves_from_row_indices, evolves_from_col_indices, num_cards, dtype_, device_);
+
+    std::vector<int64_t> attached_row_indices;
+    std::vector<int64_t> attached_col_indices;
+    size_t attached_reserve = 0;
+    for (const auto& entry : attached_energy_cards_matrix) {
+        attached_reserve += entry.second.size();
+    }
+    attached_row_indices.reserve(attached_reserve);
+    attached_col_indices.reserve(attached_reserve);
+    for (const auto& [host_index, energy_index_ptrs] : attached_energy_cards_matrix) {
+        for (const auto& energy_batch_index_ptr : energy_index_ptrs) {
+            if (!energy_batch_index_ptr) {
+                continue;
+            }
+            const int64_t col = *energy_batch_index_ptr;
+            if (col >= 0) {
+                attached_row_indices.push_back(host_index);
+                attached_col_indices.push_back(col);
+            }
+        }
+    }
+    card_features.adjacency_matrices.attached_energy_adjacency =
+        sparse_adjacency_from_row_col(attached_row_indices, attached_col_indices, num_cards, dtype_, device_);
     return card_features;
 }
 

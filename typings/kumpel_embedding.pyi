@@ -5,8 +5,12 @@ import torch._C.cpp.nn
 import typing
 __all__: list[str] = ['AdjacencyMatrices', 'AttackDataEmbedding', 'CardAmountDataEmbedding', 'CardEmbedding', 'ConditionEmbedding', 'DiscardDataEmbedding', 'FilterConditionEmbedding', 'FilterEmbedding', 'InstructionDataEmbedding', 'InstructionEmbedding', 'MultiHeadAttention', 'NormalizedLinear', 'PlayerTargetDataEmbedding', 'PositionalEmbedding', 'ReturnToDeckTypeDataEmbedding', 'SharedEmbeddingHolder', 'nesting_flatten_filter', 'nesting_reduce', 'nesting_traverse_filter']
 class AdjacencyMatrices:
-    evolves_from_adjacency: torch.Tensor
-
+    @property
+    def attached_energy_adjacency(self) -> torch.Tensor:
+        ...
+    @property
+    def evolves_from_adjacency(self) -> torch.Tensor:
+        ...
 class AttackDataEmbedding(torch._C.cpp.nn.Module):
     def __init__(self, shared_embedding_holder: SharedEmbeddingHolder, dimension_out: typing.SupportsInt | typing.SupportsIndex, device: torch.device = ..., dtype: torch.dtype = ...) -> None:
         ...
