@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <memory>
+#include <unordered_map>
 #include <vector>
 
 #include "../include/AttentionUtils.h"
@@ -196,6 +197,10 @@ CardFeatures CardEmbeddingImpl::collect_card_features(const std::vector<ProtoBuf
     std::unordered_map<int64_t, std::shared_ptr<std::vector<int64_t>>> evolves_from_matrix;
     std::unordered_map<std::string, std::shared_ptr<std::vector<int64_t>>> name_to_batch_index;
     std::string player_prefix;
+
+    std::unordered_map<int64_t, std::vector<std::shared_ptr<int64_t>>> attached_energy_cards_matrix;
+    std::unordered_map<int64_t, std::shared_ptr<int64_t>> deck_id_to_card_index;
+
     for (int64_t card_index = 0; card_index < static_cast<int64_t>(card_batch.size()); ++card_index) {
         const auto& card = card_batch[static_cast<size_t>(card_index)];
 
@@ -208,10 +213,27 @@ CardFeatures CardEmbeddingImpl::collect_card_features(const std::vector<ProtoBuf
             get_batch_indices_from_map(name_to_batch_index, player_prefix + card.name());
         batch_indices_of_cards_with_same_name->push_back(card_index);
 
+        auto& ptr = deck_id_to_card_index[card.deck_id()];
+        if (!ptr) {
+            ptr = std::make_shared<int64_t>(card_index);
+        } else {
+            *ptr = card_index;
+        }
+
         if (card.has_evolves_from()) {
             const auto& pre_evolution = player_prefix + card.evolves_from();
             auto batch_indices_of_pre_evolution = get_batch_indices_from_map(name_to_batch_index, pre_evolution);
             evolves_from_matrix[card_index] = batch_indices_of_pre_evolution;
+        }
+
+        if (card.attached_energy_cards_size() > 0) {
+            for (const auto& attached_energy_card : card.attached_energy_cards()) {
+                auto& batch_index_of_attached_energy_card = deck_id_to_card_index[attached_energy_card];
+                if (!batch_index_of_attached_energy_card) {
+                    batch_index_of_attached_energy_card = std::make_shared<int64_t>(-1);
+                }
+                attached_energy_cards_matrix[card_index].push_back(batch_index_of_attached_energy_card);
+            }
         }
 
         append_card_instructions_and_conditions(card_batch, card_features.instructions_and_conditions, card_index);
@@ -270,23 +292,34 @@ CardFeatures CardEmbeddingImpl::collect_card_features(const std::vector<ProtoBuf
     }
 
     const int64_t num_cards = static_cast<int64_t>(card_batch.size());
-    std::vector<int64_t> row_indices;
-    std::vector<int64_t> col_indices;
+    std::vector<int64_t> evolves_from_row_indices;
+    std::vector<int64_t> evolves_from_col_indices;
+    evolves_from_row_indices.reserve(evolves_from_matrix.size());
+    evolves_from_col_indices.reserve(evolves_from_matrix.size());
     for (const auto& [card_index, pre_evolution_indices] : evolves_from_matrix) {
         for (const int64_t pre_index : *pre_evolution_indices) {
-            row_indices.push_back(card_index);
-            col_indices.push_back(pre_index);
+            evolves_from_row_indices.push_back(card_index);
+            evolves_from_col_indices.push_back(pre_index);
         }
     }
-    card_features.adjacency_matrices.evolves_from_adjacency =
-        torch::zeros({num_cards, num_cards}, torch::TensorOptions().dtype(dtype_).device(device_));
-    if (!row_indices.empty()) {
-        auto rows =
-            torch::from_blob(row_indices.data(), {static_cast<int64_t>(row_indices.size())}, torch::kInt64).clone();
-        auto cols =
-            torch::from_blob(col_indices.data(), {static_cast<int64_t>(col_indices.size())}, torch::kInt64).clone();
-        card_features.adjacency_matrices.evolves_from_adjacency.index_put_({rows, cols}, 1.0f);
+
+    torch::Tensor indices_cpu;
+    torch::Tensor values_cpu;
+    if (evolves_from_row_indices.empty()) {
+        indices_cpu = torch::empty({2, 0}, torch::TensorOptions().dtype(torch::kInt64));
+        values_cpu = torch::empty({0}, torch::TensorOptions().dtype(dtype_));
+    } else {
+        const int64_t nnz = static_cast<int64_t>(evolves_from_row_indices.size());
+        auto rows = torch::from_blob(evolves_from_row_indices.data(), {nnz}, torch::kInt64).clone();
+        auto cols = torch::from_blob(evolves_from_col_indices.data(), {nnz}, torch::kInt64).clone();
+        indices_cpu = torch::stack({rows, cols}, 0);
+        values_cpu = torch::ones({nnz}, torch::TensorOptions().dtype(dtype_));
     }
+    card_features.adjacency_matrices.evolves_from_adjacency =
+        torch::sparse_coo_tensor(indices_cpu, values_cpu, {num_cards, num_cards},
+                                 torch::TensorOptions().dtype(dtype_).device(torch::kCPU))
+            .coalesce()
+            .to(device_);
     return card_features;
 }
 

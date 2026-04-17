@@ -1,6 +1,6 @@
 """Serialized ProtoBufCard batches mirroring cpp/network/benchmark_main.cpp card builders.
 
-Used by golden tests for kumpel_embedding.CardEmbedding.forward.
+Used by golden tests for kumpel_embedding.CardEmbedding.forward (returns embedding and AdjacencyMatrices).
 """
 
 from __future__ import annotations

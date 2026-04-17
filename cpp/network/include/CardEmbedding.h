@@ -44,6 +44,8 @@ struct InstructionsAndConditions {
 };
 
 struct AdjacencyMatrices {
+    /// Sparse COO float tensor of shape [num_cards, num_cards]; nonzero at (child, parent) when child evolves from
+    /// parent name in the same player's deck.
     torch::Tensor evolves_from_adjacency;
 };
 struct CardFeatures {
