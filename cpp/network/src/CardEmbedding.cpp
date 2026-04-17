@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "../include/AttentionUtils.h"
+#include "../include/SharedConstants.h"
 
 namespace {
 
@@ -225,7 +226,7 @@ CardFeatures CardEmbeddingImpl::collect_card_features(const std::vector<ProtoBuf
     for (int64_t card_index = 0; card_index < static_cast<int64_t>(card_batch.size()); ++card_index) {
         const auto& card = card_batch[static_cast<size_t>(card_index)];
 
-        if (card.deck_id() < 60) {
+        if (card.deck_id() < DECK_SIZE) {
             player_prefix = "player1_";
         } else {
             player_prefix = "player2_";
