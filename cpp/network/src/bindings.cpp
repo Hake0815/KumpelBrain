@@ -271,12 +271,16 @@ PYBIND11_MODULE(kumpel_embedding, m) {
              })
         .def("save_weights", &ConditionEmbeddingImpl::save_weights)
         .def("load_weights", &ConditionEmbeddingImpl::load_weights);
+    pybind11::class_<AdjacencyMatrices>(m, "AdjacencyMatrices")
+        .def_readonly("evolves_from_adjacency", &AdjacencyMatrices::evolves_from_adjacency)
+        .def_readonly("attached_energy_adjacency", &AdjacencyMatrices::attached_energy_adjacency);
     pybind11::class_<CardEmbeddingImpl, torch::nn::Module, std::shared_ptr<CardEmbeddingImpl>>(m, "CardEmbedding")
         .def(pybind11::init<int64_t, torch::Device, torch::Dtype>(), pybind11::arg("dimension_out"),
              pybind11::arg("device") = torch::Device(torch::kCPU), pybind11::arg("dtype") = torch::Dtype(torch::kFloat))
         .def("forward",
              [](CardEmbeddingImpl& self, const pybind11::iterable& cards) {
-                 return self.forward(parse_card_batch_serialized(cards));
+                 auto [embedding, adjacency] = self.forward(parse_card_batch_serialized(cards));
+                 return pybind11::make_tuple(embedding, adjacency);
              })
         .def("save_weights", &CardEmbeddingImpl::save_weights)
         .def("load_weights", &CardEmbeddingImpl::load_weights);

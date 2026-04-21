@@ -8,7 +8,7 @@ from game_logic_wrappers.interaction_wrapper import InteractionWrapper
 
 class GamePlayer:
     game_controller: GameControllerWrapper
-    game_uuid: uuid
+    game_uuid: uuid.UUID
 
     def __init__(
         self,
@@ -16,7 +16,7 @@ class GamePlayer:
         deck_list2: dict[str, int],
         player1_name: str,
         player2_name: str,
-        game_uuid: uuid,
+        game_uuid: uuid.UUID,
         callback_on_game_end: Callable[[str], None],
         enable_file_logging: bool = False,
     ):

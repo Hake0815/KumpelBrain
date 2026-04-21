@@ -493,7 +493,7 @@ bool tensor_device_matches_module(const torch::Tensor& tensor, const torch::Devi
 void verify_card_embedding_output_shape(CardEmbeddingImpl& card_embedding, const torch::Device& device,
                                         int64_t dimension_out, const std::string& label) {
     auto check = [&](const std::vector<serialization::ProtoBufCard>& cards, const char* case_name) {
-        auto out = card_embedding.forward(cards);
+        auto [out, adj] = card_embedding.forward(cards);
         const int64_t n = static_cast<int64_t>(cards.size());
         if (out.dim() != 2 || out.size(0) != n || out.size(1) != dimension_out) {
             std::cerr << label << " CardEmbedding::forward shape check failed [" << case_name << "]: expected (" << n
@@ -510,7 +510,39 @@ void verify_card_embedding_output_shape(CardEmbeddingImpl& card_embedding, const
                       << static_cast<int>(device.type()) << "," << device.index() << ")\n";
             std::abort();
         }
-        benchmark_sink += out.numel();
+        const auto& sparse = adj.evolves_from_adjacency;
+        if (!sparse.is_sparse()) {
+            std::cerr << label << " CardEmbedding::forward evolves_from_adjacency must be sparse COO [" << case_name
+                      << "]\n";
+            std::abort();
+        }
+        if (sparse.size(0) != n || sparse.size(1) != n) {
+            std::cerr << label << " CardEmbedding::forward sparse adjacency shape failed [" << case_name
+                      << "]: expected (" << n << ", " << n << ")\n";
+            std::abort();
+        }
+        if (!tensor_device_matches_module(sparse, device)) {
+            std::cerr << label << " CardEmbedding::forward sparse adjacency device mismatch [" << case_name << "]\n";
+            std::abort();
+        }
+        const auto& attached_sparse = adj.attached_energy_adjacency;
+        if (!attached_sparse.is_sparse()) {
+            std::cerr << label << " CardEmbedding::forward attached_energy_adjacency must be sparse COO [" << case_name
+                      << "]\n";
+            std::abort();
+        }
+        if (attached_sparse.size(0) != n || attached_sparse.size(1) != n) {
+            std::cerr << label << " CardEmbedding::forward attached_energy sparse shape failed [" << case_name
+                      << "]: expected (" << n << ", " << n << ")\n";
+            std::abort();
+        }
+        if (!tensor_device_matches_module(attached_sparse, device)) {
+            std::cerr << label << " CardEmbedding::forward attached_energy_adjacency device mismatch [" << case_name
+                      << "]\n";
+            std::abort();
+        }
+        benchmark_sink +=
+            out.numel() + sparse.values().size(0) + attached_sparse.values().size(0);
     };
 
     for (int v = 0; v < 12; ++v) {
@@ -660,20 +692,23 @@ void run_embedding_benchmarks(const torch::Device& device, const std::string& la
 
     auto cards_large = build_card_batch(instruction_batch_size);
     benchmark_ms(label + " card_embedding_forward_256", device, warmup_runs, measured_runs, [&]() {
-        auto out = card_embedding->forward(cards_large);
-        benchmark_sink += out.numel();
+        auto [out, adj] = card_embedding->forward(cards_large);
+        benchmark_sink += out.numel() + adj.evolves_from_adjacency.values().size(0) +
+                          adj.attached_energy_adjacency.values().size(0);
     });
 
     auto cards_32 = build_card_batch(32);
     benchmark_ms(label + " card_embedding_forward_32", device, warmup_runs, measured_runs, [&]() {
-        auto out = card_embedding->forward(cards_32);
-        benchmark_sink += out.numel();
+        auto [out, adj] = card_embedding->forward(cards_32);
+        benchmark_sink += out.numel() + adj.evolves_from_adjacency.values().size(0) +
+                          adj.attached_energy_adjacency.values().size(0);
     });
 
     auto cards_128 = build_card_batch(128);
     benchmark_ms(label + " card_embedding_forward_128", device, warmup_runs, measured_runs, [&]() {
-        auto out = card_embedding->forward(cards_128);
-        benchmark_sink += out.numel();
+        auto [out, adj] = card_embedding->forward(cards_128);
+        benchmark_sink += out.numel() + adj.evolves_from_adjacency.values().size(0) +
+                          adj.attached_energy_adjacency.values().size(0);
     });
 
     std::vector<serialization::ProtoBufCard> cards_homogeneous;
@@ -682,8 +717,9 @@ void run_embedding_benchmarks(const torch::Device& device, const std::string& la
         cards_homogeneous.push_back(make_card_for_variant(4, i));
     }
     benchmark_ms(label + " card_embedding_forward_256_all_variant4", device, warmup_runs, measured_runs, [&]() {
-        auto out = card_embedding->forward(cards_homogeneous);
-        benchmark_sink += out.numel();
+        auto [out, adj] = card_embedding->forward(cards_homogeneous);
+        benchmark_sink += out.numel() + adj.evolves_from_adjacency.values().size(0) +
+                          adj.attached_energy_adjacency.values().size(0);
     });
 }
 

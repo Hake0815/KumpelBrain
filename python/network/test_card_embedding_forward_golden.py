@@ -98,7 +98,7 @@ def test_card_embedding_forward_golden_case(
         )
         model.eval()
         with torch.inference_mode():
-            actual = model.forward(cards)
+            actual, _adjacency = model.forward(cards)
         if device.type == "cuda":
             torch.cuda.synchronize()
 
