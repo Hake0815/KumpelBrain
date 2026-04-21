@@ -69,9 +69,21 @@ def test_cpp_condition_embedding_one_empty_group_cpu():
     assert mask.shape == (1, 0)
 
 
+def test_cpp_card_state_embedding_empty_batch_cpu():
+    dim = 32
+    device = torch.device("cpu")
+    model = kumpel_embedding.CardStateEmbedding(dim, device=device)
+    model.eval()
+    with torch.inference_mode():
+        out = model.forward([])
+    assert out.shape == (0, dim)
+    assert out.device.type == device.type
+
+
 if __name__ == "__main__":
     test_cpp_instruction_embedding_zero_groups_cpu()
     test_cpp_instruction_embedding_one_empty_group_cpu()
     test_cpp_condition_embedding_zero_groups_cpu()
     test_cpp_condition_embedding_one_empty_group_cpu()
+    test_cpp_card_state_embedding_empty_batch_cpu()
     print("test_empty_embedding_batches_cpp: ok")

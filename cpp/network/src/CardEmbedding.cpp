@@ -56,6 +56,32 @@ torch::Tensor sparse_adjacency_from_row_col(std::vector<int64_t>& row_indices, s
         .to(device);
 }
 
+torch::Tensor adjacency_from_ptr_map(
+    const std::unordered_map<int64_t, std::vector<std::shared_ptr<int64_t>>>& ptr_map, int64_t num_cards,
+    torch::Dtype dtype, torch::Device device) {
+    std::vector<int64_t> row_indices;
+    std::vector<int64_t> col_indices;
+    size_t reserve = 0;
+    for (const auto& entry : ptr_map) {
+        reserve += entry.second.size();
+    }
+    row_indices.reserve(reserve);
+    col_indices.reserve(reserve);
+    for (const auto& [host_index, index_ptrs] : ptr_map) {
+        for (const auto& batch_index_ptr : index_ptrs) {
+            if (!batch_index_ptr) {
+                continue;
+            }
+            const int64_t col = *batch_index_ptr;
+            if (col >= 0) {
+                row_indices.push_back(host_index);
+                col_indices.push_back(col);
+            }
+        }
+    }
+    return sparse_adjacency_from_row_col(row_indices, col_indices, num_cards, dtype, device);
+}
+
 void reserve_card_features(CardFeatures& f, int64_t batch_size) {
     const auto n = static_cast<size_t>(batch_size);
     f.card_type.reserve(n);
@@ -220,6 +246,7 @@ CardFeatures CardEmbeddingImpl::collect_card_features(const std::vector<ProtoBuf
     std::string player_prefix;
 
     std::unordered_map<int64_t, std::vector<std::shared_ptr<int64_t>>> attached_energy_cards_matrix;
+    std::unordered_map<int64_t, std::vector<std::shared_ptr<int64_t>>> pre_evolutions_matrix;
     /// Last batch index seen for each deck_id; assumes at most one card per deck_id in the batch.
     std::unordered_map<int64_t, std::shared_ptr<int64_t>> deck_id_to_card_index;
 
@@ -249,13 +276,22 @@ CardFeatures CardEmbeddingImpl::collect_card_features(const std::vector<ProtoBuf
         }
 
         if (card.attached_energy_cards_size() > 0) {
-            for (const auto& attached_energy_card : card.attached_energy_cards()) {
-                const int64_t energy_deck_id = static_cast<int64_t>(attached_energy_card);
+            for (const auto energy_deck_id : card.attached_energy_cards()) {
                 auto& batch_index_of_attached_energy_card = deck_id_to_card_index[energy_deck_id];
                 if (!batch_index_of_attached_energy_card) {
                     batch_index_of_attached_energy_card = std::make_shared<int64_t>(-1);
                 }
                 attached_energy_cards_matrix[card_index].push_back(batch_index_of_attached_energy_card);
+            }
+        }
+
+        if (card.pre_evolution_ids_size() > 0) {
+            for (const auto pre_evolution_deck_id : card.pre_evolution_ids()) {
+                auto& batch_index_of_pre_evolution = deck_id_to_card_index[pre_evolution_deck_id];
+                if (!batch_index_of_pre_evolution) {
+                    batch_index_of_pre_evolution = std::make_shared<int64_t>(-1);
+                }
+                pre_evolutions_matrix[card_index].push_back(batch_index_of_pre_evolution);
             }
         }
 
@@ -329,28 +365,10 @@ CardFeatures CardEmbeddingImpl::collect_card_features(const std::vector<ProtoBuf
     card_features.adjacency_matrices.evolves_from_adjacency =
         sparse_adjacency_from_row_col(evolves_from_row_indices, evolves_from_col_indices, num_cards, dtype_, device_);
 
-    std::vector<int64_t> attached_row_indices;
-    std::vector<int64_t> attached_col_indices;
-    size_t attached_reserve = 0;
-    for (const auto& entry : attached_energy_cards_matrix) {
-        attached_reserve += entry.second.size();
-    }
-    attached_row_indices.reserve(attached_reserve);
-    attached_col_indices.reserve(attached_reserve);
-    for (const auto& [host_index, energy_index_ptrs] : attached_energy_cards_matrix) {
-        for (const auto& energy_batch_index_ptr : energy_index_ptrs) {
-            if (!energy_batch_index_ptr) {
-                continue;
-            }
-            const int64_t col = *energy_batch_index_ptr;
-            if (col >= 0) {
-                attached_row_indices.push_back(host_index);
-                attached_col_indices.push_back(col);
-            }
-        }
-    }
     card_features.adjacency_matrices.attached_energy_adjacency =
-        sparse_adjacency_from_row_col(attached_row_indices, attached_col_indices, num_cards, dtype_, device_);
+        adjacency_from_ptr_map(attached_energy_cards_matrix, num_cards, dtype_, device_);
+    card_features.adjacency_matrices.pre_evolutions_adjacency =
+        adjacency_from_ptr_map(pre_evolutions_matrix, num_cards, dtype_, device_);
     return card_features;
 }
 

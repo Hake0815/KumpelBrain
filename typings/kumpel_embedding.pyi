@@ -3,13 +3,16 @@ import collections.abc
 import torch
 import torch._C.cpp.nn
 import typing
-__all__: list[str] = ['AdjacencyMatrices', 'AttackDataEmbedding', 'CardAmountDataEmbedding', 'CardEmbedding', 'ConditionEmbedding', 'DiscardDataEmbedding', 'FilterConditionEmbedding', 'FilterEmbedding', 'InstructionDataEmbedding', 'InstructionEmbedding', 'MultiHeadAttention', 'NormalizedLinear', 'PlayerTargetDataEmbedding', 'PositionalEmbedding', 'ReturnToDeckTypeDataEmbedding', 'SharedEmbeddingHolder', 'nesting_flatten_filter', 'nesting_reduce', 'nesting_traverse_filter']
+__all__: list[str] = ['AdjacencyMatrices', 'AttackDataEmbedding', 'CardAmountDataEmbedding', 'CardEmbedding', 'CardStateEmbedding', 'ConditionEmbedding', 'DiscardDataEmbedding', 'FilterConditionEmbedding', 'FilterEmbedding', 'InstructionDataEmbedding', 'InstructionEmbedding', 'MultiHeadAttention', 'NormalizedLinear', 'PlayerTargetDataEmbedding', 'PositionalEmbedding', 'ReturnToDeckTypeDataEmbedding', 'SharedEmbeddingHolder', 'nesting_flatten_filter', 'nesting_reduce', 'nesting_traverse_filter']
 class AdjacencyMatrices:
     @property
     def attached_energy_adjacency(self) -> torch.Tensor:
         ...
     @property
     def evolves_from_adjacency(self) -> torch.Tensor:
+        ...
+    @property
+    def pre_evolutions_adjacency(self) -> torch.Tensor:
         ...
 class AttackDataEmbedding(torch._C.cpp.nn.Module):
     def __init__(self, shared_embedding_holder: SharedEmbeddingHolder, dimension_out: typing.SupportsInt | typing.SupportsIndex, device: torch.device = ..., dtype: torch.dtype = ...) -> None:
@@ -33,6 +36,15 @@ class CardEmbedding(torch._C.cpp.nn.Module):
     def __init__(self, dimension_out: typing.SupportsInt | typing.SupportsIndex, device: torch.device = ..., dtype: torch.dtype = ...) -> None:
         ...
     def forward(self, arg0: collections.abc.Iterable) -> tuple[torch.Tensor, AdjacencyMatrices]:
+        ...
+    def load_weights(self, arg0: str) -> None:
+        ...
+    def save_weights(self, arg0: str) -> None:
+        ...
+class CardStateEmbedding(torch._C.cpp.nn.Module):
+    def __init__(self, dimension_out: typing.SupportsInt | typing.SupportsIndex, device: torch.device = ..., dtype: torch.dtype = ...) -> None:
+        ...
+    def forward(self, arg0: collections.abc.Iterable) -> torch.Tensor:
         ...
     def load_weights(self, arg0: str) -> None:
         ...

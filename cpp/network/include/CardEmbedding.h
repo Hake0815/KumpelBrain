@@ -50,6 +50,9 @@ struct AdjacencyMatrices {
     /// Sparse COO float tensor of shape [num_cards, num_cards]; nonzero at (host, energy_batch_index) when the host
     /// lists that energy card's deck_id in attached_energy_cards (resolved after one pass over the batch).
     torch::Tensor attached_energy_adjacency;
+    /// Sparse COO float tensor of shape [num_cards, num_cards]; nonzero at (host, pre_evolution_batch_index) when the
+    /// host lists that pre-evolution card's deck_id in pre_evolution_ids (resolved after one pass over the batch).
+    torch::Tensor pre_evolutions_adjacency;
 };
 struct CardFeatures {
     std::vector<int64_t> card_type;
@@ -107,8 +110,7 @@ struct StagedTensors {
     torch::Tensor current_damage_mask;
 };
 
-/// Embeds a batch of `ProtoBufCard` into shape [batch, dimension_out]. Layout and hyperparameters:
-/// ../doc/card_embedding_math.md.
+/// Embeds a batch of `ProtoBufCard` into shape [batch, dimension_out].
 struct CardEmbeddingImpl : torch::nn::Module, SaveLoadMixin<CardEmbeddingImpl> {
     CardEmbeddingImpl(int64_t dimension_out, torch::Device device = torch::kCPU, torch::Dtype dtype = torch::kFloat);
 
