@@ -4,6 +4,7 @@
 #include <torch/torch.h>
 
 #include "network/include/CardEmbedding.h"
+#include "network/include/CardPositionEmbedding.h"
 
 using ProtoBufCardState = gamecore::serialization::ProtoBufCardState;
 
@@ -19,6 +20,7 @@ struct CardStateEmbeddingImpl : torch::nn::Module, SaveLoadMixin<CardStateEmbedd
     torch::Device device_;
     torch::Dtype dtype_;
     CardEmbedding card_embedding_{nullptr};
+    CardPositionEmbedding position_embedding_{nullptr};
     torch::nn::Linear self_loop_weights_{nullptr};
     torch::nn::Linear evolves_from_weights_{nullptr};
     torch::nn::Linear evolves_into_weights_{nullptr};

@@ -11,7 +11,7 @@
 #include <string>
 #include <vector>
 
-#include "../network/include/CardEmbedding.h"
+#include "../network/include/CardStateEmbedding.h"
 #include "../network/include/ConditionEmbedding.h"
 #include "../network/include/InstructionDataEmbedding.h"
 #include "../network/include/InstructionEmbedding.h"
@@ -450,6 +450,41 @@ std::vector<serialization::ProtoBufCard> build_card_batch(int64_t batch_size) {
     return cards;
 }
 
+serialization::ProtoBufCardState card_state_from_card(const serialization::ProtoBufCard& card) {
+    serialization::ProtoBufCardState state;
+    *state.mutable_card() = card;
+    return state;
+}
+
+std::vector<serialization::ProtoBufCardState> card_states_from_cards(
+    const std::vector<serialization::ProtoBufCard>& cards) {
+    std::vector<serialization::ProtoBufCardState> out;
+    out.reserve(cards.size());
+    for (const auto& c : cards) {
+        out.push_back(card_state_from_card(c));
+    }
+    return out;
+}
+
+void apply_benchmark_position(serialization::ProtoBufCardState& state, int64_t index) {
+    auto* pos = state.mutable_position();
+    pos->set_owner(static_cast<serialization::ProtoBufOwner>(index % 2));
+    pos->set_opponent_position_knowledge(
+        static_cast<serialization::ProtoBufPositionKnowledge>(index % 3));
+    pos->set_top_deck_position_index(static_cast<int32_t>(index % 60));
+    pos->clear_possible_positions();
+    const int n_pos = 1 + static_cast<int>(index % 4);
+    for (int j = 0; j < n_pos; ++j) {
+        pos->add_possible_positions(static_cast<serialization::ProtoBufCardPosition>((index + j) % 11));
+    }
+}
+
+void enrich_card_states_with_positions(std::vector<serialization::ProtoBufCardState>& states) {
+    for (size_t i = 0; i < states.size(); ++i) {
+        apply_benchmark_position(states[i], static_cast<int64_t>(i));
+    }
+}
+
 serialization::ProtoBufCard make_card_empty_global_instructions_one_condition() {
     serialization::ProtoBufCard card;
     *card.add_conditions() = make_condition(serialization::CONDITION_TYPE_ABILITY_NOT_USED, {});
@@ -490,14 +525,16 @@ bool tensor_device_matches_module(const torch::Tensor& tensor, const torch::Devi
     return true;
 }
 
-void verify_card_embedding_output_shape(CardEmbeddingImpl& card_embedding, const torch::Device& device,
-                                        int64_t dimension_out, const std::string& label) {
+void verify_card_state_embedding_output_shape(CardStateEmbeddingImpl& card_state_embedding, const torch::Device& device,
+                                              int64_t dimension_out, const std::string& label) {
     auto check = [&](const std::vector<serialization::ProtoBufCard>& cards, const char* case_name) {
-        auto [out, adj] = card_embedding.forward(cards);
-        const int64_t n = static_cast<int64_t>(cards.size());
+        auto states = card_states_from_cards(cards);
+        enrich_card_states_with_positions(states);
+        auto out = card_state_embedding.forward(states);
+        const int64_t n = static_cast<int64_t>(states.size());
         if (out.dim() != 2 || out.size(0) != n || out.size(1) != dimension_out) {
-            std::cerr << label << " CardEmbedding::forward shape check failed [" << case_name << "]: expected (" << n
-                      << ", " << dimension_out << "), got (";
+            std::cerr << label << " CardStateEmbedding::forward shape check failed [" << case_name << "]: expected ("
+                      << n << ", " << dimension_out << "), got (";
             for (int64_t d = 0; d < out.dim(); ++d) {
                 std::cerr << out.size(d) << (d + 1 < out.dim() ? ", " : "");
             }
@@ -505,45 +542,27 @@ void verify_card_embedding_output_shape(CardEmbeddingImpl& card_embedding, const
             std::abort();
         }
         if (!tensor_device_matches_module(out, device)) {
-            std::cerr << label << " CardEmbedding::forward device mismatch [" << case_name << "]: output ("
+            std::cerr << label << " CardStateEmbedding::forward device mismatch [" << case_name << "]: output ("
                       << static_cast<int>(out.device().type()) << "," << out.device().index() << ") module ("
                       << static_cast<int>(device.type()) << "," << device.index() << ")\n";
             std::abort();
         }
-        const auto& sparse = adj.evolves_from_adjacency;
-        if (!sparse.is_sparse()) {
-            std::cerr << label << " CardEmbedding::forward evolves_from_adjacency must be sparse COO [" << case_name
-                      << "]\n";
-            std::abort();
-        }
-        if (sparse.size(0) != n || sparse.size(1) != n) {
-            std::cerr << label << " CardEmbedding::forward sparse adjacency shape failed [" << case_name
-                      << "]: expected (" << n << ", " << n << ")\n";
-            std::abort();
-        }
-        if (!tensor_device_matches_module(sparse, device)) {
-            std::cerr << label << " CardEmbedding::forward sparse adjacency device mismatch [" << case_name << "]\n";
-            std::abort();
-        }
-        const auto& attached_sparse = adj.attached_energy_adjacency;
-        if (!attached_sparse.is_sparse()) {
-            std::cerr << label << " CardEmbedding::forward attached_energy_adjacency must be sparse COO [" << case_name
-                      << "]\n";
-            std::abort();
-        }
-        if (attached_sparse.size(0) != n || attached_sparse.size(1) != n) {
-            std::cerr << label << " CardEmbedding::forward attached_energy sparse shape failed [" << case_name
-                      << "]: expected (" << n << ", " << n << ")\n";
-            std::abort();
-        }
-        if (!tensor_device_matches_module(attached_sparse, device)) {
-            std::cerr << label << " CardEmbedding::forward attached_energy_adjacency device mismatch [" << case_name
-                      << "]\n";
-            std::abort();
-        }
-        benchmark_sink +=
-            out.numel() + sparse.values().size(0) + attached_sparse.values().size(0);
+        benchmark_sink += out.numel();
     };
+
+    {
+        auto out = card_state_embedding.forward({});
+        if (out.dim() != 2 || out.size(0) != 0 || out.size(1) != dimension_out) {
+            std::cerr << label << " CardStateEmbedding::forward empty batch shape check failed: expected (0, "
+                      << dimension_out << ")\n";
+            std::abort();
+        }
+        if (!tensor_device_matches_module(out, device)) {
+            std::cerr << label << " CardStateEmbedding::forward empty batch device mismatch\n";
+            std::abort();
+        }
+        benchmark_sink += out.numel();
+    }
 
     for (int v = 0; v < 12; ++v) {
         const std::string tag = "single_variant_" + std::to_string(v);
@@ -574,7 +593,7 @@ void verify_card_embedding_output_shape(CardEmbeddingImpl& card_embedding, const
     check({make_card_all_optionals_static_only()}, "all_optionals_static_only");
     check({make_card_high_repeat_lists(), make_card_all_optionals_static_only()}, "batch_high_repeat_and_static_only");
 
-    std::cout << label << " CardEmbedding::forward shape checks passed (expected [num_cards, " << dimension_out
+    std::cout << label << " CardStateEmbedding::forward shape checks passed (expected [num_cards, " << dimension_out
               << "])\n";
 }
 
@@ -640,15 +659,15 @@ void run_embedding_benchmarks(const torch::Device& device, const std::string& la
         std::make_shared<InstructionEmbeddingImpl>(instruction_data_embedding, shared, dimension, device, dtype);
     auto condition_embedding =
         std::make_shared<ConditionEmbeddingImpl>(instruction_data_embedding, shared, dimension, device, dtype);
-    auto card_embedding = std::make_shared<CardEmbeddingImpl>(dimension, device, dtype);
+    auto card_state_embedding = std::make_shared<CardStateEmbeddingImpl>(dimension, device, dtype);
 
     shared->eval();
     instruction_data_embedding->eval();
     instruction_embedding->eval();
     condition_embedding->eval();
-    card_embedding->eval();
+    card_state_embedding->eval();
 
-    verify_card_embedding_output_shape(*card_embedding, device, dimension, label);
+    verify_card_state_embedding_output_shape(*card_state_embedding, device, dimension, label);
 
     const auto instruction_batch_size = static_cast<int64_t>(instructions.size());
     const auto condition_batch_size = static_cast<int64_t>(conditions.size());
@@ -691,24 +710,27 @@ void run_embedding_benchmarks(const torch::Device& device, const std::string& la
     });
 
     auto cards_large = build_card_batch(instruction_batch_size);
-    benchmark_ms(label + " card_embedding_forward_256", device, warmup_runs, measured_runs, [&]() {
-        auto [out, adj] = card_embedding->forward(cards_large);
-        benchmark_sink += out.numel() + adj.evolves_from_adjacency.values().size(0) +
-                          adj.attached_energy_adjacency.values().size(0);
+    auto states_large = card_states_from_cards(cards_large);
+    enrich_card_states_with_positions(states_large);
+    benchmark_ms(label + " card_state_embedding_forward_256", device, warmup_runs, measured_runs, [&]() {
+        auto out = card_state_embedding->forward(states_large);
+        benchmark_sink += out.numel();
     });
 
     auto cards_32 = build_card_batch(32);
-    benchmark_ms(label + " card_embedding_forward_32", device, warmup_runs, measured_runs, [&]() {
-        auto [out, adj] = card_embedding->forward(cards_32);
-        benchmark_sink += out.numel() + adj.evolves_from_adjacency.values().size(0) +
-                          adj.attached_energy_adjacency.values().size(0);
+    auto states_32 = card_states_from_cards(cards_32);
+    enrich_card_states_with_positions(states_32);
+    benchmark_ms(label + " card_state_embedding_forward_32", device, warmup_runs, measured_runs, [&]() {
+        auto out = card_state_embedding->forward(states_32);
+        benchmark_sink += out.numel();
     });
 
     auto cards_128 = build_card_batch(128);
-    benchmark_ms(label + " card_embedding_forward_128", device, warmup_runs, measured_runs, [&]() {
-        auto [out, adj] = card_embedding->forward(cards_128);
-        benchmark_sink += out.numel() + adj.evolves_from_adjacency.values().size(0) +
-                          adj.attached_energy_adjacency.values().size(0);
+    auto states_128 = card_states_from_cards(cards_128);
+    enrich_card_states_with_positions(states_128);
+    benchmark_ms(label + " card_state_embedding_forward_128", device, warmup_runs, measured_runs, [&]() {
+        auto out = card_state_embedding->forward(states_128);
+        benchmark_sink += out.numel();
     });
 
     std::vector<serialization::ProtoBufCard> cards_homogeneous;
@@ -716,10 +738,11 @@ void run_embedding_benchmarks(const torch::Device& device, const std::string& la
     for (int64_t i = 0; i < instruction_batch_size; ++i) {
         cards_homogeneous.push_back(make_card_for_variant(4, i));
     }
-    benchmark_ms(label + " card_embedding_forward_256_all_variant4", device, warmup_runs, measured_runs, [&]() {
-        auto [out, adj] = card_embedding->forward(cards_homogeneous);
-        benchmark_sink += out.numel() + adj.evolves_from_adjacency.values().size(0) +
-                          adj.attached_energy_adjacency.values().size(0);
+    auto states_homogeneous = card_states_from_cards(cards_homogeneous);
+    enrich_card_states_with_positions(states_homogeneous);
+    benchmark_ms(label + " card_state_embedding_forward_256_all_variant4", device, warmup_runs, measured_runs, [&]() {
+        auto out = card_state_embedding->forward(states_homogeneous);
+        benchmark_sink += out.numel();
     });
 }
 

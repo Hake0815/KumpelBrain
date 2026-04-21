@@ -12,6 +12,7 @@ torch::Tensor relational_message(const torch::Tensor& adjacency, torch::nn::Line
 CardStateEmbeddingImpl::CardStateEmbeddingImpl(int64_t dimension_out, torch::Device device, torch::Dtype dtype)
     : dimension_out_(dimension_out), device_(device), dtype_(dtype) {
     card_embedding_ = register_module("card_embedding", CardEmbedding(dimension_out, device, dtype));
+    position_embedding_ = register_module("position_embedding", CardPositionEmbedding(dimension_out, device, dtype));
     self_loop_weights_ = register_module("self_loop_weights", torch::nn::Linear(dimension_out, dimension_out));
     evolves_from_weights_ = register_module(
         "evolves_from_weights", torch::nn::Linear(torch::nn::LinearOptions(dimension_out, dimension_out).bias(false)));
@@ -34,21 +35,18 @@ torch::Tensor CardStateEmbeddingImpl::forward(const std::vector<ProtoBufCardStat
     if (card_state_batch.empty()) {
         return torch::empty({0, dimension_out_}, torch::TensorOptions().dtype(dtype_).device(device_));
     }
-    std::vector<ProtoBufCard> cards;
-    cards.reserve(card_state_batch.size());
-    for (const auto& card_state : card_state_batch) {
-        cards.push_back(card_state.card());
-    }
-    auto [embedded_cards, adj] = card_embedding_->forward(cards);
+    auto [embedded_cards, adj] = card_embedding_->forward(card_state_batch);
+    auto position_vec = position_embedding_->forward(card_state_batch);
+    auto node_embeddings = embedded_cards + position_vec;
 
     auto aggregate =
-        self_loop_weights_(embedded_cards) +
-        relational_message(adj.evolves_from_adjacency, evolves_from_weights_, embedded_cards) +
-        relational_message(adj.evolves_from_adjacency.transpose(0, 1), evolves_into_weights_, embedded_cards) +
-        relational_message(adj.pre_evolutions_adjacency, evolved_from_weights_, embedded_cards) +
-        relational_message(adj.pre_evolutions_adjacency.transpose(0, 1), evolved_into_weights_, embedded_cards) +
-        relational_message(adj.attached_energy_adjacency, attached_energy_cards_weights_, embedded_cards) +
-        relational_message(adj.attached_energy_adjacency.transpose(0, 1), energy_attached_to_weights_, embedded_cards);
+        self_loop_weights_(node_embeddings) +
+        relational_message(adj.evolves_from_adjacency, evolves_from_weights_, node_embeddings) +
+        relational_message(adj.evolves_from_adjacency.transpose(0, 1), evolves_into_weights_, node_embeddings) +
+        relational_message(adj.pre_evolutions_adjacency, evolved_from_weights_, node_embeddings) +
+        relational_message(adj.pre_evolutions_adjacency.transpose(0, 1), evolved_into_weights_, node_embeddings) +
+        relational_message(adj.attached_energy_adjacency, attached_energy_cards_weights_, node_embeddings) +
+        relational_message(adj.attached_energy_adjacency.transpose(0, 1), energy_attached_to_weights_, node_embeddings);
 
     return torch::relu(aggregate);
 }

@@ -1,4 +1,7 @@
-"""Serialized ProtoBufCard batches mirroring cpp/network/benchmark_main.cpp card builders.
+"""Serialized ProtoBufCardState batches mirroring cpp/network/benchmark_main.cpp card builders.
+
+Each row is `ProtoBufCardState` with `card` filled from the benchmark-equivalent `ProtoBufCard` and a
+minimal default `position` (CardEmbedding.forward only reads `card`).
 
 Used by golden tests for kumpel_embedding.CardEmbedding.forward (returns embedding and AdjacencyMatrices).
 """
@@ -137,7 +140,6 @@ def _make_condition(condition_type: int, data_entries: list):
 
 def apply_card_surface_features(card, variant: int, seed: int) -> None:
     """Match benchmark_main.cpp apply_card_surface_features."""
-    pb2 = _pb2_mod()
     v = variant % 12
     s = int(seed)
 
@@ -464,47 +466,59 @@ def make_card_completely_empty():
     return _pb2_mod().ProtoBufCard()
 
 
-def _ser(card) -> bytes:
-    return card.SerializeToString()
+def _ser_card_state_for_embedding(card) -> bytes:
+    """Wrap `ProtoBufCard` in `ProtoBufCardState` with defaults aligned to card_state fixtures."""
+    pb2 = _pb2_mod()
+    st = pb2.ProtoBufCardState()
+    st.card.CopyFrom(card)
+    pos = st.position
+    pos.owner = pb2.OWNER_SELF
+    pos.possible_positions.append(pb2.CARD_POSITION_BENCH)
+    pos.opponent_position_knowledge = pb2.POSITION_KNOWLEDGE_UNKNOWN
+    return st.SerializeToString()
 
 
 def build_fixture_cases() -> dict[str, list[bytes]]:
-    """Stable case ids -> list of serialized ProtoBufCard (order matches batch)."""
+    """Stable case ids -> list of serialized ProtoBufCardState (order matches batch)."""
     cases: dict[str, list[bytes]] = {}
 
     for v in range(12):
-        cases[f"single_variant_{v}"] = [_ser(make_card_for_variant(v, v))]
+        cases[f"single_variant_{v}"] = [
+            _ser_card_state_for_embedding(make_card_for_variant(v, v))
+        ]
 
     cases["batch_twelve_variants"] = [
-        _ser(make_card_for_variant(i, i)) for i in range(12)
+        _ser_card_state_for_embedding(make_card_for_variant(i, i)) for i in range(12)
     ]
-    cases["batch_small_mixed"] = [_ser(c) for c in build_card_batch(4)]
+    cases["batch_small_mixed"] = [
+        _ser_card_state_for_embedding(c) for c in build_card_batch(4)
+    ]
 
-    cases["completely_empty"] = [_ser(make_card_completely_empty())]
+    cases["completely_empty"] = [_ser_card_state_for_embedding(make_card_completely_empty())]
     cases["empty_global_instructions_one_condition"] = [
-        _ser(make_card_empty_global_instructions_one_condition())
+        _ser_card_state_for_embedding(make_card_empty_global_instructions_one_condition())
     ]
     cases["empty_global_conditions_one_instruction"] = [
-        _ser(make_card_empty_global_conditions_one_instruction())
+        _ser_card_state_for_embedding(make_card_empty_global_conditions_one_instruction())
     ]
     cases["empty_globals_attack_only"] = [
-        _ser(make_card_empty_globals_attack_only())
+        _ser_card_state_for_embedding(make_card_empty_globals_attack_only())
     ]
     cases["batch_mixed_empty_global_and_empty_card"] = [
-        _ser(make_card_empty_global_instructions_one_condition()),
-        _ser(make_card_empty_global_conditions_one_instruction()),
-        _ser(make_card_empty_globals_attack_only()),
-        _ser(make_card_completely_empty()),
+        _ser_card_state_for_embedding(make_card_empty_global_instructions_one_condition()),
+        _ser_card_state_for_embedding(make_card_empty_global_conditions_one_instruction()),
+        _ser_card_state_for_embedding(make_card_empty_globals_attack_only()),
+        _ser_card_state_for_embedding(make_card_completely_empty()),
     ]
     cases["high_repeat_traits_and_energies"] = [
-        _ser(make_card_high_repeat_lists())
+        _ser_card_state_for_embedding(make_card_high_repeat_lists())
     ]
     cases["all_optionals_static_only"] = [
-        _ser(make_card_all_optionals_static_only())
+        _ser_card_state_for_embedding(make_card_all_optionals_static_only())
     ]
     cases["batch_high_repeat_and_static_only"] = [
-        _ser(make_card_high_repeat_lists()),
-        _ser(make_card_all_optionals_static_only()),
+        _ser_card_state_for_embedding(make_card_high_repeat_lists()),
+        _ser_card_state_for_embedding(make_card_all_optionals_static_only()),
     ]
     # Empty card batch is not supported: MultiHeadAttention broadcast fails for batch_size==0.
 

@@ -26,6 +26,7 @@ set(KUMPEL_CORE_SOURCES
     network/src/AttackEmbedding.cpp
     network/src/CardAmountDataEmbedding.cpp
     network/src/CardEmbedding.cpp
+    network/src/CardPositionEmbedding.cpp
     network/src/CardStateEmbedding.cpp
     network/src/ConditionEmbedding.cpp
     network/src/DiscardDataEmbedding.cpp
