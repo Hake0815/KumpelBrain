@@ -1,9 +1,10 @@
 #ifndef CARD_STATE_EMBEDDING_H
 #define CARD_STATE_EMBEDDING_H
 
-#include <torch/nn/modules/linear.h>
+#include <torch/torch.h>
 
 #include "network/include/CardEmbedding.h"
+
 using ProtoBufCardState = gamecore::serialization::ProtoBufCardState;
 
 /// Embeds a batch of `ProtoBufCardState` into shape [batch, dimension_out].
@@ -18,6 +19,7 @@ struct CardStateEmbeddingImpl : torch::nn::Module, SaveLoadMixin<CardStateEmbedd
     torch::Device device_;
     torch::Dtype dtype_;
     CardEmbedding card_embedding_{nullptr};
+    torch::nn::Linear self_loop_weights_{nullptr};
     torch::nn::Linear evolves_from_weights_{nullptr};
     torch::nn::Linear evolves_into_weights_{nullptr};
     torch::nn::Linear evolved_from_weights_{nullptr};
