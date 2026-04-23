@@ -1,8 +1,9 @@
-#include "../include/InstructionEmbedding.h"
+#include "network/include/InstructionEmbedding.h"
 
-#include "../include/AttentionUtils.h"
-#include "../include/Nesting.h"
-#include "../include/TensorUtils.h"
+#include "network/include/AttentionUtils.h"
+#include "network/include/Nesting.h"
+#include "network/include/SharedConstants.h"
+#include "network/include/TensorUtils.h"
 
 namespace serialization = gamecore::serialization;
 
@@ -15,8 +16,7 @@ InstructionEmbeddingImpl::InstructionEmbeddingImpl(
       device_(device),
       dtype_(dtype) {
     instruction_type_embedding_ =
-        register_module("instruction_type_embedding",
-                        torch::nn::Embedding(torch::nn::EmbeddingOptions(8, dimension_out_).padding_idx(0)));
+        register_module("instruction_type_embedding", torch::nn::Embedding(NUMBER_INSTRUCTION_TYPES, dimension_out_));
     data_multi_head_attention_ =
         register_module("data_multi_head_attention",
                         MultiHeadAttention(dimension_out_, dimension_out_, dimension_out_,
@@ -51,18 +51,17 @@ std::pair<torch::Tensor, torch::Tensor> InstructionEmbeddingImpl::forward_flatte
 
     auto embedded_instruction_data = instruction_data_embedding_->forward(flat).to(device_);
 
-    auto instruction_embeddings =
-        compute_instruction_embeddings(flat.instruction_indices, flat.instruction_data_parent_rows,
-                                       embedded_instruction_types, embedded_instruction_data,
-                                       flat.max_sequence_length_per_parent_row);
+    auto instruction_embeddings = compute_instruction_embeddings(
+        flat.instruction_indices, flat.instruction_data_parent_rows, embedded_instruction_types,
+        embedded_instruction_data, flat.max_sequence_length_per_parent_row);
 
     auto batch_offsets = tensor_utils::build_contiguous_offsets(flat.instruction_indices.select(1, 0), batch_size);
 
     const auto num_instructions = instruction_embeddings.size(0);
     auto local_pos = tensor_utils::local_positions_from_batch_offsets(batch_offsets, num_instructions);
     auto positioned_flat = position_embedding_->forward_packed(instruction_embeddings, local_pos);
-    auto [padded_batch, valid_token_mask] = tensor_utils::pad_by_offsets(
-        positioned_flat, batch_offsets, dimension_out_, flat.max_sequence_length_per_batch_item);
+    auto [padded_batch, valid_token_mask] = tensor_utils::pad_by_offsets(positioned_flat, batch_offsets, dimension_out_,
+                                                                         flat.max_sequence_length_per_batch_item);
     return {padded_batch, valid_token_mask};
 }
 

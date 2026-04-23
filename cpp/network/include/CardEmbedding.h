@@ -113,7 +113,8 @@ struct StagedTensors {
 
 /// Embeds a batch of `ProtoBufCard` into shape [batch, dimension_out].
 struct CardEmbeddingImpl : torch::nn::Module, SaveLoadMixin<CardEmbeddingImpl> {
-    CardEmbeddingImpl(int64_t dimension_out, torch::Device device = torch::kCPU, torch::Dtype dtype = torch::kFloat);
+    CardEmbeddingImpl(std::shared_ptr<SharedEmbeddingHolderImpl> shared_embedding_holder, int64_t dimension_out,
+                      torch::Device device = torch::kCPU, torch::Dtype dtype = torch::kFloat);
 
     std::pair<torch::Tensor, AdjacencyMatrices> forward(const std::vector<ProtoBufCardState>& card_batch);
 

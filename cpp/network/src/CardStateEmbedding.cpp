@@ -11,8 +11,12 @@ torch::Tensor relational_message(const torch::Tensor& adjacency, torch::nn::Line
 
 CardStateEmbeddingImpl::CardStateEmbeddingImpl(int64_t dimension_out, torch::Device device, torch::Dtype dtype)
     : dimension_out_(dimension_out), device_(device), dtype_(dtype) {
-    card_embedding_ = register_module("card_embedding", CardEmbedding(dimension_out, device, dtype));
-    position_embedding_ = register_module("position_embedding", CardPositionEmbedding(dimension_out, device, dtype));
+    shared_embedding_holder_ =
+        register_module("shared_embedding_holder", SharedEmbeddingHolder(dimension_out, device, dtype));
+    card_embedding_ =
+        register_module("card_embedding", CardEmbedding(shared_embedding_holder_.ptr(), dimension_out, device, dtype));
+    position_embedding_ = register_module(
+        "position_embedding", CardPositionEmbedding(shared_embedding_holder_.ptr(), dimension_out, device, dtype));
     self_loop_weights_ = register_module("self_loop_weights", torch::nn::Linear(dimension_out, dimension_out));
     evolves_from_weights_ = register_module(
         "evolves_from_weights", torch::nn::Linear(torch::nn::LinearOptions(dimension_out, dimension_out).bias(false)));

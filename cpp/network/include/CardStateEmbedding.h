@@ -5,6 +5,8 @@
 
 #include "network/include/CardEmbedding.h"
 #include "network/include/CardPositionEmbedding.h"
+#include "network/include/SaveLoadMixin.h"
+#include "network/include/SharedEmbeddingHolder.h"
 
 using ProtoBufCardState = gamecore::serialization::ProtoBufCardState;
 
@@ -19,6 +21,7 @@ struct CardStateEmbeddingImpl : torch::nn::Module, SaveLoadMixin<CardStateEmbedd
     int64_t dimension_out_;
     torch::Device device_;
     torch::Dtype dtype_;
+    SharedEmbeddingHolder shared_embedding_holder_{nullptr};
     CardEmbedding card_embedding_{nullptr};
     CardPositionEmbedding position_embedding_{nullptr};
     torch::nn::Linear self_loop_weights_{nullptr};

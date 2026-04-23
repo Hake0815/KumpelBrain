@@ -2,24 +2,19 @@
 
 #include <vector>
 
-namespace {
+#include "../include/SharedConstants.h"
 
-constexpr int64_t kNumOwners = 2;
-constexpr int64_t kNumCardPositions = 11;
-constexpr int64_t kNumPositionKnowledge = 3;
+namespace {}  // namespace
 
-}  // namespace
-
-CardPositionEmbeddingImpl::CardPositionEmbeddingImpl(int64_t dimension_out, torch::Device device, torch::Dtype dtype)
+CardPositionEmbeddingImpl::CardPositionEmbeddingImpl(std::shared_ptr<SharedEmbeddingHolderImpl> shared_embedding_holder,
+                                                     int64_t dimension_out, torch::Device device, torch::Dtype dtype)
     : dimension_out_(dimension_out), device_(device), dtype_(dtype) {
     owner_embedding_ = register_module("owner_embedding",
-                                       torch::nn::Embedding(torch::nn::EmbeddingOptions(kNumOwners, dimension_out)));
-    possible_position_embedding_ = register_module(
-        "possible_position_embedding",
-        torch::nn::Embedding(torch::nn::EmbeddingOptions(kNumCardPositions + 1, dimension_out).padding_idx(0)));
+                                       torch::nn::Embedding(torch::nn::EmbeddingOptions(NUMBER_OWNERS, dimension_out)));
+    possible_position_embedding_ = shared_embedding_holder->card_position_embedding_;
     opponent_position_knowledge_embedding_ =
         register_module("opponent_position_knowledge_embedding",
-                        torch::nn::Embedding(torch::nn::EmbeddingOptions(kNumPositionKnowledge, dimension_out)));
+                        torch::nn::Embedding(torch::nn::EmbeddingOptions(NUMBER_POSITION_KNOWLEDGE, dimension_out)));
     top_deck_position_index_embedding_ =
         register_module("top_deck_position_index_embedding", NormalizedLinear(1, dimension_out, 60.0, device, dtype));
     to(device, dtype);
@@ -81,6 +76,5 @@ torch::Tensor CardPositionEmbeddingImpl::forward(const std::vector<ProtoBufCardS
         embedded_possible_positions / possible_position_counts_tensor.unsqueeze(1).clamp_min(1.0f);
 
     return (embedded_owner + embedded_opponent_position_knowledge + embedded_top_deck_position_index +
-            embedded_possible_positions_averaged) /
-           4.0;
+            embedded_possible_positions_averaged);
 }

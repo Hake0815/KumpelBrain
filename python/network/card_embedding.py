@@ -387,7 +387,7 @@ class InstructionDataEmbedding(nn.Module, SaveLoadMixin):
             shared_embedding_holder, dimension_out, **self.factory_kwargs
         )
         self.instruction_data_type_embedding = nn.Embedding(
-            6, dimension_out, padding_idx=0, **self.factory_kwargs
+            6, dimension_out, **self.factory_kwargs
         )
         object.__setattr__(
             self,
@@ -494,7 +494,7 @@ class InstructionEmbedding(nn.Module, SaveLoadMixin):
             instruction_data_embedding,
         )
         self.instruction_type_embedding = nn.Embedding(
-            8, dimension_out, padding_idx=0, **self.factory_kwargs
+            8, dimension_out, **self.factory_kwargs
         )
         self.data_multi_head_attention = MultiHeadAttention(
             dimension_out,
@@ -569,7 +569,7 @@ class ConditionEmbedding(nn.Module, SaveLoadMixin):
             instruction_data_embedding,
         )
         self.condition_type_embedding = nn.Embedding(
-            8, dimension_out, padding_idx=0, **self.factory_kwargs
+            2, dimension_out, **self.factory_kwargs
         )
         self.data_multi_head_attention = MultiHeadAttention(
             dimension_out,

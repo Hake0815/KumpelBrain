@@ -1,4 +1,6 @@
-#include "../include/InstructionDataEmbedding.h"
+#include "network/include/InstructionDataEmbedding.h"
+
+#include "network/include/SharedConstants.h"
 
 namespace {
 
@@ -38,9 +40,8 @@ InstructionDataEmbeddingImpl::InstructionDataEmbeddingImpl(
     player_target_data_embedding_ =
         register_module("player_target_data_embedding",
                         PlayerTargetDataEmbedding(shared_embedding_holder, dimension_out_, device_, dtype_));
-    instruction_data_type_embedding_ =
-        register_module("instruction_data_type_embedding",
-                        torch::nn::Embedding(torch::nn::EmbeddingOptions(6, dimension_out_).padding_idx(0)));
+    instruction_data_type_embedding_ = register_module(
+        "instruction_data_type_embedding", torch::nn::Embedding(NUMBER_INSTRUCTION_DATA_TYPES, dimension_out_));
     position_embedding_ = shared_embedding_holder->position_embedding_;
 
     to(device_, dtype_);

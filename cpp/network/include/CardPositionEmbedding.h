@@ -8,16 +8,16 @@
 
 #include "network/include/NormalizedLinear.h"
 #include "network/include/SaveLoadMixin.h"
+#include "network/include/SharedEmbeddingHolder.h"
 #include "network/src/serialization/gamecore_serialization.pb.h"
 
 using ProtoBufCardState = gamecore::serialization::ProtoBufCardState;
 
 /// Learns `ProtoBufCardState.position` as a single [batch, dimension_out] tensor per row.
 struct CardPositionEmbeddingImpl : torch::nn::Module, SaveLoadMixin<CardPositionEmbeddingImpl> {
-    CardPositionEmbeddingImpl(int64_t dimension_out, torch::Device device = torch::kCPU,
-                              torch::Dtype dtype = torch::kFloat);
+    CardPositionEmbeddingImpl(std::shared_ptr<SharedEmbeddingHolderImpl> shared_embedding_holder, int64_t dimension_out,
+                              torch::Device device = torch::kCPU, torch::Dtype dtype = torch::kFloat);
 
-    /// Shape [batch_size, dimension_out]. Rows are zero when `!has_position()`.
     torch::Tensor forward(const std::vector<ProtoBufCardState>& card_state_batch);
 
    private:
