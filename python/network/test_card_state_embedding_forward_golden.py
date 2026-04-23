@@ -110,8 +110,14 @@ def test_pre_evolutions_adjacency_differs_from_attached_energy_adjacency():
     device = torch.device("cpu")
     with _deterministic_algorithms(True):
         _seed(device)
-        emb = kumpel_embedding.CardEmbedding(
+        shared = kumpel_embedding.SharedEmbeddingHolder(
             fixtures.FIXTURE_DIMENSION_OUT, device=device, dtype=torch.float32
+        )
+        emb = kumpel_embedding.CardEmbedding(
+            shared,
+            fixtures.FIXTURE_DIMENSION_OUT,
+            device=device,
+            dtype=torch.float32,
         )
         emb.eval()
         card_bytes = fixtures.build_adjacency_divergent_card_bytes()

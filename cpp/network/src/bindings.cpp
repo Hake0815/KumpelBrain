@@ -276,7 +276,8 @@ PYBIND11_MODULE(kumpel_embedding, m) {
         .def_readonly("attached_energy_adjacency", &AdjacencyMatrices::attached_energy_adjacency)
         .def_readonly("pre_evolutions_adjacency", &AdjacencyMatrices::pre_evolutions_adjacency);
     pybind11::class_<CardEmbeddingImpl, torch::nn::Module, std::shared_ptr<CardEmbeddingImpl>>(m, "CardEmbedding")
-        .def(pybind11::init<int64_t, torch::Device, torch::Dtype>(), pybind11::arg("dimension_out"),
+        .def(pybind11::init<std::shared_ptr<SharedEmbeddingHolderImpl>, int64_t, torch::Device, torch::Dtype>(),
+             pybind11::arg("shared_embedding_holder"), pybind11::arg("dimension_out"),
              pybind11::arg("device") = torch::Device(torch::kCPU), pybind11::arg("dtype") = torch::Dtype(torch::kFloat))
         .def("forward",
              [](CardEmbeddingImpl& self, const pybind11::iterable& card_states) {

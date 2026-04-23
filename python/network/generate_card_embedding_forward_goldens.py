@@ -53,8 +53,14 @@ def _seed_for_device(device: torch.device) -> None:
 
 def _build_model(device: torch.device) -> kumpel_embedding.CardEmbedding:
     _seed_for_device(device)
-    m = kumpel_embedding.CardEmbedding(
+    shared = kumpel_embedding.SharedEmbeddingHolder(
         fixtures.FIXTURE_DIMENSION_OUT, device=device, dtype=torch.float32
+    )
+    m = kumpel_embedding.CardEmbedding(
+        shared,
+        fixtures.FIXTURE_DIMENSION_OUT,
+        device=device,
+        dtype=torch.float32,
     )
     m.eval()
     return m
@@ -67,10 +73,9 @@ def _forward_case(model, card_bytes: list[bytes]) -> torch.Tensor:
 
 
 def generate_for_device(device: torch.device) -> dict[str, torch.Tensor]:
-    _seed_for_device(device)
-    model = _build_model(device)
     gold: dict[str, torch.Tensor] = {}
     for case_id in sorted(fixtures.FIXTURE_CASES.keys()):
+        model = _build_model(device)
         cards = fixtures.FIXTURE_CASES[case_id]
         out = _forward_case(model, cards)
         if device.type == "cuda":

@@ -93,8 +93,14 @@ def test_card_embedding_forward_golden_case(
 
     with _deterministic_algorithms(True):
         _seed(device)
-        model = kumpel_embedding.CardEmbedding(
+        shared = kumpel_embedding.SharedEmbeddingHolder(
             fixtures.FIXTURE_DIMENSION_OUT, device=device, dtype=torch.float32
+        )
+        model = kumpel_embedding.CardEmbedding(
+            shared,
+            fixtures.FIXTURE_DIMENSION_OUT,
+            device=device,
+            dtype=torch.float32,
         )
         model.eval()
         with torch.inference_mode():
