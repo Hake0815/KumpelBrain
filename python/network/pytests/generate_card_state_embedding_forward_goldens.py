@@ -3,7 +3,7 @@
 
 Run from repo root:
 
-  .venv/bin/python python/network/generate_card_state_embedding_forward_goldens.py
+  .venv/bin/python python/network/pytests/generate_card_state_embedding_forward_goldens.py
 
 Requires built kumpel_embedding under cpp/build.
 """
@@ -16,13 +16,16 @@ from pathlib import Path
 
 import torch
 
-_REPO_ROOT = Path(__file__).resolve().parents[2]
-_NETWORK_DIR = Path(__file__).resolve().parent
+_PYTESTS_DIR = Path(__file__).resolve().parent
+_NETWORK_SRC_DIR = _PYTESTS_DIR.parent
+_REPO_ROOT = _NETWORK_SRC_DIR.parent.parent
 _CPP_BUILD = _REPO_ROOT / "cpp" / "build"
-_FIXTURES_DIR = _NETWORK_DIR / "fixtures"
+_FIXTURES_DIR = _PYTESTS_DIR / "fixtures"
 
-sys.path.insert(0, str(_NETWORK_DIR))
-sys.path.insert(0, str(_CPP_BUILD))
+for _p in (_CPP_BUILD, _PYTESTS_DIR, _NETWORK_SRC_DIR):
+    _s = str(_p)
+    if _s not in sys.path:
+        sys.path.insert(0, _s)
 
 import card_state_embedding_forward_fixtures as fixtures  # noqa: E402
 import kumpel_embedding  # noqa: E402

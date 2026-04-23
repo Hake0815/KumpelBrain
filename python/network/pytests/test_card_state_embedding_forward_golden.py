@@ -2,9 +2,9 @@
 
 Regenerate after intentional math changes:
 
-  .venv/bin/python python/network/generate_card_state_embedding_forward_goldens.py
+  .venv/bin/python python/network/pytests/generate_card_state_embedding_forward_goldens.py
 
-Run: python -m pytest python/network/test_card_state_embedding_forward_golden.py -v
+Run: python -m pytest python/network/pytests/test_card_state_embedding_forward_golden.py -v
 """
 
 from __future__ import annotations
@@ -13,12 +13,16 @@ import contextlib
 import sys
 from pathlib import Path
 
-_NETWORK_DIR = Path(__file__).resolve().parent
-_CPP_BUILD = Path(__file__).resolve().parents[2] / "cpp" / "build"
-_FIXTURES_DIR = _NETWORK_DIR / "fixtures"
+_PYTESTS_DIR = Path(__file__).resolve().parent
+_NETWORK_SRC_DIR = _PYTESTS_DIR.parent
+_REPO_ROOT = _NETWORK_SRC_DIR.parent.parent
+_CPP_BUILD = _REPO_ROOT / "cpp" / "build"
+_FIXTURES_DIR = _PYTESTS_DIR / "fixtures"
 
-sys.path.insert(0, str(_NETWORK_DIR))
-sys.path.insert(0, str(_CPP_BUILD))
+for _p in (_CPP_BUILD, _PYTESTS_DIR, _NETWORK_SRC_DIR):
+    _s = str(_p)
+    if _s not in sys.path:
+        sys.path.insert(0, _s)
 
 import pytest
 import torch

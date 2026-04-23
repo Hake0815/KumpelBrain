@@ -1,6 +1,6 @@
 """Parity for InstructionDataEmbedding / InstructionEmbedding (Python vs C++).
 
-Run: python -m pytest python/network/test_instruction_cpp_parity.py -v
+Run: python -m pytest python/network/pytests/test_instruction_cpp_parity.py -v
 """
 
 from contextlib import contextmanager
@@ -11,6 +11,15 @@ import tempfile
 import time
 from typing import Any, Callable
 
+_PYTESTS_DIR = Path(__file__).resolve().parent
+_NETWORK_SRC_DIR = _PYTESTS_DIR.parent
+_REPO_ROOT = _NETWORK_SRC_DIR.parent.parent
+_CPP_BUILD = _REPO_ROOT / "cpp" / "build"
+for _p in (_CPP_BUILD, _PYTESTS_DIR, _NETWORK_SRC_DIR):
+    _s = str(_p)
+    if _s not in sys.path:
+        sys.path.insert(0, _s)
+
 import pytest
 import torch
 
@@ -18,8 +27,6 @@ import instruction_test_data
 import card_embedding
 import nesting
 import proto_serialization
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "cpp" / "build"))
 import kumpel_embedding
 
 

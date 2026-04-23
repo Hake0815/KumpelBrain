@@ -1,14 +1,22 @@
 """C++ InstructionEmbedding / ConditionEmbedding forwards on empty batches (card-level empty lists).
 
-Run: python -m pytest python/network/test_empty_embedding_batches_cpp.py -v
+Run: python -m pytest python/network/pytests/test_empty_embedding_batches_cpp.py -v
 """
 
 from pathlib import Path
 import sys
 
+_PYTESTS_DIR = Path(__file__).resolve().parent
+_NETWORK_SRC_DIR = _PYTESTS_DIR.parent
+_REPO_ROOT = _NETWORK_SRC_DIR.parent.parent
+_CPP_BUILD = _REPO_ROOT / "cpp" / "build"
+for _p in (_CPP_BUILD, _PYTESTS_DIR, _NETWORK_SRC_DIR):
+    _s = str(_p)
+    if _s not in sys.path:
+        sys.path.insert(0, _s)
+
 import torch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "cpp" / "build"))
 import kumpel_embedding
 
 
