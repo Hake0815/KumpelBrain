@@ -156,6 +156,8 @@ CardEmbeddingImpl::CardEmbeddingImpl(std::shared_ptr<SharedEmbeddingHolderImpl> 
         register_module("card_self_multi_head_attention",
                         MultiHeadAttention(dimension_out, dimension_out, dimension_out,
                                            std::max<int64_t>(dimension_out_ / 16, 4), 8, 0.0, true, device, dtype));
+    token_type_embedding_ =
+        register_module("token_type_embedding", torch::nn::Embedding(NUM_CARD_TOKEN_TYPES, dimension_out));
     mask_tensor_options_ = torch::TensorOptions().device(device_).dtype(torch::kBool);
     index_tensor_options_ = torch::TensorOptions().device(device_).dtype(torch::kInt64);
     float_tensor_options_ = torch::TensorOptions().device(device_).dtype(dtype);
@@ -523,10 +525,14 @@ StagedTensors CardEmbeddingImpl::stage_features(const CardFeatures& f) {
 std::pair<torch::Tensor, torch::Tensor> CardEmbeddingImpl::embed_card_features(const CardFeatures& card_features,
                                                                                const StagedTensors& staged,
                                                                                int64_t batch_size) {
-    auto [embedded_energy_type_tokens, embedded_energy_type_mask, attack_energy_costs] =
+    auto [embedded_energy_type_tokens, embedded_energy_type_mask, attack_energy_costs, energy_type_ids] =
         embed_energy_type_features(card_features, staged, batch_size);
-    auto [instructions_and_conditions_tokens, instructions_and_conditions_mask] =
+    auto [instructions_and_conditions_tokens, instructions_and_conditions_mask, ic_type_ids] =
         embed_instructions_and_conditions(card_features.instructions_and_conditions, attack_energy_costs, batch_size);
+
+    const auto make_type_ids = [&](int64_t seq_len, int64_t type_id) {
+        return torch::full({batch_size, seq_len}, type_id, index_tensor_options_);
+    };
 
     auto card_type_mask = ones_1x1_bool_.expand({batch_size, 1});
     auto card_type_tokens = shared_embedding_holder_->card_type_embedding_(staged.card_type).unsqueeze(1);
@@ -556,18 +562,27 @@ std::pair<torch::Tensor, torch::Tensor> CardEmbeddingImpl::embed_card_features(c
         pokemon_turn_trait_embedding_->forward(staged.flattened_pokemon_turn_traits),
         card_features.pokemon_turn_trait_card_indices, staged.pokemon_turn_trait_card_indices, batch_size);
 
-    return {torch::cat({card_type_tokens, card_subtype_tokens, embedded_energy_type_tokens, max_hp_tokens,
-                        retreat_cost_tokens, number_of_prize_cards_on_knockout_tokens, current_damage_tokens,
-                        pokemon_turn_trait_tokens, instructions_and_conditions_tokens},
-                       1),
-            torch::cat({card_type_mask, card_subtype_mask, embedded_energy_type_mask, max_hp_mask, retreat_cost_mask,
-                        number_of_prize_cards_on_knockout_mask, current_damage_mask, pokemon_turn_trait_mask,
-                        instructions_and_conditions_mask},
-                       1)};
+    auto all_tokens = torch::cat({card_type_tokens, card_subtype_tokens, embedded_energy_type_tokens, max_hp_tokens,
+                                  retreat_cost_tokens, number_of_prize_cards_on_knockout_tokens, current_damage_tokens,
+                                  pokemon_turn_trait_tokens, instructions_and_conditions_tokens},
+                                 1);
+    auto all_masks = torch::cat({card_type_mask, card_subtype_mask, embedded_energy_type_mask, max_hp_mask,
+                                 retreat_cost_mask, number_of_prize_cards_on_knockout_mask, current_damage_mask,
+                                 pokemon_turn_trait_mask, instructions_and_conditions_mask},
+                                1);
+    auto all_type_ids =
+        torch::cat({make_type_ids(1, 0), make_type_ids(1, 1), energy_type_ids, make_type_ids(1, 7),
+                    make_type_ids(1, 8), make_type_ids(1, 9), make_type_ids(1, 10),
+                    make_type_ids(pokemon_turn_trait_tokens.size(1), 11), ic_type_ids},
+                   1);
+
+    all_tokens = all_tokens + token_type_embedding_(all_type_ids);
+    return {all_tokens, all_masks};
 }
 
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> CardEmbeddingImpl::embed_energy_type_features(
-    const CardFeatures& card_features, const StagedTensors& staged, int64_t batch_size) {
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
+CardEmbeddingImpl::embed_energy_type_features(const CardFeatures& card_features, const StagedTensors& staged,
+                                              int64_t batch_size) {
     auto energy_type_mask = staged.energy_type_mask.unsqueeze(1);
     auto weakness_mask = staged.weakness_mask.unsqueeze(1);
     auto resistance_mask = staged.resistance_mask.unsqueeze(1);
@@ -609,12 +624,20 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> CardEmbeddingImpl::embed
         combine_flat_embedded_card_feature(embedded_attached_energies, card_features.attached_energy_card_indices,
                                            staged.attached_energy_card_indices, batch_size);
 
+    const auto make_type_ids = [&](int64_t seq_len, int64_t type_id) {
+        return torch::full({batch_size, seq_len}, type_id, index_tensor_options_);
+    };
+
     return {
         torch::cat(
             {energy_type_tokens, weakness_tokens, resistance_tokens, provided_energy_tokens, attached_energy_tokens},
             1),
         torch::cat({energy_type_mask, weakness_mask, resistance_mask, provided_energy_mask, attached_energy_mask}, 1),
-        attack_energy_costs};
+        attack_energy_costs,
+        torch::cat({make_type_ids(1, 2), make_type_ids(1, 3), make_type_ids(1, 4),
+                    make_type_ids(provided_energy_tokens.size(1), 5),
+                    make_type_ids(attached_energy_tokens.size(1), 6)},
+                   1)};
 }
 
 std::pair<torch::Tensor, torch::Tensor> CardEmbeddingImpl::combine_flat_embedded_card_feature(
@@ -651,7 +674,7 @@ std::pair<torch::Tensor, torch::Tensor> CardEmbeddingImpl::combine_flat_embedded
     return {out, mask};
 }
 
-std::pair<torch::Tensor, torch::Tensor> CardEmbeddingImpl::embed_instructions_and_conditions(
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> CardEmbeddingImpl::embed_instructions_and_conditions(
     const InstructionsAndConditions& instructions_and_conditions, const torch::Tensor& attack_energy_costs,
     int64_t batch_size) {
     auto embedded_instructions_pair = instruction_embedding_->forward(instructions_and_conditions.instructions);
@@ -671,8 +694,18 @@ std::pair<torch::Tensor, torch::Tensor> CardEmbeddingImpl::embed_instructions_an
     auto [embedded_card_conditions, mask_card_conditions] =
         embed_card_conditions(embedded_conditions_pair, instructions_and_conditions.condition_card_indices,
                               instructions_and_conditions.condition_card_parent_indices, batch_size);
+
+    const auto make_type_ids = [&](int64_t seq_len, int64_t type_id) {
+        return torch::full({batch_size, seq_len}, type_id, index_tensor_options_);
+    };
+
     return {torch::cat({embedded_card_instructions, embedded_card_conditions, embedded_abilities, embedded_attacks}, 1),
-            torch::cat({mask_card_instructions, mask_card_conditions, mask_abilities, mask_attacks}, 1)};
+            torch::cat({mask_card_instructions, mask_card_conditions, mask_abilities, mask_attacks}, 1),
+            torch::cat({make_type_ids(embedded_card_instructions.size(1), 12),
+                        make_type_ids(embedded_card_conditions.size(1), 13),
+                        make_type_ids(embedded_abilities.size(1), 14),
+                        make_type_ids(embedded_attacks.size(1), 15)},
+                       1)};
 }
 
 std::pair<torch::Tensor, torch::Tensor> CardEmbeddingImpl::embed_attacks(

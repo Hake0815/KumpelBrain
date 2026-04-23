@@ -23,4 +23,6 @@ constexpr int64_t NUMBER_INSTRUCTION_TYPES = gamecore::serialization::ProtoBufIn
 constexpr int64_t NUMBER_INSTRUCTION_DATA_TYPES = gamecore::serialization::ProtoBufInstructionDataType_ARRAYSIZE;
 constexpr int64_t NUMBER_RETURN_TO_DECK_TYPES = gamecore::serialization::ProtoBufReturnToDeckType_ARRAYSIZE;
 
+constexpr int64_t NUM_CARD_TOKEN_TYPES = 16;
+
 #endif

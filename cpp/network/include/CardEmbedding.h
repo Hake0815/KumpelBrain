@@ -145,6 +145,7 @@ struct CardEmbeddingImpl : torch::nn::Module, SaveLoadMixin<CardEmbeddingImpl> {
     MultiHeadAttention card_self_multi_head_attention_{nullptr};
     MultiHeadAttention card_pooling_multi_head_attention_{nullptr};
     torch::nn::Embedding card_pooling_query_embedding_{nullptr};
+    torch::nn::Embedding token_type_embedding_{nullptr};
 
     CardFeatures collect_card_features(const std::vector<ProtoBufCardState>& card_batch);
 
@@ -156,12 +157,12 @@ struct CardEmbeddingImpl : torch::nn::Module, SaveLoadMixin<CardEmbeddingImpl> {
 
     std::pair<torch::Tensor, torch::Tensor> embed_card_features(const CardFeatures& card_features,
                                                                 const StagedTensors& staged, int64_t batch_size);
-    std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> embed_energy_type_features(
+    std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor> embed_energy_type_features(
         const CardFeatures& card_features, const StagedTensors& staged, int64_t batch_size);
     std::pair<torch::Tensor, torch::Tensor> combine_flat_embedded_card_feature(
         const torch::Tensor& flat_embedded_feature, const std::vector<int64_t>& card_indices,
         const torch::Tensor& card_indices_tensor, int64_t batch_size);
-    std::pair<torch::Tensor, torch::Tensor> embed_instructions_and_conditions(
+    std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> embed_instructions_and_conditions(
         const InstructionsAndConditions& instructions_and_conditions, const torch::Tensor& attack_energy_costs,
         int64_t batch_size);
     std::pair<torch::Tensor, torch::Tensor> embed_attacks(
