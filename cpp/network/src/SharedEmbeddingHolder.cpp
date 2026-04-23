@@ -10,9 +10,10 @@ SharedEmbeddingHolderImpl::SharedEmbeddingHolderImpl(int64_t dimension_out, torc
     hp_embedding_ = register_module("hp_embedding", NormalizedLinear(1, dimension_out, 400.0, device, dtype));
     card_amount_range_embedding_ =
         register_module("card_amount_range_embedding", NormalizedLinear(2, dimension_out, 400.0, device, dtype));
-    card_position_embedding_ = register_module(
-        "card_position_embedding",
-        torch::nn::Embedding(torch::nn::EmbeddingOptions(NUMBER_CARD_POSITIONS + 1, dimension_out).padding_idx(0)));
+    card_position_embedding_ =
+        register_module("card_position_embedding",
+                        torch::nn::Embedding(torch::nn::EmbeddingOptions(NUMBER_CARD_POSITIONS + 1, dimension_out)
+                                                 .padding_idx(0)));  // +1 for padding index, to make masking easier
     player_target_embedding_ =
         register_module("player_target_embedding", torch::nn::Embedding(NUMBER_PLAYER_TARGETS, dimension_out));
     position_embedding_ =

@@ -4,8 +4,6 @@
 
 #include "../include/SharedConstants.h"
 
-namespace {}  // namespace
-
 CardPositionEmbeddingImpl::CardPositionEmbeddingImpl(std::shared_ptr<SharedEmbeddingHolderImpl> shared_embedding_holder,
                                                      int64_t dimension_out, torch::Device device, torch::Dtype dtype)
     : dimension_out_(dimension_out), device_(device), dtype_(dtype) {
