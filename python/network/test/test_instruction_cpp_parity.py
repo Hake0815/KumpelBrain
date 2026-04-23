@@ -1,3 +1,8 @@
+"""Parity for InstructionDataEmbedding / InstructionEmbedding (Python vs C++).
+
+Run: python -m pytest python/network/test_instruction_cpp_parity.py -v
+"""
+
 from contextlib import contextmanager
 import os
 from pathlib import Path
@@ -6,6 +11,7 @@ import tempfile
 import time
 from typing import Any, Callable
 
+import pytest
 import torch
 
 import instruction_test_data
@@ -39,12 +45,6 @@ def _with_loaded_weights(py_model, cpp_model) -> None:
     finally:
         if os.path.exists(path):
             os.remove(path)
-
-
-def _set_constant_parameters(model, value: float = 0.01) -> None:
-    with torch.no_grad():
-        for parameter in model.parameters():
-            parameter.fill_(value)
 
 
 def _benchmark_forward(
@@ -82,7 +82,7 @@ def _deterministic_algorithms(enabled: bool):
         )
 
 
-def test_instruction_data_embedding_parity(
+def _parity_instruction_data_embedding(
     py_shared: card_embedding.SharedEmbeddingHolder,
     cpp_shared: kumpel_embedding.SharedEmbeddingHolder,
     dim: int,
@@ -130,7 +130,7 @@ def test_instruction_data_embedding_parity(
     return py_instruction_data, cpp_instruction_data
 
 
-def test_instruction_embedding_parity(
+def _parity_instruction_embedding(
     py_instruction_data: card_embedding.InstructionDataEmbedding,
     cpp_instruction_data: kumpel_embedding.InstructionDataEmbedding,
     py_shared: card_embedding.SharedEmbeddingHolder,
@@ -178,10 +178,10 @@ def run_instruction_parity(
     py_shared.eval()
     cpp_shared.eval()
 
-    py_instrction_data, cpp_instrction_data = test_instruction_data_embedding_parity(
+    py_instrction_data, cpp_instrction_data = _parity_instruction_data_embedding(
         py_shared, cpp_shared, dim, device
     )
-    return test_instruction_embedding_parity(
+    return _parity_instruction_embedding(
         py_instrction_data,
         cpp_instrction_data,
         py_shared,
@@ -192,39 +192,22 @@ def run_instruction_parity(
     )
 
 
-def main() -> None:
+def test_instruction_embedding_parity_cpu() -> None:
     torch.manual_seed(42)
-
     dim = 32
     run_instruction_parity(dim, torch.device("cpu"))
-    print("Instruction CPU fallback parity passed.")
-
-    if torch.cuda.is_available():
-        device = torch.device("cuda")
-        for deterministic in (False, True):
-            mode_name = "deterministic" if deterministic else "non-deterministic"
-            with _deterministic_algorithms(deterministic):
-                py_avg_seconds, cpp_avg_seconds = run_instruction_parity(
-                    dim, device, benchmark=True
-                )
-            assert py_avg_seconds is not None
-            assert cpp_avg_seconds is not None
-            speedup = (
-                py_avg_seconds / cpp_avg_seconds
-                if cpp_avg_seconds > 0
-                else float("inf")
-            )
-            print(
-                f"InstructionEmbedding {mode_name} timing (avg per forward): "
-                f"Python={py_avg_seconds * 1e3:.3f} ms, "
-                f"C++={cpp_avg_seconds * 1e3:.3f} ms, "
-                f"speedup={speedup:.2f}x"
-            )
-    else:
-        print("Instruction CUDA timing skipped: CUDA is not available.")
-
-    print("Instruction parity passed.")
 
 
-if __name__ == "__main__":
-    main()
+@pytest.mark.parametrize("deterministic", [False, True])
+def test_instruction_embedding_cuda_benchmark(deterministic: bool) -> None:
+    if not torch.cuda.is_available():
+        pytest.skip("CUDA is not available")
+    torch.manual_seed(42)
+    dim = 32
+    device = torch.device("cuda")
+    with _deterministic_algorithms(deterministic):
+        py_avg_seconds, cpp_avg_seconds = run_instruction_parity(
+            dim, device, benchmark=True
+        )
+    assert py_avg_seconds is not None
+    assert cpp_avg_seconds is not None

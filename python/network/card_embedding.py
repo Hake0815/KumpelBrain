@@ -8,6 +8,28 @@ from save_load_mixin import SaveLoadMixin
 from attention_pooling import query_sum_attention_pooling
 
 
+class EnergyTypeEmbedding(nn.Module, SaveLoadMixin):
+    """Matches cpp/network EnergyTypeEmbeddingImpl submodule names for save/load parity."""
+
+    def __init__(
+        self,
+        dimension_out: int,
+        device: torch.device | None = None,
+        dtype: torch.dtype | None = None,
+    ):
+        factory_kwargs = {"device": device, "dtype": dtype}
+        super().__init__()
+        self.energy_type_embedding = nn.Embedding(11, dimension_out, **factory_kwargs)
+        self.context_embedding = nn.Embedding(7, dimension_out, **factory_kwargs)
+
+    def forward(
+        self, energy_type_batch: torch.Tensor, energy_type_contexts: torch.Tensor
+    ) -> torch.Tensor:
+        return self.energy_type_embedding(energy_type_batch) + self.context_embedding(
+            energy_type_contexts
+        )
+
+
 class NormalizedLinear(nn.Module, SaveLoadMixin):
     def __init__(
         self,
@@ -41,13 +63,18 @@ class SharedEmbeddingHolder(nn.Module, SaveLoadMixin):
         self.card_amount_range_embedding = NormalizedLinear(
             2, dimension_out, **factory_kwargs
         )
-        self.card_position_embedding = nn.Embedding(11, dimension_out, **factory_kwargs)
+        # Match cpp/network/src/SharedEmbeddingHolder.cpp: num_embeddings = NUMBER_CARD_POSITIONS + 1, padding_idx=0.
+        self.card_position_embedding = nn.Embedding(
+            12, dimension_out, padding_idx=0, **factory_kwargs
+        )
         self.player_target_embedding = nn.Embedding(2, dimension_out, **factory_kwargs)
         self.position_embedding = positional_embedding.PositionalEmbedding(
             dimension_out, **factory_kwargs
         )
         self.damage_embedding = NormalizedLinear(1, dimension_out, 400.0, **factory_kwargs)
-        self.energy_type_embedding = nn.Embedding(11, dimension_out, **factory_kwargs)
+        self.energy_type_embedding = EnergyTypeEmbedding(
+            dimension_out, device=device, dtype=dtype
+        )
 
 
 class FilterConditionEmbedding(nn.Module, SaveLoadMixin):
@@ -296,9 +323,10 @@ class CardAmountDataEmbedding(nn.Module, SaveLoadMixin):
         )
 
     def forward(self, card_amount_data: torch.Tensor) -> torch.Tensor:
+        position = card_amount_data[:, 2] + 1
         return self._card_amount_range_embedding(
             card_amount_data[:, 0:2]
-        ) + self._card_position_embedding(card_amount_data[:, 2])
+        ) + self._card_position_embedding(position)
 
 
 class ReturnToDeckTypeDataEmbedding(nn.Module, SaveLoadMixin):
@@ -326,9 +354,10 @@ class ReturnToDeckTypeDataEmbedding(nn.Module, SaveLoadMixin):
         )
 
     def forward(self, return_to_deck_type_data: torch.Tensor) -> torch.Tensor:
+        position = return_to_deck_type_data[:, 1] + 1
         return self.return_to_deck_type_embedding(
             return_to_deck_type_data[:, 0]
-        ) + self._card_position_embedding(return_to_deck_type_data[:, 1])
+        ) + self._card_position_embedding(position)
 
 
 class PlayerTargetDataEmbedding(nn.Module, SaveLoadMixin):

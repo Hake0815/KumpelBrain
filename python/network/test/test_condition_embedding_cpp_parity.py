@@ -1,3 +1,8 @@
+"""Parity for ConditionEmbedding (Python vs C++).
+
+Run: python -m pytest python/network/test_condition_embedding_cpp_parity.py -v
+"""
+
 from contextlib import contextmanager
 import os
 from pathlib import Path
@@ -6,6 +11,7 @@ import tempfile
 import time
 from typing import Any, Callable
 
+import pytest
 import torch
 
 import card_embedding
@@ -122,39 +128,22 @@ def run_condition_parity(
     return py_avg_seconds, cpp_avg_seconds
 
 
-def main() -> None:
+def test_condition_embedding_parity_cpu() -> None:
     torch.manual_seed(42)
-
     dim = 32
     run_condition_parity(dim, torch.device("cpu"))
-    print("Condition CPU fallback parity passed.")
-
-    if torch.cuda.is_available():
-        device = torch.device("cuda")
-        for deterministic in (False, True):
-            mode_name = "deterministic" if deterministic else "non-deterministic"
-            with _deterministic_algorithms(deterministic):
-                py_avg_seconds, cpp_avg_seconds = run_condition_parity(
-                    dim, device, benchmark=True
-                )
-            assert py_avg_seconds is not None
-            assert cpp_avg_seconds is not None
-            speedup = (
-                py_avg_seconds / cpp_avg_seconds
-                if cpp_avg_seconds > 0
-                else float("inf")
-            )
-            print(
-                f"ConditionEmbedding {mode_name} timing (avg per forward): "
-                f"Python={py_avg_seconds * 1e3:.3f} ms, "
-                f"C++={cpp_avg_seconds * 1e3:.3f} ms, "
-                f"speedup={speedup:.2f}x"
-            )
-    else:
-        print("Condition CUDA timing skipped: CUDA is not available.")
-
-    print("ConditionEmbedding parity passed.")
 
 
-if __name__ == "__main__":
-    main()
+@pytest.mark.parametrize("deterministic", [False, True])
+def test_condition_embedding_cuda_benchmark(deterministic: bool) -> None:
+    if not torch.cuda.is_available():
+        pytest.skip("CUDA is not available")
+    torch.manual_seed(42)
+    dim = 32
+    device = torch.device("cuda")
+    with _deterministic_algorithms(deterministic):
+        py_avg_seconds, cpp_avg_seconds = run_condition_parity(
+            dim, device, benchmark=True
+        )
+    assert py_avg_seconds is not None
+    assert cpp_avg_seconds is not None

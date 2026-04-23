@@ -1,5 +1,11 @@
+"""Parity for nesting filter traversal / flatten / reduce (Python vs C++).
+
+Run: python -m pytest python/network/test_nesting_cpp_filter_parity.py -v
+"""
+
 from pathlib import Path
 import sys
+
 import torch
 
 import filter_test_data
@@ -57,11 +63,6 @@ def _run_case(case_name: str, case_data: list[dict]) -> None:
     _assert_reduce_close(f"{case_name} reduce", py_reduced, cpp_reduced)
 
 
-def main() -> None:
+def test_nesting_filter_parity_all_groups() -> None:
     for case_name, case_data in filter_test_data.all_test_data.items():
         _run_case(case_name, case_data)
-    print("Nesting filter parity passed.")
-
-
-if __name__ == "__main__":
-    main()

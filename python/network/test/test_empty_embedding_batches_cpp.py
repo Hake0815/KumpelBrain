@@ -1,7 +1,6 @@
 """C++ InstructionEmbedding / ConditionEmbedding forwards on empty batches (card-level empty lists).
 
-Run: python -m pytest python/network/test_empty_embedding_batches_cpp.py
-Or:  python python/network/test_empty_embedding_batches_cpp.py
+Run: python -m pytest python/network/test_empty_embedding_batches_cpp.py -v
 """
 
 from pathlib import Path
@@ -78,12 +77,3 @@ def test_cpp_card_state_embedding_empty_batch_cpu():
         out = model.forward([])
     assert out.shape == (0, dim)
     assert out.device.type == device.type
-
-
-if __name__ == "__main__":
-    test_cpp_instruction_embedding_zero_groups_cpu()
-    test_cpp_instruction_embedding_one_empty_group_cpu()
-    test_cpp_condition_embedding_zero_groups_cpu()
-    test_cpp_condition_embedding_one_empty_group_cpu()
-    test_cpp_card_state_embedding_empty_batch_cpu()
-    print("test_empty_embedding_batches_cpp: ok")

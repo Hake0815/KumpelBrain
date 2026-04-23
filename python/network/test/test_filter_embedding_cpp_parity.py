@@ -1,3 +1,8 @@
+"""Parity for FilterEmbedding forward (Python vs C++).
+
+Run: python -m pytest python/network/test_filter_embedding_cpp_parity.py -v
+"""
+
 from pathlib import Path
 import sys
 import os
@@ -47,7 +52,7 @@ def _run_case(
     _assert_close(case_name, py_out, cpp_out)
 
 
-def main() -> None:
+def test_filter_embedding_parity_all_groups() -> None:
     torch.manual_seed(42)
     torch.use_deterministic_algorithms(True)
 
@@ -76,9 +81,3 @@ def main() -> None:
     for group_name in ("simple", "nested", "edge_cases"):
         combined.extend(filter_test_data.all_test_data[group_name])
     _run_case("group:combined_all", py_filter, cpp_filter, combined)
-
-    print("FilterEmbedding parity passed for all filter_test_data groups.")
-
-
-if __name__ == "__main__":
-    main()
