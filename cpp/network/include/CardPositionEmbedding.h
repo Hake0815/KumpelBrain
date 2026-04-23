@@ -28,6 +28,8 @@ struct CardPositionEmbeddingImpl : torch::nn::Module, SaveLoadMixin<CardPosition
     torch::nn::Embedding possible_position_embedding_{nullptr};
     torch::nn::Embedding opponent_position_knowledge_embedding_{nullptr};
     NormalizedLinear top_deck_position_index_embedding_{nullptr};
+    torch::nn::Linear position_mlp_hidden_{nullptr};
+    torch::nn::Linear position_mlp_out_{nullptr};
 };
 
 TORCH_MODULE(CardPositionEmbedding);

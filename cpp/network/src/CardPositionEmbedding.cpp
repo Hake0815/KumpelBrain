@@ -15,6 +15,9 @@ CardPositionEmbeddingImpl::CardPositionEmbeddingImpl(std::shared_ptr<SharedEmbed
                         torch::nn::Embedding(torch::nn::EmbeddingOptions(NUMBER_POSITION_KNOWLEDGE, dimension_out)));
     top_deck_position_index_embedding_ =
         register_module("top_deck_position_index_embedding", NormalizedLinear(1, dimension_out, 60.0, device, dtype));
+    position_mlp_hidden_ =
+        register_module("position_mlp_hidden", torch::nn::Linear(4 * dimension_out, dimension_out));
+    position_mlp_out_ = register_module("position_mlp_out", torch::nn::Linear(dimension_out, dimension_out));
     to(device, dtype);
 }
 
@@ -73,6 +76,9 @@ torch::Tensor CardPositionEmbeddingImpl::forward(const std::vector<ProtoBufCardS
     const auto embedded_possible_positions_averaged =
         embedded_possible_positions / possible_position_counts_tensor.unsqueeze(1).clamp_min(1.0f);
 
-    return (embedded_owner + embedded_opponent_position_knowledge + embedded_top_deck_position_index +
-            embedded_possible_positions_averaged);
+    auto concat = torch::cat(
+        {embedded_owner, embedded_opponent_position_knowledge, embedded_top_deck_position_index,
+         embedded_possible_positions_averaged},
+        1);
+    return position_mlp_out_(torch::relu(position_mlp_hidden_(concat)));
 }
