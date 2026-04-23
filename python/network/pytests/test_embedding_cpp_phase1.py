@@ -1,12 +1,27 @@
+"""Parity checks for phase-1 embedding modules (Python vs C++).
+
+Run: python -m pytest python/network/pytests/test_embedding_cpp_phase1.py -v
+"""
+
 import os
+from collections.abc import Iterator
+from pathlib import Path
 import sys
 import tempfile
 
+_PYTESTS_DIR = Path(__file__).resolve().parent
+_NETWORK_SRC_DIR = _PYTESTS_DIR.parent
+_REPO_ROOT = _NETWORK_SRC_DIR.parent.parent
+_CPP_BUILD = _REPO_ROOT / "cpp" / "build"
+for _p in (_CPP_BUILD, _PYTESTS_DIR, _NETWORK_SRC_DIR):
+    _s = str(_p)
+    if _s not in sys.path:
+        sys.path.insert(0, _s)
+
+import pytest
 import torch
 
 import card_embedding
-
-sys.path.insert(0, "../../cpp/build")
 import kumpel_embedding
 
 
@@ -28,7 +43,24 @@ def _with_loaded_weights(py_model, cpp_model):
             os.remove(path)
 
 
-def test_normalized_linear(dim, batch):
+@pytest.fixture
+def dim() -> int:
+    return 32
+
+
+@pytest.fixture
+def batch() -> int:
+    return 8
+
+
+@pytest.fixture(autouse=True)
+def _phase1_deterministic_seed() -> Iterator[None]:
+    torch.manual_seed(42)
+    torch.use_deterministic_algorithms(True)
+    yield
+
+
+def _check_normalized_linear(dim: int, batch: int) -> None:
     py_norm = card_embedding.NormalizedLinear(3, dim)
     cpp_norm = kumpel_embedding.NormalizedLinear(3, dim)
 
@@ -37,23 +69,24 @@ def test_normalized_linear(dim, batch):
     _assert_close("NormalizedLinear", py_norm(x), cpp_norm.forward(x))
 
 
-def main() -> None:
-    torch.manual_seed(42)
-    torch.use_deterministic_algorithms(True)
+def test_normalized_linear_parity(dim: int, batch: int) -> None:
+    _check_normalized_linear(dim, batch)
 
-    dim = 32
-    batch = 8
 
-    test_normalized_linear(dim, batch)
-
+@pytest.fixture
+def synced_shared_holders(dim: int):
     py_shared = card_embedding.SharedEmbeddingHolder(dim)
     cpp_shared = kumpel_embedding.SharedEmbeddingHolder(dim)
     py_shared.eval()
     cpp_shared.eval()
     _with_loaded_weights(py_shared, cpp_shared)
+    return py_shared, cpp_shared
 
-    py_attack = card_embedding.AttackDataEmbedding(dim)
-    cpp_attack = kumpel_embedding.AttackDataEmbedding(dim)
+
+def test_attack_data_embedding_parity(dim: int, batch: int, synced_shared_holders) -> None:
+    py_shared, cpp_shared = synced_shared_holders
+    py_attack = card_embedding.AttackDataEmbedding(py_shared, dim)
+    cpp_attack = kumpel_embedding.AttackDataEmbedding(cpp_shared, dim)
     _with_loaded_weights(py_attack, cpp_attack)
     attack_data = torch.randint(0, 1, (batch, 2), dtype=torch.int64)
     attack_data[:, 1] = torch.randint(0, 8, (batch,), dtype=torch.int64)
@@ -61,6 +94,8 @@ def main() -> None:
         "AttackDataEmbedding", py_attack(attack_data), cpp_attack.forward(attack_data)
     )
 
+
+def test_discard_data_embedding_parity(dim: int, batch: int) -> None:
     py_discard = card_embedding.DiscardDataEmbedding(dim)
     cpp_discard = kumpel_embedding.DiscardDataEmbedding(dim)
     _with_loaded_weights(py_discard, cpp_discard)
@@ -71,6 +106,11 @@ def main() -> None:
         cpp_discard.forward(discard_data),
     )
 
+
+def test_card_amount_data_embedding_parity(
+    dim: int, batch: int, synced_shared_holders
+) -> None:
+    py_shared, cpp_shared = synced_shared_holders
     py_amount = card_embedding.CardAmountDataEmbedding(py_shared, dim)
     cpp_amount = kumpel_embedding.CardAmountDataEmbedding(cpp_shared, dim)
     _with_loaded_weights(py_amount, cpp_amount)
@@ -82,6 +122,11 @@ def main() -> None:
         cpp_amount.forward(amount_data),
     )
 
+
+def test_return_to_deck_type_data_embedding_parity(
+    dim: int, batch: int, synced_shared_holders
+) -> None:
+    py_shared, cpp_shared = synced_shared_holders
     py_ret = card_embedding.ReturnToDeckTypeDataEmbedding(py_shared, dim)
     cpp_ret = kumpel_embedding.ReturnToDeckTypeDataEmbedding(cpp_shared, dim)
     _with_loaded_weights(py_ret, cpp_ret)
@@ -93,6 +138,11 @@ def main() -> None:
         cpp_ret.forward(ret_data),
     )
 
+
+def test_player_target_data_embedding_parity(
+    dim: int, batch: int, synced_shared_holders
+) -> None:
+    py_shared, cpp_shared = synced_shared_holders
     py_player = card_embedding.PlayerTargetDataEmbedding(py_shared, dim)
     cpp_player = kumpel_embedding.PlayerTargetDataEmbedding(cpp_shared, dim)
     _with_loaded_weights(py_player, cpp_player)
@@ -102,9 +152,3 @@ def main() -> None:
         py_player(player_data),
         cpp_player.forward(player_data),
     )
-
-    print("Phase 1 parity passed.")
-
-
-if __name__ == "__main__":
-    main()

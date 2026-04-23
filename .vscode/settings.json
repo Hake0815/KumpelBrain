@@ -9,5 +9,8 @@
   "cmake.configureSettings": {
     "Python_EXECUTABLE": "/home/felix/ai/KumpelBrain/.venv/bin/python",
     "Torch_DIR": "/home/felix/ai/KumpelBrain/.venv/lib/python3.13/site-packages/torch/share/cmake/Torch"
-  }
+  },
+  "python.testing.pytestArgs": ["python"],
+  "python.testing.unittestEnabled": false,
+  "python.testing.pytestEnabled": true
 }

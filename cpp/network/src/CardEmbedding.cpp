@@ -56,9 +56,8 @@ torch::Tensor sparse_adjacency_from_row_col(std::vector<int64_t>& row_indices, s
         .to(device);
 }
 
-torch::Tensor adjacency_from_ptr_map(
-    const std::unordered_map<int64_t, std::vector<std::shared_ptr<int64_t>>>& ptr_map, int64_t num_cards,
-    torch::Dtype dtype, torch::Device device) {
+torch::Tensor adjacency_from_ptr_map(const std::unordered_map<int64_t, std::vector<std::shared_ptr<int64_t>>>& ptr_map,
+                                     int64_t num_cards, torch::Dtype dtype, torch::Device device) {
     std::vector<int64_t> row_indices;
     std::vector<int64_t> col_indices;
     size_t reserve = 0;
@@ -113,10 +112,9 @@ void reserve_card_features(CardFeatures& f, int64_t batch_size) {
 
 }  // namespace
 
-CardEmbeddingImpl::CardEmbeddingImpl(int64_t dimension_out, torch::Device device, torch::Dtype dtype)
-    : dimension_out_(dimension_out), device_(device), dtype_(dtype) {
-    shared_embedding_holder_ =
-        register_module("shared_embedding_holder", SharedEmbeddingHolder(dimension_out, device, dtype));
+CardEmbeddingImpl::CardEmbeddingImpl(std::shared_ptr<SharedEmbeddingHolderImpl> shared_embedding_holder,
+                                     int64_t dimension_out, torch::Device device, torch::Dtype dtype)
+    : shared_embedding_holder_(shared_embedding_holder), dimension_out_(dimension_out), device_(device), dtype_(dtype) {
     instruction_data_embedding_ =
         register_module("instruction_data_embedding",
                         InstructionDataEmbedding(shared_embedding_holder_.ptr(), dimension_out, device, dtype));
@@ -152,8 +150,8 @@ CardEmbeddingImpl::CardEmbeddingImpl(int64_t dimension_out, torch::Device device
         "number_of_prize_cards_on_knockout_embedding", NormalizedLinear(1, dimension_out, 6.0, device, dtype));
     current_damage_embedding_ =
         register_module("current_damage_embedding", NormalizedLinear(1, dimension_out, 400.0, device, dtype));
-    pokemon_turn_trait_embedding_ =
-        register_module("pokemon_turn_trait_embedding", torch::nn::Embedding(2, dimension_out));
+    pokemon_turn_trait_embedding_ = register_module("pokemon_turn_trait_embedding",
+                                                    torch::nn::Embedding(NUMBER_POKEMON_TURN_TRAITS, dimension_out));
     card_self_multi_head_attention_ =
         register_module("card_self_multi_head_attention",
                         MultiHeadAttention(dimension_out, dimension_out, dimension_out,
@@ -165,7 +163,8 @@ CardEmbeddingImpl::CardEmbeddingImpl(int64_t dimension_out, torch::Device device
     to(device, dtype);
 }
 
-std::pair<torch::Tensor, AdjacencyMatrices> CardEmbeddingImpl::forward(const std::vector<ProtoBufCard>& card_batch) {
+std::pair<torch::Tensor, AdjacencyMatrices> CardEmbeddingImpl::forward(
+    const std::vector<ProtoBufCardState>& card_batch) {
     const int64_t batch_size = static_cast<int64_t>(card_batch.size());
     auto card_features = collect_card_features(card_batch);
     auto staged = stage_features(card_features);
@@ -179,10 +178,9 @@ std::pair<torch::Tensor, AdjacencyMatrices> CardEmbeddingImpl::forward(const std
             card_features.adjacency_matrices};
 }
 
-void CardEmbeddingImpl::append_card_instructions_and_conditions(const std::vector<ProtoBufCard>& card_batch,
+void CardEmbeddingImpl::append_card_instructions_and_conditions(const ProtoBufCard& card,
                                                                 InstructionsAndConditions& instructions_and_conditions,
                                                                 int64_t card_index) {
-    const auto& card = card_batch[static_cast<size_t>(card_index)];
     if (card.instructions_size() > 0) {
         instructions_and_conditions.instructions.emplace_back();
         append_proto_list(instructions_and_conditions.instructions.back(), card.instructions());
@@ -238,7 +236,7 @@ void CardEmbeddingImpl::append_card_instructions_and_conditions(const std::vecto
     }
 }
 
-CardFeatures CardEmbeddingImpl::collect_card_features(const std::vector<ProtoBufCard>& card_batch) {
+CardFeatures CardEmbeddingImpl::collect_card_features(const std::vector<ProtoBufCardState>& card_batch) {
     CardFeatures card_features;
     reserve_card_features(card_features, static_cast<int64_t>(card_batch.size()));
     std::unordered_map<int64_t, std::shared_ptr<std::vector<int64_t>>> evolves_from_matrix;
@@ -251,7 +249,7 @@ CardFeatures CardEmbeddingImpl::collect_card_features(const std::vector<ProtoBuf
     std::unordered_map<int64_t, std::shared_ptr<int64_t>> deck_id_to_card_index;
 
     for (int64_t card_index = 0; card_index < static_cast<int64_t>(card_batch.size()); ++card_index) {
-        const auto& card = card_batch[static_cast<size_t>(card_index)];
+        const auto& card = card_batch[static_cast<size_t>(card_index)].card();
 
         if (card.deck_id() < DECK_SIZE) {
             player_prefix = "player1_";
@@ -295,7 +293,7 @@ CardFeatures CardEmbeddingImpl::collect_card_features(const std::vector<ProtoBuf
             }
         }
 
-        append_card_instructions_and_conditions(card_batch, card_features.instructions_and_conditions, card_index);
+        append_card_instructions_and_conditions(card, card_features.instructions_and_conditions, card_index);
         card_features.card_type.push_back(static_cast<int64_t>(card.card_type()));
 
         card_features.card_subtype.push_back(static_cast<int64_t>(card.card_subtype()));

@@ -16,5 +16,7 @@ CardAmountDataEmbeddingImpl::CardAmountDataEmbeddingImpl(
 torch::Tensor CardAmountDataEmbeddingImpl::forward(const torch::Tensor& card_amount_data) {
     auto amount_range = card_amount_data.index({Slice(), Slice(0, 2)});
     auto position = card_amount_data.index({Slice(), 2});
+    position =
+        position + torch::ones_like(position, torch::TensorOptions().device(position.device()).dtype(position.dtype()));
     return card_amount_range_embedding_(amount_range) + card_position_embedding_(position);
 }

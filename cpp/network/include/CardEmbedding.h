@@ -20,6 +20,7 @@
 #include "network/include/MultiHeadAttention.h"
 #include "network/include/NormalizedLinear.h"
 
+using ProtoBufCardState = gamecore::serialization::ProtoBufCardState;
 using ProtoBufCard = gamecore::serialization::ProtoBufCard;
 
 struct ParentIndex {
@@ -112,9 +113,10 @@ struct StagedTensors {
 
 /// Embeds a batch of `ProtoBufCard` into shape [batch, dimension_out].
 struct CardEmbeddingImpl : torch::nn::Module, SaveLoadMixin<CardEmbeddingImpl> {
-    CardEmbeddingImpl(int64_t dimension_out, torch::Device device = torch::kCPU, torch::Dtype dtype = torch::kFloat);
+    CardEmbeddingImpl(std::shared_ptr<SharedEmbeddingHolderImpl> shared_embedding_holder, int64_t dimension_out,
+                      torch::Device device = torch::kCPU, torch::Dtype dtype = torch::kFloat);
 
-    std::pair<torch::Tensor, AdjacencyMatrices> forward(const std::vector<ProtoBufCard>& card_batch);
+    std::pair<torch::Tensor, AdjacencyMatrices> forward(const std::vector<ProtoBufCardState>& card_batch);
 
    private:
     int64_t dimension_out_;
@@ -144,9 +146,9 @@ struct CardEmbeddingImpl : torch::nn::Module, SaveLoadMixin<CardEmbeddingImpl> {
     MultiHeadAttention card_pooling_multi_head_attention_{nullptr};
     torch::nn::Embedding card_pooling_query_embedding_{nullptr};
 
-    CardFeatures collect_card_features(const std::vector<ProtoBufCard>& card_batch);
+    CardFeatures collect_card_features(const std::vector<ProtoBufCardState>& card_batch);
 
-    void append_card_instructions_and_conditions(const std::vector<ProtoBufCard>& card_batch,
+    void append_card_instructions_and_conditions(const ProtoBufCard& card,
                                                  InstructionsAndConditions& instructions_and_conditions,
                                                  int64_t card_index);
 
