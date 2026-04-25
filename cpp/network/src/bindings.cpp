@@ -5,16 +5,19 @@
 #include "../include/AttackDataEmbedding.h"
 #include "../include/CardAmountDataEmbedding.h"
 #include "../include/CardEmbedding.h"
+#include "../include/CardPositionEmbedding.h"
 #include "../include/CardStateEmbedding.h"
 #include "../include/ConditionEmbedding.h"
 #include "../include/DiscardDataEmbedding.h"
 #include "../include/FilterConditionEmbedding.h"
 #include "../include/FilterEmbedding.h"
+#include "../include/GameStateEmbedding.h"
 #include "../include/InstructionDataEmbedding.h"
 #include "../include/InstructionEmbedding.h"
 #include "../include/MultiHeadAttention.h"
 #include "../include/Nesting.h"
 #include "../include/NormalizedLinear.h"
+#include "../include/PlayerStateEmbedding.h"
 #include "../include/PlayerTargetDataEmbedding.h"
 #include "../include/PositionalEmbedding.h"
 #include "../include/ReturnToDeckTypeDataEmbedding.h"
@@ -127,13 +130,13 @@ std::vector<std::vector<MessageType>> parse_nested_serialized_batch(const pybind
     return parsed;
 }
 
-std::vector<serialization::ProtoBufCardState> parse_card_state_batch_serialized(const pybind11::iterable& batch) {
-    std::vector<serialization::ProtoBufCardState> parsed;
+void parse_card_state_batch_serialized(const pybind11::iterable& batch,
+                                       google::protobuf::RepeatedPtrField<serialization::ProtoBufCardState>& parsed) {
+    parsed.Clear();
     for (auto item : batch) {
-        parsed.push_back(parse_serialized_message<serialization::ProtoBufCardState>(item.cast<pybind11::object>(),
-                                                                                    "ProtoBufCardState"));
+        *parsed.Add() = parse_serialized_message<serialization::ProtoBufCardState>(item.cast<pybind11::object>(),
+                                                                                   "ProtoBufCardState");
     }
-    return parsed;
 }
 
 }  // namespace
@@ -281,11 +284,27 @@ PYBIND11_MODULE(kumpel_embedding, m) {
              pybind11::arg("device") = torch::Device(torch::kCPU), pybind11::arg("dtype") = torch::Dtype(torch::kFloat))
         .def("forward",
              [](CardEmbeddingImpl& self, const pybind11::iterable& card_states) {
-                 auto [embedding, adjacency] = self.forward(parse_card_state_batch_serialized(card_states));
+                 google::protobuf::RepeatedPtrField<serialization::ProtoBufCardState> parsed;
+                 parse_card_state_batch_serialized(card_states, parsed);
+                 auto [embedding, adjacency] = self.forward(parsed);
                  return pybind11::make_tuple(embedding, adjacency);
              })
         .def("save_weights", &CardEmbeddingImpl::save_weights)
         .def("load_weights", &CardEmbeddingImpl::load_weights);
+
+    pybind11::class_<CardPositionEmbeddingImpl, torch::nn::Module, std::shared_ptr<CardPositionEmbeddingImpl>>(
+        m, "CardPositionEmbedding")
+        .def(pybind11::init<std::shared_ptr<SharedEmbeddingHolderImpl>, int64_t, torch::Device, torch::Dtype>(),
+             pybind11::arg("shared_embedding_holder"), pybind11::arg("dimension_out"),
+             pybind11::arg("device") = torch::Device(torch::kCPU), pybind11::arg("dtype") = torch::Dtype(torch::kFloat))
+        .def("forward",
+             [](CardPositionEmbeddingImpl& self, const pybind11::iterable& card_states) {
+                 google::protobuf::RepeatedPtrField<serialization::ProtoBufCardState> parsed;
+                 parse_card_state_batch_serialized(card_states, parsed);
+                 return self.forward(parsed);
+             })
+        .def("save_weights", &CardPositionEmbeddingImpl::save_weights)
+        .def("load_weights", &CardPositionEmbeddingImpl::load_weights);
 
     pybind11::class_<CardStateEmbeddingImpl, torch::nn::Module, std::shared_ptr<CardStateEmbeddingImpl>>(
         m, "CardStateEmbedding")
@@ -293,10 +312,39 @@ PYBIND11_MODULE(kumpel_embedding, m) {
              pybind11::arg("device") = torch::Device(torch::kCPU), pybind11::arg("dtype") = torch::Dtype(torch::kFloat))
         .def("forward",
              [](CardStateEmbeddingImpl& self, const pybind11::iterable& card_states) {
-                 return self.forward(parse_card_state_batch_serialized(card_states));
+                 google::protobuf::RepeatedPtrField<serialization::ProtoBufCardState> parsed;
+                 parse_card_state_batch_serialized(card_states, parsed);
+                 return self.forward(parsed);
              })
         .def("save_weights", &CardStateEmbeddingImpl::save_weights)
         .def("load_weights", &CardStateEmbeddingImpl::load_weights);
+
+    pybind11::class_<PlayerStateEmbeddingImpl, torch::nn::Module, std::shared_ptr<PlayerStateEmbeddingImpl>>(
+        m, "PlayerStateEmbedding")
+        .def(pybind11::init<int64_t, torch::Device, torch::Dtype>(), pybind11::arg("dimension_out"),
+             pybind11::arg("device") = torch::Device(torch::kCPU), pybind11::arg("dtype") = torch::Dtype(torch::kFloat))
+        .def("forward",
+             [](PlayerStateEmbeddingImpl& self, const pybind11::handle& self_player_state,
+                const pybind11::handle& opponent_player_state) {
+                 return self.forward(
+                     parse_serialized_message<serialization::ProtoBufPlayerState>(self_player_state, "ProtoBufPlayerState"),
+                     parse_serialized_message<serialization::ProtoBufPlayerState>(opponent_player_state,
+                                                                                  "ProtoBufPlayerState"));
+             })
+        .def("save_weights", &PlayerStateEmbeddingImpl::save_weights)
+        .def("load_weights", &PlayerStateEmbeddingImpl::load_weights);
+
+    pybind11::class_<GameStateEmbeddingImpl, torch::nn::Module, std::shared_ptr<GameStateEmbeddingImpl>>(
+        m, "GameStateEmbedding")
+        .def(pybind11::init<int64_t, torch::Device, torch::Dtype>(), pybind11::arg("dimension_out"),
+             pybind11::arg("device") = torch::Device(torch::kCPU), pybind11::arg("dtype") = torch::Dtype(torch::kFloat))
+        .def("forward",
+             [](GameStateEmbeddingImpl& self, const pybind11::handle& game_state) {
+                 return self.forward(
+                     parse_serialized_message<serialization::ProtoBufGameState>(game_state, "ProtoBufGameState"));
+             })
+        .def("save_weights", &GameStateEmbeddingImpl::save_weights)
+        .def("load_weights", &GameStateEmbeddingImpl::load_weights);
 
     m.def("nesting_traverse_filter", [](const pybind11::iterable& nested_input) {
         auto nodes = parse_filter_list(nested_input);

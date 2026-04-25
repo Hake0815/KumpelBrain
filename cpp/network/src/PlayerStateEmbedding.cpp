@@ -23,6 +23,7 @@ PlayerStateEmbeddingImpl::PlayerStateEmbeddingImpl(int64_t dimension_out, torch:
         register_module("turn_counter_embedding", NormalizedLinear(1, dimension_out, LARGE_TURNCOUNTER, device, dtype));
     player_turn_traits_embedding_ =
         register_module("player_turn_traits_embedding", torch::nn::Embedding(NUMBER_PLAYER_TURN_TRAITS, dimension_out));
+    queries_embedding_ = register_module("queries_embedding", torch::nn::Embedding(2, dimension_out));
     multi_head_attention_ =
         register_module("multi_head_attention",
                         MultiHeadAttention(dimension_out_, dimension_out_, dimension_out_,
