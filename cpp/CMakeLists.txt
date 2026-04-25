@@ -33,12 +33,14 @@ set(KUMPEL_CORE_SOURCES
     network/src/EnergyTypeEmbedding.cpp
     network/src/FilterConditionEmbedding.cpp
     network/src/FilterEmbedding.cpp
+    network/src/GameStateEmbedding.cpp
     network/src/InstructionDataEmbedding.cpp
     network/src/InstructionEmbedding.cpp
-    network/src/PositionalEmbedding.cpp
     network/src/Nesting.cpp
-    network/src/TensorUtils.cpp
+    network/src/PlayerStateEmbedding.cpp
     network/src/PlayerTargetDataEmbedding.cpp
+    network/src/PositionalEmbedding.cpp
+    network/src/TensorUtils.cpp
     network/src/ReturnToDeckTypeDataEmbedding.cpp
     network/src/MultiHeadAttention.cpp
     network/src/NormalizedLinear.cpp

@@ -85,7 +85,8 @@ CardStateEmbeddingImpl::CardStateEmbeddingImpl(int64_t dimension_out, torch::Dev
     to(device, dtype);
 }
 
-torch::Tensor CardStateEmbeddingImpl::forward(const std::vector<ProtoBufCardState>& card_state_batch) {
+torch::Tensor CardStateEmbeddingImpl::forward(
+    const google::protobuf::RepeatedPtrField<ProtoBufCardState>& card_state_batch) {
     if (card_state_batch.empty()) {
         return torch::empty({0, dimension_out_}, torch::TensorOptions().dtype(dtype_).device(device_));
     }

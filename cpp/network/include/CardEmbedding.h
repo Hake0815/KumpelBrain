@@ -116,7 +116,8 @@ struct CardEmbeddingImpl : torch::nn::Module, SaveLoadMixin<CardEmbeddingImpl> {
     CardEmbeddingImpl(std::shared_ptr<SharedEmbeddingHolderImpl> shared_embedding_holder, int64_t dimension_out,
                       torch::Device device = torch::kCPU, torch::Dtype dtype = torch::kFloat);
 
-    std::pair<torch::Tensor, AdjacencyMatrices> forward(const std::vector<ProtoBufCardState>& card_batch);
+    std::pair<torch::Tensor, AdjacencyMatrices> forward(
+        const google::protobuf::RepeatedPtrField<ProtoBufCardState>& card_batch);
 
    private:
     int64_t dimension_out_;
@@ -147,7 +148,7 @@ struct CardEmbeddingImpl : torch::nn::Module, SaveLoadMixin<CardEmbeddingImpl> {
     torch::nn::Embedding card_pooling_query_embedding_{nullptr};
     torch::nn::Embedding token_type_embedding_{nullptr};
 
-    CardFeatures collect_card_features(const std::vector<ProtoBufCardState>& card_batch);
+    CardFeatures collect_card_features(const google::protobuf::RepeatedPtrField<ProtoBufCardState>& card_batch);
 
     void append_card_instructions_and_conditions(const ProtoBufCard& card,
                                                  InstructionsAndConditions& instructions_and_conditions,
