@@ -4,6 +4,8 @@
 #include <torch/nn/modules/embedding.h>
 #include <torch/torch.h>
 
+#include <vector>
+
 #include "network/include/MultiHeadAttention.h"
 #include "network/include/NormalizedLinear.h"
 #include "network/include/SaveLoadMixin.h"
@@ -19,11 +21,33 @@ struct PlayerStateEmbeddingImpl : torch::nn::Module, SaveLoadMixin<PlayerStateEm
                           const ProtoBufPlayerState& opponent_player_state);
 
    private:
+    struct PlayerStateFeatures {
+        std::vector<int64_t> boolean_indices;
+        std::vector<float> counts;
+        std::vector<int64_t> player_turn_traits;
+        std::vector<int64_t> player_turn_trait_offsets;
+        int64_t max_player_turn_traits = 0;
+    };
+
+    struct PlayerStateStagedTensors {
+        torch::Tensor boolean_indices;
+        torch::Tensor counts;
+        torch::Tensor player_turn_traits;
+        torch::Tensor player_turn_trait_offsets;
+    };
+
+    struct PlayerTraitTokens {
+        torch::Tensor tokens;
+        torch::Tensor mask;
+    };
+
     int64_t dimension_out_;
     torch::Device device_;
     torch::Dtype dtype_;
     torch::TensorOptions index_options_;
     torch::TensorOptions float_options_;
+    torch::Tensor query_indices_;
+    torch::Tensor base_token_mask_;
     torch::nn::Embedding is_active_embedding_{nullptr};
     torch::nn::Embedding is_attacking_embedding_{nullptr};
     torch::nn::Embedding knows_his_prizes_embedding_{nullptr};
@@ -38,7 +62,11 @@ struct PlayerStateEmbeddingImpl : torch::nn::Module, SaveLoadMixin<PlayerStateEm
     torch::nn::Embedding queries_embedding_{nullptr};
     MultiHeadAttention multi_head_attention_{nullptr};
 
-    torch::Tensor embed_player_state(const ProtoBufPlayerState& player_state);
+    PlayerStateFeatures collect_features(const ProtoBufPlayerState& self_player_state,
+                                         const ProtoBufPlayerState& opponent_player_state) const;
+    PlayerStateStagedTensors stage_features(const PlayerStateFeatures& features) const;
+    torch::Tensor embed_base_tokens(const PlayerStateStagedTensors& staged);
+    PlayerTraitTokens embed_trait_tokens(const PlayerStateStagedTensors& staged, int64_t max_player_turn_traits);
 };
 
 TORCH_MODULE(PlayerStateEmbedding);

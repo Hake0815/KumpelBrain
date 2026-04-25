@@ -77,9 +77,11 @@ def test_player_state_embedding_uneven_traits_cpu():
         b = _player_state_bytes(num_traits=b_traits, seed=b_traits + 10)
         with torch.inference_mode():
             out = m.forward(a, b)
+            repeated = m.forward(a, b)
         assert out.shape == (2, dim)
         assert out.device.type == device.type
         assert torch.isfinite(out).all()
+        torch.testing.assert_close(repeated, out)
 
 
 def test_game_state_embedding_zero_cards_uneven_traits_cpu():
