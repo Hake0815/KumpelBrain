@@ -488,7 +488,8 @@ void enrich_card_states_with_positions(google::protobuf::RepeatedPtrField<serial
     }
 }
 
-serialization::ProtoBufPlayerState make_player_state(int64_t seed, bool active, bool attacking) {
+serialization::ProtoBufPlayerState make_player_state(int64_t seed, bool active, bool attacking,
+                                                      int num_turn_traits = 2) {
     serialization::ProtoBufPlayerState player;
     player.set_is_active(active);
     player.set_is_attacking(attacking);
@@ -499,18 +500,19 @@ serialization::ProtoBufPlayerState make_player_state(int64_t seed, bool active, 
     player.set_bench_count(static_cast<int32_t>(seed % 6));
     player.set_discard_pile_count(static_cast<int32_t>((seed * 3) % 50));
     player.set_turn_counter(static_cast<int32_t>(1 + (seed % 10)));
-    for (int i = 0; i < 2; ++i) {
+    for (int i = 0; i < num_turn_traits; ++i) {
         player.add_player_turn_traits(static_cast<serialization::ProtoBufPlayerTurnTrait>((seed + i) % 4));
     }
     return player;
 }
 
-serialization::ProtoBufGameState make_game_state(int64_t card_count, int64_t seed) {
+serialization::ProtoBufGameState make_game_state(int64_t card_count, int64_t seed, int self_turn_traits = 2,
+                                                 int opponent_turn_traits = 2) {
     serialization::ProtoBufGameState game_state;
     game_state.set_recreatable(true);
     game_state.set_technical_game_state(serialization::GAME_STATE_IDLE_PLAYER_TURN);
-    *game_state.mutable_self_state() = make_player_state(seed, true, true);
-    *game_state.mutable_opponent_state() = make_player_state(seed + 1, false, false);
+    *game_state.mutable_self_state() = make_player_state(seed, true, true, self_turn_traits);
+    *game_state.mutable_opponent_state() = make_player_state(seed + 1, false, false, opponent_turn_traits);
 
     google::protobuf::RepeatedPtrField<serialization::ProtoBufCardState> states;
     fill_card_states_from_cards(build_card_batch(card_count), states);
@@ -680,19 +682,25 @@ void verify_card_state_embedding_output_shape(CardStateEmbeddingImpl& card_state
 void verify_player_state_embedding_output_shape(PlayerStateEmbeddingImpl& player_state_embedding,
                                                 const torch::Device& device, int64_t dimension_out,
                                                 const std::string& label) {
-    const auto self = make_player_state(0, true, true);
-    const auto opponent = make_player_state(1, false, false);
-    auto out = player_state_embedding.forward(self, opponent);
-    if (out.dim() != 2 || out.size(0) != 2 || out.size(1) != dimension_out) {
-        std::cerr << label << " PlayerStateEmbedding::forward shape check failed: expected (2, " << dimension_out
-                  << ")\n";
-        std::abort();
-    }
-    if (!tensor_device_matches_module(out, device)) {
-        std::cerr << label << " PlayerStateEmbedding::forward device mismatch\n";
-        std::abort();
-    }
-    benchmark_sink += out.numel();
+    auto check_pair = [&](const serialization::ProtoBufPlayerState& self,
+                          const serialization::ProtoBufPlayerState& opponent, const char* case_name) {
+        auto out = player_state_embedding.forward(self, opponent);
+        if (out.dim() != 2 || out.size(0) != 2 || out.size(1) != dimension_out) {
+            std::cerr << label << " PlayerStateEmbedding::forward shape check failed [" << case_name
+                      << "]: expected (2, " << dimension_out << ")\n";
+            std::abort();
+        }
+        if (!tensor_device_matches_module(out, device)) {
+            std::cerr << label << " PlayerStateEmbedding::forward device mismatch [" << case_name << "]\n";
+            std::abort();
+        }
+        benchmark_sink += out.numel();
+    };
+
+    check_pair(make_player_state(0, true, true, 2), make_player_state(1, false, false, 2), "balanced_traits");
+    check_pair(make_player_state(10, true, true, 0), make_player_state(11, false, false, 4), "uneven_0_vs_4");
+    check_pair(make_player_state(20, true, true, 1), make_player_state(21, false, false, 3), "uneven_1_vs_3");
+    check_pair(make_player_state(30, true, true, 4), make_player_state(31, false, false, 0), "uneven_4_vs_0");
 }
 
 void verify_game_state_embedding_output_shape(GameStateEmbeddingImpl& game_state_embedding, const torch::Device& device,
@@ -708,6 +716,20 @@ void verify_game_state_embedding_output_shape(GameStateEmbeddingImpl& game_state
         }
         if (!tensor_device_matches_module(out, device)) {
             std::cerr << label << " GameStateEmbedding::forward device mismatch\n";
+            std::abort();
+        }
+        benchmark_sink += out.numel();
+    }
+    {
+        auto uneven = make_game_state(0, 500, 0, 4);
+        auto out = game_state_embedding.forward(uneven);
+        if (out.dim() != 2 || out.size(0) != 2 || out.size(1) != dimension_out) {
+            std::cerr << label << " GameStateEmbedding::forward uneven traits (0 cards): expected (2, "
+                      << dimension_out << ")\n";
+            std::abort();
+        }
+        if (!tensor_device_matches_module(out, device)) {
+            std::cerr << label << " GameStateEmbedding::forward uneven traits device mismatch\n";
             std::abort();
         }
         benchmark_sink += out.numel();
@@ -894,6 +916,30 @@ void run_embedding_benchmarks(const torch::Device& device, const std::string& la
         benchmark_sink += out.numel();
     });
 
+    const auto self_0 = make_player_state(200, true, true, 0);
+    const auto opp_4 = make_player_state(201, false, false, 4);
+    benchmark_ms(label + " player_state_embedding_forward_uneven_0_vs_4", device, warmup_runs, measured_runs,
+                 [&]() {
+                     auto out = player_state_embedding->forward(self_0, opp_4);
+                     benchmark_sink += out.numel();
+                 });
+
+    const auto self_1 = make_player_state(210, true, true, 1);
+    const auto opp_3 = make_player_state(211, false, false, 3);
+    benchmark_ms(label + " player_state_embedding_forward_uneven_1_vs_3", device, warmup_runs, measured_runs,
+                 [&]() {
+                     auto out = player_state_embedding->forward(self_1, opp_3);
+                     benchmark_sink += out.numel();
+                 });
+
+    const auto self_4 = make_player_state(220, true, true, 4);
+    const auto opp_0 = make_player_state(221, false, false, 0);
+    benchmark_ms(label + " player_state_embedding_forward_uneven_4_vs_0", device, warmup_runs, measured_runs,
+                 [&]() {
+                     auto out = player_state_embedding->forward(self_4, opp_0);
+                     benchmark_sink += out.numel();
+                 });
+
     auto game_state_32 = make_game_state(32, 200);
     benchmark_ms(label + " game_state_embedding_forward_32", device, warmup_runs, measured_runs, [&]() {
         auto out = game_state_embedding->forward(game_state_32);
@@ -905,6 +951,20 @@ void run_embedding_benchmarks(const torch::Device& device, const std::string& la
         auto out = game_state_embedding->forward(game_state_128);
         benchmark_sink += out.numel();
     });
+
+    auto game_state_32_uneven = make_game_state(32, 400, 0, 4);
+    benchmark_ms(label + " game_state_embedding_forward_32_uneven_traits", device, warmup_runs, measured_runs,
+                 [&]() {
+                     auto out = game_state_embedding->forward(game_state_32_uneven);
+                     benchmark_sink += out.numel();
+                 });
+
+    auto game_state_128_uneven = make_game_state(128, 500, 4, 0);
+    benchmark_ms(label + " game_state_embedding_forward_128_uneven_traits", device, warmup_runs, measured_runs,
+                 [&]() {
+                     auto out = game_state_embedding->forward(game_state_128_uneven);
+                     benchmark_sink += out.numel();
+                 });
 }
 
 }  // namespace

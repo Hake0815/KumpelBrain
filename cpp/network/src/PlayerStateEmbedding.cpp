@@ -2,7 +2,9 @@
 
 #include <c10/core/ScalarType.h>
 
+#include "network/include/AttentionUtils.h"
 #include "network/include/SharedConstants.h"
+#include "network/include/TensorUtils.h"
 
 PlayerStateEmbeddingImpl::PlayerStateEmbeddingImpl(int64_t dimension_out, torch::Device device, torch::Dtype dtype)
     : dimension_out_(dimension_out), device_(device), dtype_(dtype) {
@@ -38,10 +40,14 @@ torch::Tensor PlayerStateEmbeddingImpl::forward(const ProtoBufPlayerState& self_
     auto embedded_self_player_state = embed_player_state(self_player_state);
     auto embedded_opponent_player_state = embed_player_state(opponent_player_state);
 
-    auto queries = queries_embedding_(torch::tensor({0, 1}, index_options_)).unsqueeze(1);
-    auto key_value = torch::stack({embedded_self_player_state, embedded_opponent_player_state}, 0);
+    const int64_t self_len = embedded_self_player_state.size(0);
+    const int64_t opp_len = embedded_opponent_player_state.size(0);
+    auto flat = torch::cat({embedded_self_player_state, embedded_opponent_player_state}, 0);
+    auto offsets = torch::tensor({static_cast<int64_t>(0), self_len, self_len + opp_len}, index_options_);
+    auto [padded, valid_token_mask] = tensor_utils::pad_by_offsets(flat, offsets, dimension_out_);
 
-    return multi_head_attention_(queries, key_value, key_value).squeeze(1);
+    auto queries = queries_embedding_(torch::tensor({0, 1}, index_options_)).unsqueeze(1);
+    return attention_utils::masked_attention_pooling(multi_head_attention_, queries, padded, valid_token_mask);
 }
 
 torch::Tensor PlayerStateEmbeddingImpl::embed_player_state(const ProtoBufPlayerState& player_state) {
