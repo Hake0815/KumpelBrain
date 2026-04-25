@@ -6,6 +6,11 @@
 #include "network/src/serialization/gamecore_serialization.pb.h"
 
 constexpr int64_t DECK_SIZE = 60;
+constexpr int64_t MAX_PRIZES = 6;
+constexpr int64_t LARGE_HAND_COUNT = 10;
+constexpr int64_t BENCH_SIZE = 5;
+constexpr int64_t LARGE_DISCARD_PILE_SIZE = 50;
+constexpr int64_t LARGE_TURNCOUNTER = 10;
 constexpr int64_t NUMBER_CARD_TYPES = gamecore::serialization::ProtoBufCardType_ARRAYSIZE;
 constexpr int64_t NUMBER_CARD_SUBTYPES = gamecore::serialization::ProtoBufCardSubtype_ARRAYSIZE;
 constexpr int64_t NUMBER_CARD_POSITIONS = gamecore::serialization::ProtoBufCardPosition_ARRAYSIZE;
@@ -22,7 +27,7 @@ constexpr int64_t NUMBER_FILTER_LOGICAL_OPERATORS = gamecore::serialization::Pro
 constexpr int64_t NUMBER_INSTRUCTION_TYPES = gamecore::serialization::ProtoBufInstructionType_ARRAYSIZE;
 constexpr int64_t NUMBER_INSTRUCTION_DATA_TYPES = gamecore::serialization::ProtoBufInstructionDataType_ARRAYSIZE;
 constexpr int64_t NUMBER_RETURN_TO_DECK_TYPES = gamecore::serialization::ProtoBufReturnToDeckType_ARRAYSIZE;
-
+constexpr int64_t NUMBER_PLAYER_TURN_TRAITS = gamecore::serialization::ProtoBufPlayerTurnTrait_ARRAYSIZE;
 constexpr int64_t NUM_CARD_TOKEN_TYPES = 16;
 
 #endif

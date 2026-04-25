@@ -32,7 +32,7 @@ struct CardStateEmbeddingImpl : torch::nn::Module, SaveLoadMixin<CardStateEmbedd
     CardStateEmbeddingImpl(int64_t dimension_out, torch::Device device = torch::kCPU,
                            torch::Dtype dtype = torch::kFloat);
 
-    torch::Tensor forward(const std::vector<ProtoBufCardState>& card_state_batch);
+    torch::Tensor forward(const google::protobuf::RepeatedPtrField<ProtoBufCardState>& card_state_batch);
 
    private:
     int64_t dimension_out_;
