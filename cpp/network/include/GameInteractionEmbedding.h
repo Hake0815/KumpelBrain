@@ -7,15 +7,24 @@
 #include <vector>
 
 #include "network/include/CardEmbedding.h"
+#include "network/include/MultiHeadAttention.h"
+#include "network/include/NormalizedLinear.h"
 #include "network/include/SaveLoadMixin.h"
 #include "network/src/serialization/gamecore_serialization.pb.h"
 
 using ProtoBufGameInteraction = gamecore::serialization::ProtoBufGameInteraction;
 
 struct FlatConditionalTargetQuery {
-    std::vector<int64_t> logical_operator;
-    std::vector<int64_t> int_range;  // two consecutive ints for min and max
-    std::vector<int64_t> selection_qualifier;
+    std::vector<int64_t> node_is_leaf;
+    std::vector<int64_t> node_logical_operator;
+    std::vector<int64_t> node_depth;
+    std::vector<int64_t> child_ptr;
+    std::vector<int64_t> child_idx;
+    std::vector<int64_t> leaf_node_index;
+    std::vector<int64_t> leaf_int_range;  // two consecutive ints for min and max
+    std::vector<int64_t> leaf_selection_qualifier;
+    std::vector<int64_t> root_node_index;
+    std::vector<int64_t> root_target_data_index;
 };
 struct FlatGameInteractionBatch {
     std::vector<int64_t> game_interaction_types;
@@ -44,10 +53,17 @@ struct GameInteractionEmbeddingImpl : torch::nn::Module, SaveLoadMixin<GameInter
     torch::Tensor forward(const std::vector<ProtoBufGameInteraction>& game_interactions);
 
    private:
+    torch::Tensor embed_conditional_target_queries(const FlatConditionalTargetQuery& flat);
+
     int64_t dimension_out_;
     torch::Device device_;
     torch::Dtype dtype_;
     torch::nn::Embedding game_interaction_type_embedding_{nullptr};
+    NormalizedLinear conditional_query_int_range_embedding_{nullptr};
+    torch::nn::Embedding conditional_query_selection_qualifier_embedding_{nullptr};
+    torch::nn::Linear conditional_query_leaf_projection_{nullptr};
+    torch::nn::Embedding conditional_query_operator_embedding_{nullptr};
+    MultiHeadAttention conditional_query_attention_{nullptr};
 };
 
 TORCH_MODULE(GameInteractionEmbedding);
