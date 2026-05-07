@@ -147,8 +147,10 @@ torch::Tensor make_padding_attention_mask(const torch::Tensor& valid_token_mask,
     return attention_mask.masked_fill(invalid_key_mask, static_cast<double>(std::numeric_limits<float>::lowest()));
 }
 
-torch::Tensor masked_sequence_sum(const torch::Tensor& sequence_tensor, const torch::Tensor& valid_token_mask) {
-    return (sequence_tensor * valid_token_mask.unsqueeze(-1).to(sequence_tensor.dtype())).sum(1);
+torch::Tensor masked_sequence_mean(const torch::Tensor& sequence_tensor, const torch::Tensor& valid_token_mask) {
+    const auto valid_mask = valid_token_mask.unsqueeze(-1).to(sequence_tensor.dtype());
+    const auto valid_count = valid_token_mask.sum(1).clamp_min(1).unsqueeze(-1).to(sequence_tensor.dtype());
+    return (sequence_tensor * valid_mask).sum(1) / valid_count;
 }
 
 }  // namespace tensor_utils

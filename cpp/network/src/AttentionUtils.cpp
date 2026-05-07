@@ -8,7 +8,7 @@ torch::Tensor masked_self_attention_reduce(MultiHeadAttention& multi_head_attent
                                            const torch::Tensor& padded_sequences,
                                            const torch::Tensor& valid_token_mask) {
     auto attended = masked_self_attention(multi_head_attention, padded_sequences, valid_token_mask);
-    return tensor_utils::masked_sequence_sum(attended, valid_token_mask);
+    return tensor_utils::masked_sequence_mean(attended, valid_token_mask);
 }
 
 torch::Tensor masked_self_attention(MultiHeadAttention& multi_head_attention, const torch::Tensor& padded_sequences,
