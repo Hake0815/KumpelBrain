@@ -91,7 +91,7 @@ def test_card_state_embedding_forward_golden_case(
 
     with _deterministic_algorithms(True):
         _seed(device)
-        model = kumpel_embedding.CardStateEmbedding(
+        model = kumpel_embedding.make_card_state_embedding(
             fixtures.FIXTURE_DIMENSION_OUT, device=device, dtype=torch.float32
         )
         model.eval()
@@ -117,7 +117,7 @@ def test_pre_evolutions_adjacency_differs_from_attached_energy_adjacency():
         shared = kumpel_embedding.SharedEmbeddingHolder(
             fixtures.FIXTURE_DIMENSION_OUT, device=device, dtype=torch.float32
         )
-        emb = kumpel_embedding.CardEmbedding(
+        emb = kumpel_embedding.make_card_embedding(
             shared,
             fixtures.FIXTURE_DIMENSION_OUT,
             device=device,

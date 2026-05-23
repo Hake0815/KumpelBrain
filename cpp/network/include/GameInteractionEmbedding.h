@@ -93,9 +93,6 @@ FlatGameInteractionBatchTensors flat_game_interaction_batch_to_tensors(const Fla
 
 struct GameInteractionEmbeddingImpl : torch::nn::Module, SaveLoadMixin<GameInteractionEmbeddingImpl> {
     GameInteractionEmbeddingImpl(std::shared_ptr<SharedEmbeddingHolderImpl> shared_embedding_holder,
-                                 int64_t dimension_out, torch::Device device = torch::kCPU,
-                                 torch::Dtype dtype = torch::kFloat);
-    GameInteractionEmbeddingImpl(std::shared_ptr<SharedEmbeddingHolderImpl> shared_embedding_holder,
                                  int64_t dimension_out, const SharedInstructionEmbeddings& shared_instruction_embeddings,
                                  torch::Device device = torch::kCPU, torch::Dtype dtype = torch::kFloat);
 

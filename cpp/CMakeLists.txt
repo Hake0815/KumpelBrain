@@ -47,6 +47,7 @@ set(KUMPEL_CORE_SOURCES
     network/src/MultiHeadAttention.cpp
     network/src/NormalizedLinear.cpp
     network/src/SharedEmbeddingHolder.cpp
+    network/src/SharedInstructionEmbeddingsFactory.cpp
     network/src/serialization/gamecore_serialization.pb.cc
 )
 

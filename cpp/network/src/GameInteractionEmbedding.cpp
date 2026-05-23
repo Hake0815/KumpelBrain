@@ -388,25 +388,6 @@ FlatGameInteractionBatchTensors flat_game_interaction_batch_to_tensors(const Fla
 }
 
 GameInteractionEmbeddingImpl::GameInteractionEmbeddingImpl(
-    std::shared_ptr<SharedEmbeddingHolderImpl> shared_embedding_holder, int64_t dimension_out, torch::Device device,
-    torch::Dtype dtype)
-    : shared_embedding_holder_(shared_embedding_holder), dimension_out_(dimension_out), device_(device), dtype_(dtype) {
-    instruction_data_embedding_ =
-        register_module("instruction_data_embedding",
-                        InstructionDataEmbedding(shared_embedding_holder_.ptr(), dimension_out, device, dtype));
-    instruction_embedding_ = register_module(
-        "instruction_embedding", InstructionEmbedding(instruction_data_embedding_.ptr(), shared_embedding_holder_.ptr(),
-                                                      dimension_out, device, dtype));
-    condition_embedding_ = register_module(
-        "condition_embedding", ConditionEmbedding(instruction_data_embedding_.ptr(), shared_embedding_holder_.ptr(),
-                                                  dimension_out, device, dtype));
-    attack_embedding_ = register_module("attack_embedding", AttackEmbedding(dimension_out, device, dtype));
-    ability_embedding_ = register_module("ability_embedding", AbilityEmbedding(dimension_out, device, dtype));
-    register_game_interaction_specific_modules(device, dtype);
-    to(device, dtype);
-}
-
-GameInteractionEmbeddingImpl::GameInteractionEmbeddingImpl(
     std::shared_ptr<SharedEmbeddingHolderImpl> shared_embedding_holder, int64_t dimension_out,
     const SharedInstructionEmbeddings& shared_instruction_embeddings, torch::Device device, torch::Dtype dtype)
     : shared_embedding_holder_(shared_embedding_holder), dimension_out_(dimension_out), device_(device), dtype_(dtype) {

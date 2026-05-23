@@ -1,4 +1,4 @@
-"""C++ PlayerStateEmbedding / GameStateEmbedding / CardPositionEmbedding smoke and uneven-trait tests.
+"""C++ PlayerStateEmbedding / GameEmbedding / CardPositionEmbedding smoke and uneven-trait tests.
 
 Run: python -m pytest python/network/pytests/test_player_game_state_embedding_cpp.py -v
 """
@@ -87,11 +87,11 @@ def test_player_state_embedding_uneven_traits_cpu():
 def test_game_state_embedding_zero_cards_uneven_traits_cpu():
     dim = 32
     device = torch.device("cpu")
-    m = kumpel_embedding.GameStateEmbedding(dim, device=device, dtype=torch.float32)
+    m = kumpel_embedding.GameEmbedding(dim, device=device, dtype=torch.float32)
     m.eval()
     payload = _game_state_bytes(self_traits=0, opp_traits=4, num_card_rows=0)
     with torch.inference_mode():
-        out = m.forward(payload)
+        out = m.embedGameState(payload)
     assert out.shape == (2, dim)
     assert torch.isfinite(out).all()
 
@@ -99,12 +99,12 @@ def test_game_state_embedding_zero_cards_uneven_traits_cpu():
 def test_game_state_embedding_with_cards_uneven_traits_cpu():
     dim = 32
     device = torch.device("cpu")
-    m = kumpel_embedding.GameStateEmbedding(dim, device=device, dtype=torch.float32)
+    m = kumpel_embedding.GameEmbedding(dim, device=device, dtype=torch.float32)
     m.eval()
     n_cards = 3
     payload = _game_state_bytes(self_traits=1, opp_traits=3, num_card_rows=n_cards)
     with torch.inference_mode():
-        out = m.forward(payload)
+        out = m.embedGameState(payload)
     assert out.shape == (2 + n_cards, dim)
     assert torch.isfinite(out).all()
 

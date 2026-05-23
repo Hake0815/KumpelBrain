@@ -12,7 +12,6 @@
 #include "../include/FilterConditionEmbedding.h"
 #include "../include/FilterEmbedding.h"
 #include "../include/GameEmbedding.h"
-#include "../include/GameStateEmbedding.h"
 #include "../include/InstructionDataEmbedding.h"
 #include "../include/InstructionEmbedding.h"
 #include "../include/MultiHeadAttention.h"
@@ -23,10 +22,67 @@
 #include "../include/PositionalEmbedding.h"
 #include "../include/ReturnToDeckTypeDataEmbedding.h"
 #include "../include/SharedEmbeddingHolder.h"
+#include "../include/SharedInstructionEmbeddingsFactory.h"
 
 namespace {
 
 namespace serialization = gamecore::serialization;
+
+struct CardEmbeddingHolder : torch::nn::Module {
+    CardEmbeddingHolder(std::shared_ptr<SharedEmbeddingHolderImpl> shared_embedding_holder, int64_t dimension_out,
+                        torch::Device device, torch::Dtype dtype)
+        : shared_embedding_holder_(std::move(shared_embedding_holder)),
+          dimension_out_(dimension_out),
+          device_(device),
+          dtype_(dtype) {
+        const auto shared_instruction_embeddings = create_shared_instruction_embeddings(
+            *this, shared_embedding_holder_, dimension_out_, device_, dtype_);
+        card_embedding_ = register_module(
+            "card_embedding",
+            CardEmbedding(shared_embedding_holder_, dimension_out_, shared_instruction_embeddings, device_, dtype_));
+    }
+
+    std::pair<torch::Tensor, AdjacencyMatrices> forward(
+        const google::protobuf::RepeatedPtrField<serialization::ProtoBufCardState>& card_states) {
+        return card_embedding_->forward(card_states);
+    }
+
+    void save_weights(const std::string& path) { card_embedding_->save_weights(path); }
+    void load_weights(const std::string& path) { card_embedding_->load_weights(path); }
+
+    std::shared_ptr<SharedEmbeddingHolderImpl> shared_embedding_holder_;
+    int64_t dimension_out_;
+    torch::Device device_;
+    torch::Dtype dtype_;
+    CardEmbedding card_embedding_{nullptr};
+};
+
+struct CardStateEmbeddingHolder : torch::nn::Module {
+    CardStateEmbeddingHolder(int64_t dimension_out, torch::Device device, torch::Dtype dtype)
+        : dimension_out_(dimension_out), device_(device), dtype_(dtype) {
+        shared_embedding_holder_ =
+            register_module("shared_embedding_holder", SharedEmbeddingHolder(dimension_out_, device_, dtype_));
+        const auto shared_instruction_embeddings = create_shared_instruction_embeddings(
+            *this, shared_embedding_holder_.ptr(), dimension_out_, device_, dtype_);
+        card_state_embedding_ = register_module(
+            "card_state_embedding",
+            CardStateEmbedding(shared_embedding_holder_.ptr(), dimension_out_, shared_instruction_embeddings, device_,
+                               dtype_));
+    }
+
+    torch::Tensor forward(const google::protobuf::RepeatedPtrField<serialization::ProtoBufCardState>& card_states) {
+        return card_state_embedding_->forward(card_states);
+    }
+
+    void save_weights(const std::string& path) { card_state_embedding_->save_weights(path); }
+    void load_weights(const std::string& path) { card_state_embedding_->load_weights(path); }
+
+    int64_t dimension_out_;
+    torch::Device device_;
+    torch::Dtype dtype_;
+    SharedEmbeddingHolder shared_embedding_holder_{nullptr};
+    CardStateEmbedding card_state_embedding_{nullptr};
+};
 
 nesting::GroupIndex py_tuple_to_group_index(const pybind11::tuple& t) {
     nesting::GroupIndex group_index;
@@ -289,19 +345,24 @@ PYBIND11_MODULE(kumpel_embedding, m) {
         .def_readonly("evolves_from_adjacency", &AdjacencyMatrices::evolves_from_adjacency)
         .def_readonly("attached_energy_adjacency", &AdjacencyMatrices::attached_energy_adjacency)
         .def_readonly("pre_evolutions_adjacency", &AdjacencyMatrices::pre_evolutions_adjacency);
-    pybind11::class_<CardEmbeddingImpl, torch::nn::Module, std::shared_ptr<CardEmbeddingImpl>>(m, "CardEmbedding")
-        .def(pybind11::init<std::shared_ptr<SharedEmbeddingHolderImpl>, int64_t, torch::Device, torch::Dtype>(),
-             pybind11::arg("shared_embedding_holder"), pybind11::arg("dimension_out"),
-             pybind11::arg("device") = torch::Device(torch::kCPU), pybind11::arg("dtype") = torch::Dtype(torch::kFloat))
+    pybind11::class_<CardEmbeddingHolder, torch::nn::Module, std::shared_ptr<CardEmbeddingHolder>>(m, "CardEmbedding")
         .def("forward",
-             [](CardEmbeddingImpl& self, const pybind11::iterable& card_states) {
+             [](CardEmbeddingHolder& self, const pybind11::iterable& card_states) {
                  google::protobuf::RepeatedPtrField<serialization::ProtoBufCardState> parsed;
                  parse_card_state_batch_serialized(card_states, parsed);
                  auto [embedding, adjacency] = self.forward(parsed);
                  return pybind11::make_tuple(embedding, adjacency);
              })
-        .def("save_weights", &CardEmbeddingImpl::save_weights)
-        .def("load_weights", &CardEmbeddingImpl::load_weights);
+        .def("save_weights", &CardEmbeddingHolder::save_weights)
+        .def("load_weights", &CardEmbeddingHolder::load_weights);
+
+    m.def("make_card_embedding",
+          [](std::shared_ptr<SharedEmbeddingHolderImpl> shared_embedding_holder, int64_t dimension_out,
+             torch::Device device, torch::Dtype dtype) {
+              return std::make_shared<CardEmbeddingHolder>(shared_embedding_holder, dimension_out, device, dtype);
+          },
+          pybind11::arg("shared_embedding_holder"), pybind11::arg("dimension_out"),
+          pybind11::arg("device") = torch::Device(torch::kCPU), pybind11::arg("dtype") = torch::Dtype(torch::kFloat));
 
     pybind11::class_<CardPositionEmbeddingImpl, torch::nn::Module, std::shared_ptr<CardPositionEmbeddingImpl>>(
         m, "CardPositionEmbedding")
@@ -317,18 +378,23 @@ PYBIND11_MODULE(kumpel_embedding, m) {
         .def("save_weights", &CardPositionEmbeddingImpl::save_weights)
         .def("load_weights", &CardPositionEmbeddingImpl::load_weights);
 
-    pybind11::class_<CardStateEmbeddingImpl, torch::nn::Module, std::shared_ptr<CardStateEmbeddingImpl>>(
+    pybind11::class_<CardStateEmbeddingHolder, torch::nn::Module, std::shared_ptr<CardStateEmbeddingHolder>>(
         m, "CardStateEmbedding")
-        .def(pybind11::init<int64_t, torch::Device, torch::Dtype>(), pybind11::arg("dimension_out"),
-             pybind11::arg("device") = torch::Device(torch::kCPU), pybind11::arg("dtype") = torch::Dtype(torch::kFloat))
         .def("forward",
-             [](CardStateEmbeddingImpl& self, const pybind11::iterable& card_states) {
+             [](CardStateEmbeddingHolder& self, const pybind11::iterable& card_states) {
                  google::protobuf::RepeatedPtrField<serialization::ProtoBufCardState> parsed;
                  parse_card_state_batch_serialized(card_states, parsed);
                  return self.forward(parsed);
              })
-        .def("save_weights", &CardStateEmbeddingImpl::save_weights)
-        .def("load_weights", &CardStateEmbeddingImpl::load_weights);
+        .def("save_weights", &CardStateEmbeddingHolder::save_weights)
+        .def("load_weights", &CardStateEmbeddingHolder::load_weights);
+
+    m.def("make_card_state_embedding",
+          [](int64_t dimension_out, torch::Device device, torch::Dtype dtype) {
+              return std::make_shared<CardStateEmbeddingHolder>(dimension_out, device, dtype);
+          },
+          pybind11::arg("dimension_out"), pybind11::arg("device") = torch::Device(torch::kCPU),
+          pybind11::arg("dtype") = torch::Dtype(torch::kFloat));
 
     pybind11::class_<PlayerStateEmbeddingImpl, torch::nn::Module, std::shared_ptr<PlayerStateEmbeddingImpl>>(
         m, "PlayerStateEmbedding")
@@ -344,18 +410,6 @@ PYBIND11_MODULE(kumpel_embedding, m) {
              })
         .def("save_weights", &PlayerStateEmbeddingImpl::save_weights)
         .def("load_weights", &PlayerStateEmbeddingImpl::load_weights);
-
-    pybind11::class_<GameStateEmbeddingImpl, torch::nn::Module, std::shared_ptr<GameStateEmbeddingImpl>>(
-        m, "GameStateEmbedding")
-        .def(pybind11::init<int64_t, torch::Device, torch::Dtype>(), pybind11::arg("dimension_out"),
-             pybind11::arg("device") = torch::Device(torch::kCPU), pybind11::arg("dtype") = torch::Dtype(torch::kFloat))
-        .def("forward",
-             [](GameStateEmbeddingImpl& self, const pybind11::handle& game_state) {
-                 return self.forward(
-                     parse_serialized_message<serialization::ProtoBufGameState>(game_state, "ProtoBufGameState"));
-             })
-        .def("save_weights", &GameStateEmbeddingImpl::save_weights)
-        .def("load_weights", &GameStateEmbeddingImpl::load_weights);
 
     pybind11::class_<GameEmbeddingImpl, torch::nn::Module, std::shared_ptr<GameEmbeddingImpl>>(m, "GameEmbedding")
         .def(pybind11::init<int64_t, torch::Device, torch::Dtype>(), pybind11::arg("dimension_out"),

@@ -53,18 +53,6 @@ torch::Tensor sparse_row_sum(const torch::Tensor& sparse_coo, int64_t n, torch::
 
 }  // namespace
 
-CardStateEmbeddingImpl::CardStateEmbeddingImpl(int64_t dimension_out, torch::Device device, torch::Dtype dtype)
-    : dimension_out_(dimension_out), device_(device), dtype_(dtype) {
-    shared_embedding_holder_ =
-        register_module("shared_embedding_holder", SharedEmbeddingHolder(dimension_out, device, dtype));
-    card_embedding_ =
-        register_module("card_embedding", CardEmbedding(shared_embedding_holder_.ptr(), dimension_out, device, dtype));
-    position_embedding_ = register_module(
-        "position_embedding", CardPositionEmbedding(shared_embedding_holder_.ptr(), dimension_out, device, dtype));
-    register_card_state_specific_modules(device, dtype);
-    to(device, dtype);
-}
-
 CardStateEmbeddingImpl::CardStateEmbeddingImpl(std::shared_ptr<SharedEmbeddingHolderImpl> shared_embedding_holder,
                                                int64_t dimension_out,
                                                const SharedInstructionEmbeddings& shared_instruction_embeddings,

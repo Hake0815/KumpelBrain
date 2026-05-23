@@ -59,7 +59,7 @@ def _build_model(device: torch.device) -> kumpel_embedding.CardEmbedding:
     shared = kumpel_embedding.SharedEmbeddingHolder(
         fixtures.FIXTURE_DIMENSION_OUT, device=device, dtype=torch.float32
     )
-    m = kumpel_embedding.CardEmbedding(
+    m = kumpel_embedding.make_card_embedding(
         shared,
         fixtures.FIXTURE_DIMENSION_OUT,
         device=device,

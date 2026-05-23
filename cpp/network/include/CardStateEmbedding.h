@@ -30,8 +30,6 @@ struct RgcnLayerWeights {
 
 /// Embeds a batch of `ProtoBufCardState` into shape [batch, dimension_out].
 struct CardStateEmbeddingImpl : torch::nn::Module, SaveLoadMixin<CardStateEmbeddingImpl> {
-    CardStateEmbeddingImpl(int64_t dimension_out, torch::Device device = torch::kCPU,
-                           torch::Dtype dtype = torch::kFloat);
     CardStateEmbeddingImpl(std::shared_ptr<SharedEmbeddingHolderImpl> shared_embedding_holder, int64_t dimension_out,
                            const SharedInstructionEmbeddings& shared_instruction_embeddings,
                            torch::Device device = torch::kCPU, torch::Dtype dtype = torch::kFloat);

@@ -79,7 +79,7 @@ def test_cpp_condition_embedding_one_empty_group_cpu():
 def test_cpp_card_state_embedding_empty_batch_cpu():
     dim = 32
     device = torch.device("cpu")
-    model = kumpel_embedding.CardStateEmbedding(dim, device=device)
+    model = kumpel_embedding.make_card_state_embedding(dim, device=device)
     model.eval()
     with torch.inference_mode():
         out = model.forward([])
