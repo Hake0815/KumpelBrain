@@ -11,6 +11,7 @@
 #include "../include/DiscardDataEmbedding.h"
 #include "../include/FilterConditionEmbedding.h"
 #include "../include/FilterEmbedding.h"
+#include "../include/GameEmbedding.h"
 #include "../include/GameStateEmbedding.h"
 #include "../include/InstructionDataEmbedding.h"
 #include "../include/InstructionEmbedding.h"
@@ -137,6 +138,16 @@ void parse_card_state_batch_serialized(const pybind11::iterable& batch,
         *parsed.Add() = parse_serialized_message<serialization::ProtoBufCardState>(item.cast<pybind11::object>(),
                                                                                    "ProtoBufCardState");
     }
+}
+
+std::vector<serialization::ProtoBufGameInteraction> parse_game_interaction_batch_serialized(
+    const pybind11::iterable& batch) {
+    std::vector<serialization::ProtoBufGameInteraction> parsed;
+    for (auto item : batch) {
+        parsed.push_back(parse_serialized_message<serialization::ProtoBufGameInteraction>(
+            item.cast<pybind11::object>(), "ProtoBufGameInteraction"));
+    }
+    return parsed;
 }
 
 }  // namespace
@@ -345,6 +356,23 @@ PYBIND11_MODULE(kumpel_embedding, m) {
              })
         .def("save_weights", &GameStateEmbeddingImpl::save_weights)
         .def("load_weights", &GameStateEmbeddingImpl::load_weights);
+
+    pybind11::class_<GameEmbeddingImpl, torch::nn::Module, std::shared_ptr<GameEmbeddingImpl>>(m, "GameEmbedding")
+        .def(pybind11::init<int64_t, torch::Device, torch::Dtype>(), pybind11::arg("dimension_out"),
+             pybind11::arg("device") = torch::Device(torch::kCPU), pybind11::arg("dtype") = torch::Dtype(torch::kFloat))
+        .def("embedGameState",
+             [](GameEmbeddingImpl& self, const pybind11::handle& game_state) {
+                 return self.embedGameState(
+                     parse_serialized_message<serialization::ProtoBufGameState>(game_state, "ProtoBufGameState"));
+             })
+        .def("embedGameInteraction",
+             [](GameEmbeddingImpl& self, const pybind11::iterable& game_interactions, torch::Tensor card_indices,
+                torch::Tensor cards) {
+                 return self.embedGameInteraction(parse_game_interaction_batch_serialized(game_interactions),
+                                                  card_indices, cards);
+             })
+        .def("save_weights", &GameEmbeddingImpl::save_weights)
+        .def("load_weights", &GameEmbeddingImpl::load_weights);
 
     m.def("nesting_traverse_filter", [](const pybind11::iterable& nested_input) {
         auto nodes = parse_filter_list(nested_input);
