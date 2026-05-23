@@ -34,7 +34,8 @@ struct CardStateEmbeddingImpl : torch::nn::Module, SaveLoadMixin<CardStateEmbedd
                            const SharedInstructionEmbeddings& shared_instruction_embeddings,
                            torch::Device device = torch::kCPU, torch::Dtype dtype = torch::kFloat);
 
-    torch::Tensor forward(const google::protobuf::RepeatedPtrField<ProtoBufCardState>& card_state_batch);
+    std::pair<torch::Tensor, torch::Tensor> forward(
+        const google::protobuf::RepeatedPtrField<ProtoBufCardState>& card_state_batch);
 
    private:
     void register_card_state_specific_modules(torch::Device device, torch::Dtype dtype);

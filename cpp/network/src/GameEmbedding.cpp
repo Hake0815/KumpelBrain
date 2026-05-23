@@ -24,7 +24,7 @@ GameEmbeddingImpl::GameEmbeddingImpl(int64_t dimension_out, torch::Device device
     to(device, dtype);
 }
 
-torch::Tensor GameEmbeddingImpl::embedGameState(const ProtoBufGameState& game_state) {
+std::pair<torch::Tensor, torch::Tensor> GameEmbeddingImpl::embedGameState(const ProtoBufGameState& game_state) {
     return game_state_embedding_(game_state);
 }
 

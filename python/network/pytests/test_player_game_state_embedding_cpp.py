@@ -91,9 +91,10 @@ def test_game_state_embedding_zero_cards_uneven_traits_cpu():
     m.eval()
     payload = _game_state_bytes(self_traits=0, opp_traits=4, num_card_rows=0)
     with torch.inference_mode():
-        out = m.embedGameState(payload)
-    assert out.shape == (2, dim)
-    assert torch.isfinite(out).all()
+        embedding, card_indices = m.embedGameState(payload)
+    assert embedding.shape == (2, dim)
+    assert card_indices.shape == (0,)
+    assert torch.isfinite(embedding).all()
 
 
 def test_game_state_embedding_with_cards_uneven_traits_cpu():
@@ -104,9 +105,10 @@ def test_game_state_embedding_with_cards_uneven_traits_cpu():
     n_cards = 3
     payload = _game_state_bytes(self_traits=1, opp_traits=3, num_card_rows=n_cards)
     with torch.inference_mode():
-        out = m.embedGameState(payload)
-    assert out.shape == (2 + n_cards, dim)
-    assert torch.isfinite(out).all()
+        embedding, card_indices = m.embedGameState(payload)
+    assert embedding.shape == (2 + n_cards, dim)
+    assert card_indices.shape == (n_cards,)
+    assert torch.isfinite(embedding).all()
 
 
 def test_card_position_embedding_smoke_cpu():

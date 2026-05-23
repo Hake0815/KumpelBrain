@@ -13,8 +13,8 @@ GameStateEmbeddingImpl::GameStateEmbeddingImpl(std::shared_ptr<SharedEmbeddingHo
     to(device, dtype);
 }
 
-torch::Tensor GameStateEmbeddingImpl::forward(const ProtoBufGameState& game_state) {
+std::pair<torch::Tensor, torch::Tensor> GameStateEmbeddingImpl::forward(const ProtoBufGameState& game_state) {
     auto player_states = player_state_embedding_(game_state.self_state(), game_state.opponent_state());
-    auto card_states = card_state_embedding_(game_state.card_states());
-    return torch::cat({player_states, card_states}, 0);
+    auto [card_states, card_indices] = card_state_embedding_(game_state.card_states());
+    return {torch::cat({player_states, card_states}, 0), card_indices};
 }

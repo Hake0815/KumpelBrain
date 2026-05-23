@@ -96,9 +96,23 @@ def test_card_state_embedding_forward_golden_case(
         )
         model.eval()
         with torch.inference_mode():
-            actual = model.forward(states)
+            actual, _card_indices = model.forward(states)
         if device.type == "cuda":
             torch.cuda.synchronize()
+
+    import card_embedding_forward_fixtures as card_fixtures
+
+    expected_indices = card_fixtures.build_expected_card_indices(states, device)
+    assert _card_indices.dtype == torch.long
+    assert _card_indices.device.type == device.type
+    assert _card_indices.shape == expected_indices.shape
+    torch.testing.assert_close(
+        _card_indices.cpu(),
+        expected_indices.cpu(),
+        rtol=0.0,
+        atol=0.0,
+        msg=lambda msg: f"{case_id} card_indices on {device}: {msg}",
+    )
 
     torch.testing.assert_close(
         actual.cpu(),

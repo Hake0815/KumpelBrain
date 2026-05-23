@@ -96,7 +96,7 @@ def test_game_embedding_embed_game_state_golden_case(
         )
         model.eval()
         with torch.inference_mode():
-            actual = model.embedGameState(payload)
+            actual, _card_indices = model.embedGameState(payload)
         if device.type == "cuda":
             torch.cuda.synchronize()
 

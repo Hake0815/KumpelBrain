@@ -93,13 +93,12 @@ void CardStateEmbeddingImpl::register_card_state_specific_modules(torch::Device 
     }
 }
 
-torch::Tensor CardStateEmbeddingImpl::forward(
+std::pair<torch::Tensor, torch::Tensor> CardStateEmbeddingImpl::forward(
     const google::protobuf::RepeatedPtrField<ProtoBufCardState>& card_state_batch) {
-    if (card_state_batch.empty()) {
-        return torch::empty({0, dimension_out_}, torch::TensorOptions().dtype(dtype_).device(device_));
-    }
     auto [embedded_cards, adj, card_indices] = card_embedding_->forward(card_state_batch);
-    (void)card_indices;
+    if (card_state_batch.empty()) {
+        return {embedded_cards, card_indices};
+    }
     auto position_vec = position_embedding_->forward(card_state_batch);
 
     auto gate = torch::sigmoid(card_position_gate_(torch::cat({embedded_cards, position_vec}, 1)));
@@ -113,7 +112,7 @@ torch::Tensor CardStateEmbeddingImpl::forward(
         h = torch::relu(aggregate_one_layer(h, adj, layer_weights)) + h;
     }
 
-    return h;
+    return {h, card_indices};
 }
 
 torch::Tensor CardStateEmbeddingImpl::aggregate_one_layer(const torch::Tensor& node_emb, const AdjacencyMatrices& adj,

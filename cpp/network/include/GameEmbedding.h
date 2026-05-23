@@ -22,7 +22,7 @@ using ProtoBufGameInteraction = gamecore::serialization::ProtoBufGameInteraction
 struct GameEmbeddingImpl : torch::nn::Module, SaveLoadMixin<GameEmbeddingImpl> {
     GameEmbeddingImpl(int64_t dimension_out, torch::Device device = torch::kCPU, torch::Dtype dtype = torch::kFloat);
 
-    torch::Tensor embedGameState(const ProtoBufGameState& game_state);
+    std::pair<torch::Tensor, torch::Tensor> embedGameState(const ProtoBufGameState& game_state);
 
     torch::Tensor embedGameInteraction(const std::vector<ProtoBufGameInteraction>& game_interactions,
                                        torch::Tensor card_indices, torch::Tensor cards);

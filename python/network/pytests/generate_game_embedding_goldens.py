@@ -66,10 +66,10 @@ def generate_game_state_for_device(device: torch.device) -> dict[str, torch.Tens
     for case_id in sorted(fixtures.EMBED_GAME_STATE_CASES.keys()):
         payload = fixtures.EMBED_GAME_STATE_CASES[case_id]
         with torch.inference_mode():
-            out = model.embedGameState(payload)
+            embedding, _card_indices = model.embedGameState(payload)
         if device.type == "cuda":
             torch.cuda.synchronize()
-        gold[case_id] = out.detach().cpu().contiguous()
+        gold[case_id] = embedding.detach().cpu().contiguous()
     return gold
 
 
@@ -80,9 +80,8 @@ def generate_game_interaction_for_device(device: torch.device) -> dict[str, torc
     for case_id in sorted(fixtures.EMBED_GAME_INTERACTION_CASES.keys()):
         game_state_bytes, interaction_bytes = fixtures.EMBED_GAME_INTERACTION_CASES[case_id]
         with torch.inference_mode():
-            game_state_embedding = model.embedGameState(game_state_bytes)
+            game_state_embedding, indices = model.embedGameState(game_state_bytes)
             cards = fixtures.extract_card_embeddings(game_state_embedding)
-            indices = fixtures.build_card_indices(game_state_bytes, device)
             out = model.embedGameInteraction(interaction_bytes, indices, cards)
         if device.type == "cuda":
             torch.cuda.synchronize()

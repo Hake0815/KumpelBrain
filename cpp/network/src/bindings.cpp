@@ -70,7 +70,8 @@ struct CardStateEmbeddingHolder : torch::nn::Module {
                                dtype_));
     }
 
-    torch::Tensor forward(const google::protobuf::RepeatedPtrField<serialization::ProtoBufCardState>& card_states) {
+    std::pair<torch::Tensor, torch::Tensor> forward(
+        const google::protobuf::RepeatedPtrField<serialization::ProtoBufCardState>& card_states) {
         return card_state_embedding_->forward(card_states);
     }
 
@@ -384,7 +385,8 @@ PYBIND11_MODULE(kumpel_embedding, m) {
              [](CardStateEmbeddingHolder& self, const pybind11::iterable& card_states) {
                  google::protobuf::RepeatedPtrField<serialization::ProtoBufCardState> parsed;
                  parse_card_state_batch_serialized(card_states, parsed);
-                 return self.forward(parsed);
+                 auto [embedding, card_indices] = self.forward(parsed);
+                 return pybind11::make_tuple(embedding, card_indices);
              })
         .def("save_weights", &CardStateEmbeddingHolder::save_weights)
         .def("load_weights", &CardStateEmbeddingHolder::load_weights);
@@ -416,8 +418,9 @@ PYBIND11_MODULE(kumpel_embedding, m) {
              pybind11::arg("device") = torch::Device(torch::kCPU), pybind11::arg("dtype") = torch::Dtype(torch::kFloat))
         .def("embedGameState",
              [](GameEmbeddingImpl& self, const pybind11::handle& game_state) {
-                 return self.embedGameState(
+                 auto [embedding, card_indices] = self.embedGameState(
                      parse_serialized_message<serialization::ProtoBufGameState>(game_state, "ProtoBufGameState"));
+                 return pybind11::make_tuple(embedding, card_indices);
              })
         .def("embedGameInteraction",
              [](GameEmbeddingImpl& self, const pybind11::iterable& game_interactions, torch::Tensor card_indices,

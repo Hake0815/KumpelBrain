@@ -16,7 +16,7 @@ struct GameStateEmbeddingImpl : torch::nn::Module, SaveLoadMixin<GameStateEmbedd
                            const SharedInstructionEmbeddings& shared_instruction_embeddings,
                            torch::Device device = torch::kCPU, torch::Dtype dtype = torch::kFloat);
 
-    torch::Tensor forward(const ProtoBufGameState& game_state);
+    std::pair<torch::Tensor, torch::Tensor> forward(const ProtoBufGameState& game_state);
 
    private:
     int64_t dimension_out_;

@@ -419,25 +419,6 @@ bool tensor_device_matches_module(const torch::Tensor& tensor, const torch::Devi
     return true;
 }
 
-torch::Tensor build_card_indices_from_game_state(const serialization::ProtoBufGameState& game_state,
-                                                 torch::Device device) {
-    int64_t max_deck_id = -1;
-    for (int i = 0; i < game_state.card_states_size(); ++i) {
-        const auto deck_id = game_state.card_states(i).card().deck_id();
-        if (deck_id >= 0) {
-            max_deck_id = std::max(max_deck_id, deck_id);
-        }
-    }
-    auto indices = torch::full({max_deck_id + 1}, -1, torch::TensorOptions().device(device).dtype(torch::kLong));
-    for (int i = 0; i < game_state.card_states_size(); ++i) {
-        const auto deck_id = game_state.card_states(i).card().deck_id();
-        if (deck_id >= 0) {
-            indices.index_put_({deck_id}, i);
-        }
-    }
-    return indices;
-}
-
 torch::Tensor extract_card_embeddings(const torch::Tensor& game_state_embedding) {
     return game_state_embedding.slice(0, 2, game_state_embedding.size(0));
 }
@@ -557,8 +538,8 @@ GameInteractionBenchCase build_game_interaction_bench_case(GameEmbeddingImpl& ga
     GameInteractionBenchCase bench_case;
     bench_case.name = name;
     bench_case.game_state = make_game_state(card_count, seed);
-    bench_case.card_indices = build_card_indices_from_game_state(bench_case.game_state, device);
-    const auto game_state_embedding = game_embedding.embedGameState(bench_case.game_state);
+    const auto [game_state_embedding, card_indices] = game_embedding.embedGameState(bench_case.game_state);
+    bench_case.card_indices = card_indices;
     bench_case.cards = extract_card_embeddings(game_state_embedding);
     bench_case.interactions = make_game_interaction_batch(interaction_batch_size, excluded_type);
     return bench_case;
@@ -583,7 +564,8 @@ void verify_game_embedding_output_shape(GameEmbeddingImpl& game_embedding, const
                                         int64_t dimension_out, const std::string& label) {
     for (int64_t card_count : {0, 32, 128}) {
         auto game_state = make_game_state(card_count, card_count + 10);
-        auto out = game_embedding.embedGameState(game_state);
+        auto [out, card_indices] = game_embedding.embedGameState(game_state);
+        (void)card_indices;
         const int64_t expected_rows = card_count + 2;
         if (out.dim() != 2 || out.size(0) != expected_rows || out.size(1) != dimension_out) {
             std::cerr << label << " GameEmbedding::embedGameState shape check failed for " << card_count
@@ -598,7 +580,8 @@ void verify_game_embedding_output_shape(GameEmbeddingImpl& game_embedding, const
     }
     {
         auto uneven = make_game_state(0, 500, 0, 4);
-        auto out = game_embedding.embedGameState(uneven);
+        auto [out, card_indices] = game_embedding.embedGameState(uneven);
+        (void)card_indices;
         if (out.dim() != 2 || out.size(0) != 2 || out.size(1) != dimension_out) {
             std::cerr << label << " GameEmbedding::embedGameState uneven traits (0 cards): expected (2, "
                       << dimension_out << ")\n";
@@ -612,7 +595,8 @@ void verify_game_embedding_output_shape(GameEmbeddingImpl& game_embedding, const
     }
 
     {
-        auto empty_indices = build_card_indices_from_game_state(make_game_state(0, 600), device);
+        auto [empty_embedding, empty_indices] = game_embedding.embedGameState(make_game_state(0, 600));
+        (void)empty_embedding;
         auto empty_cards = torch::empty({0, dimension_out}, torch::TensorOptions().device(device).dtype(torch::kFloat));
         auto out = game_embedding.embedGameInteraction({}, empty_indices, empty_cards);
         if (out.dim() != 2 || out.size(0) != 0 || out.size(1) != dimension_out) {
@@ -714,27 +698,31 @@ void run_embedding_benchmarks(const torch::Device& device, const std::string& la
 
     auto game_state_32 = make_game_state(32, 200);
     benchmark_ms(label + " game_embedding_embed_game_state_32", device, warmup_runs, measured_runs, [&]() {
-        auto out = game_embedding->embedGameState(game_state_32);
+        auto [out, card_indices] = game_embedding->embedGameState(game_state_32);
+        (void)card_indices;
         benchmark_sink += out.numel();
     });
 
     auto game_state_128 = make_game_state(128, 300);
     benchmark_ms(label + " game_embedding_embed_game_state_128", device, warmup_runs, measured_runs, [&]() {
-        auto out = game_embedding->embedGameState(game_state_128);
+        auto [out, card_indices] = game_embedding->embedGameState(game_state_128);
+        (void)card_indices;
         benchmark_sink += out.numel();
     });
 
     auto game_state_32_uneven = make_game_state(32, 400, 0, 4);
     benchmark_ms(label + " game_embedding_embed_game_state_32_uneven_traits", device, warmup_runs, measured_runs,
                  [&]() {
-                     auto out = game_embedding->embedGameState(game_state_32_uneven);
+                     auto [out, card_indices] = game_embedding->embedGameState(game_state_32_uneven);
+                     (void)card_indices;
                      benchmark_sink += out.numel();
                  });
 
     auto game_state_128_uneven = make_game_state(128, 500, 4, 0);
     benchmark_ms(label + " game_embedding_embed_game_state_128_uneven_traits", device, warmup_runs, measured_runs,
                  [&]() {
-                     auto out = game_embedding->embedGameState(game_state_128_uneven);
+                     auto [out, card_indices] = game_embedding->embedGameState(game_state_128_uneven);
+                     (void)card_indices;
                      benchmark_sink += out.numel();
                  });
 
