@@ -61,19 +61,41 @@ CardStateEmbeddingImpl::CardStateEmbeddingImpl(int64_t dimension_out, torch::Dev
         register_module("card_embedding", CardEmbedding(shared_embedding_holder_.ptr(), dimension_out, device, dtype));
     position_embedding_ = register_module(
         "position_embedding", CardPositionEmbedding(shared_embedding_holder_.ptr(), dimension_out, device, dtype));
-    card_position_gate_ = register_module("card_position_gate", torch::nn::Linear(2 * dimension_out, dimension_out));
+    register_card_state_specific_modules(device, dtype);
+    to(device, dtype);
+}
+
+CardStateEmbeddingImpl::CardStateEmbeddingImpl(std::shared_ptr<SharedEmbeddingHolderImpl> shared_embedding_holder,
+                                               int64_t dimension_out,
+                                               const SharedInstructionEmbeddings& shared_instruction_embeddings,
+                                               torch::Device device, torch::Dtype dtype)
+    : dimension_out_(dimension_out), device_(device), dtype_(dtype) {
+    shared_embedding_holder_ = shared_embedding_holder;
+    card_embedding_ = register_module(
+        "card_embedding",
+        CardEmbedding(shared_embedding_holder_.ptr(), dimension_out, shared_instruction_embeddings, device, dtype));
+    position_embedding_ = register_module(
+        "position_embedding", CardPositionEmbedding(shared_embedding_holder_.ptr(), dimension_out, device, dtype));
+    register_card_state_specific_modules(device, dtype);
+    to(device, dtype);
+}
+
+void CardStateEmbeddingImpl::register_card_state_specific_modules(torch::Device device, torch::Dtype dtype) {
+    card_position_gate_ =
+        register_module("card_position_gate", torch::nn::Linear(2 * dimension_out_, dimension_out_));
     degree_count_embedding_ = register_module("degree_count_embedding",
-                                              NormalizedLinear(kNumDegreeFeatures, dimension_out, 10.0, device, dtype));
+                                              NormalizedLinear(kNumDegreeFeatures, dimension_out_, 10.0, device, dtype));
 
     const auto no_bias = [&](const std::string& name) {
-        return register_module(name,
-                               torch::nn::Linear(torch::nn::LinearOptions(dimension_out, dimension_out).bias(false)));
+        return register_module(
+            name, torch::nn::Linear(torch::nn::LinearOptions(dimension_out_, dimension_out_).bias(false)));
     };
 
     for (int64_t layer = 0; layer < kNumRgcnLayers; ++layer) {
         const auto prefix = "layer_" + std::to_string(layer) + "_";
         auto& w = rgcn_layers_[static_cast<size_t>(layer)];
-        w.self_loop = register_module(prefix + "self_loop_weights", torch::nn::Linear(dimension_out, dimension_out));
+        w.self_loop =
+            register_module(prefix + "self_loop_weights", torch::nn::Linear(dimension_out_, dimension_out_));
         w.evolves_from = no_bias(prefix + "evolves_from_weights");
         w.evolves_into = no_bias(prefix + "evolves_into_weights");
         w.evolved_from = no_bias(prefix + "pre_evolution_weights");
@@ -81,8 +103,6 @@ CardStateEmbeddingImpl::CardStateEmbeddingImpl(int64_t dimension_out, torch::Dev
         w.energy_attached_to = no_bias(prefix + "attached_energy_weights");
         w.attached_energy_cards = no_bias(prefix + "energy_host_weights");
     }
-
-    to(device, dtype);
 }
 
 torch::Tensor CardStateEmbeddingImpl::forward(

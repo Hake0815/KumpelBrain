@@ -126,43 +126,65 @@ CardEmbeddingImpl::CardEmbeddingImpl(std::shared_ptr<SharedEmbeddingHolderImpl> 
                                                   dimension_out, device, dtype));
     ability_embedding_ = register_module("ability_embedding", AbilityEmbedding(dimension_out, device, dtype));
     attack_embedding_ = register_module("attack_embedding", AttackEmbedding(dimension_out, device, dtype));
-    card_instructions_multi_head_attention_ =
-        register_module("card_instructions_multi_head_attention",
-                        MultiHeadAttention(dimension_out, dimension_out, dimension_out,
-                                           std::max<int64_t>(dimension_out_ / 16, 4), 4, 0.0, true, device, dtype));
-    card_conditions_multi_head_attention_ =
-        register_module("card_conditions_multi_head_attention",
-                        MultiHeadAttention(dimension_out, dimension_out, dimension_out,
-                                           std::max<int64_t>(dimension_out_ / 16, 4), 4, 0.0, true, device, dtype));
-    card_instruction_query_embedding_ =
-        register_module("card_instruction_query_embedding", torch::nn::Embedding(1, dimension_out));
-    card_condition_query_embedding_ =
-        register_module("card_condition_query_embedding", torch::nn::Embedding(1, dimension_out));
-    card_pooling_multi_head_attention_ =
-        register_module("card_pooling_multi_head_attention",
-                        MultiHeadAttention(dimension_out, dimension_out, dimension_out,
-                                           std::max<int64_t>(dimension_out_ / 16, 4), 8, 0.0, true, device, dtype));
-    card_pooling_query_embedding_ =
-        register_module("card_pooling_query_embedding", torch::nn::Embedding(1, dimension_out));
-    retreat_cost_embedding_ =
-        register_module("retreat_cost_embedding", NormalizedLinear(1, dimension_out, 10.0, device, dtype));
-    number_of_prize_cards_on_knockout_embedding_ = register_module(
-        "number_of_prize_cards_on_knockout_embedding", NormalizedLinear(1, dimension_out, 6.0, device, dtype));
-    current_damage_embedding_ =
-        register_module("current_damage_embedding", NormalizedLinear(1, dimension_out, 400.0, device, dtype));
-    pokemon_turn_trait_embedding_ = register_module("pokemon_turn_trait_embedding",
-                                                    torch::nn::Embedding(NUMBER_POKEMON_TURN_TRAITS, dimension_out));
-    card_self_multi_head_attention_ =
-        register_module("card_self_multi_head_attention",
-                        MultiHeadAttention(dimension_out, dimension_out, dimension_out,
-                                           std::max<int64_t>(dimension_out_ / 16, 4), 8, 0.0, true, device, dtype));
-    token_type_embedding_ =
-        register_module("token_type_embedding", torch::nn::Embedding(NUM_CARD_TOKEN_TYPES, dimension_out));
+    register_card_specific_modules(device, dtype);
     mask_tensor_options_ = torch::TensorOptions().device(device_).dtype(torch::kBool);
     index_tensor_options_ = torch::TensorOptions().device(device_).dtype(torch::kInt64);
     float_tensor_options_ = torch::TensorOptions().device(device_).dtype(dtype);
     ones_1x1_bool_ = torch::ones({1, 1}, mask_tensor_options_);
     to(device, dtype);
+}
+
+CardEmbeddingImpl::CardEmbeddingImpl(std::shared_ptr<SharedEmbeddingHolderImpl> shared_embedding_holder,
+                                     int64_t dimension_out,
+                                     const SharedInstructionEmbeddings& shared_instruction_embeddings,
+                                     torch::Device device, torch::Dtype dtype)
+    : shared_embedding_holder_(shared_embedding_holder), dimension_out_(dimension_out), device_(device), dtype_(dtype) {
+    instruction_data_embedding_ = shared_instruction_embeddings.instruction_data_embedding;
+    instruction_embedding_ = shared_instruction_embeddings.instruction_embedding;
+    condition_embedding_ = shared_instruction_embeddings.condition_embedding;
+    attack_embedding_ = shared_instruction_embeddings.attack_embedding;
+    ability_embedding_ = shared_instruction_embeddings.ability_embedding;
+    register_card_specific_modules(device, dtype);
+    mask_tensor_options_ = torch::TensorOptions().device(device_).dtype(torch::kBool);
+    index_tensor_options_ = torch::TensorOptions().device(device_).dtype(torch::kInt64);
+    float_tensor_options_ = torch::TensorOptions().device(device_).dtype(dtype);
+    ones_1x1_bool_ = torch::ones({1, 1}, mask_tensor_options_);
+    to(device, dtype);
+}
+
+void CardEmbeddingImpl::register_card_specific_modules(torch::Device device, torch::Dtype dtype) {
+    card_instructions_multi_head_attention_ =
+        register_module("card_instructions_multi_head_attention",
+                        MultiHeadAttention(dimension_out_, dimension_out_, dimension_out_,
+                                           std::max<int64_t>(dimension_out_ / 16, 4), 4, 0.0, true, device, dtype));
+    card_conditions_multi_head_attention_ =
+        register_module("card_conditions_multi_head_attention",
+                        MultiHeadAttention(dimension_out_, dimension_out_, dimension_out_,
+                                           std::max<int64_t>(dimension_out_ / 16, 4), 4, 0.0, true, device, dtype));
+    card_instruction_query_embedding_ =
+        register_module("card_instruction_query_embedding", torch::nn::Embedding(1, dimension_out_));
+    card_condition_query_embedding_ =
+        register_module("card_condition_query_embedding", torch::nn::Embedding(1, dimension_out_));
+    card_pooling_multi_head_attention_ =
+        register_module("card_pooling_multi_head_attention",
+                        MultiHeadAttention(dimension_out_, dimension_out_, dimension_out_,
+                                           std::max<int64_t>(dimension_out_ / 16, 4), 8, 0.0, true, device, dtype));
+    card_pooling_query_embedding_ =
+        register_module("card_pooling_query_embedding", torch::nn::Embedding(1, dimension_out_));
+    retreat_cost_embedding_ =
+        register_module("retreat_cost_embedding", NormalizedLinear(1, dimension_out_, 10.0, device, dtype));
+    number_of_prize_cards_on_knockout_embedding_ = register_module(
+        "number_of_prize_cards_on_knockout_embedding", NormalizedLinear(1, dimension_out_, 6.0, device, dtype));
+    current_damage_embedding_ =
+        register_module("current_damage_embedding", NormalizedLinear(1, dimension_out_, 400.0, device, dtype));
+    pokemon_turn_trait_embedding_ = register_module("pokemon_turn_trait_embedding",
+                                                      torch::nn::Embedding(NUMBER_POKEMON_TURN_TRAITS, dimension_out_));
+    card_self_multi_head_attention_ =
+        register_module("card_self_multi_head_attention",
+                        MultiHeadAttention(dimension_out_, dimension_out_, dimension_out_,
+                                           std::max<int64_t>(dimension_out_ / 16, 4), 8, 0.0, true, device, dtype));
+    token_type_embedding_ =
+        register_module("token_type_embedding", torch::nn::Embedding(NUM_CARD_TOKEN_TYPES, dimension_out_));
 }
 
 std::pair<torch::Tensor, AdjacencyMatrices> CardEmbeddingImpl::forward(

@@ -33,6 +33,7 @@ set(KUMPEL_CORE_SOURCES
     network/src/EnergyTypeEmbedding.cpp
     network/src/FilterConditionEmbedding.cpp
     network/src/FilterEmbedding.cpp
+    network/src/GameEmbedding.cpp
     network/src/GameInteractionEmbedding.cpp
     network/src/GameStateEmbedding.cpp
     network/src/InstructionDataEmbedding.cpp

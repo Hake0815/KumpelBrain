@@ -40,8 +40,7 @@ void append_attack_instructions_and_conditions(const ProtoBufAttack& attack,
         return;
     }
 
-    const int64_t attack_slot =
-        static_cast<int64_t>(instructions_and_conditions.instruction_attack_indices.size());
+    const int64_t attack_slot = static_cast<int64_t>(instructions_and_conditions.instruction_attack_indices.size());
     if (has_energy) {
         for (const auto energy_type : attack.energy_cost()) {
             instructions_and_conditions.energy_flat.push_back(static_cast<int64_t>(energy_type));
@@ -239,15 +238,14 @@ FlatGameInteractionBatchTensors flat_game_interaction_batch_to_tensors(const Fla
     const size_t n_root_node_index = q.root_node_index.size();
     const size_t n_root_target_data_index = q.root_target_data_index.size();
 
-    const size_t total_int64 = n_game_interaction_types + n_game_interaction_data_types +
-                               n_game_interaction_data_type_offsets + n_number_data_batch_index + n_number_data +
-                               n_target_data_batch_index + n_target_data_possible_targets_deck_ids +
-                               n_target_data_possible_targets_deck_ids_length + n_target_data_target_action +
-                               n_target_data_remainder_action + n_target_data_number_of_targets +
-                               n_interaction_card_batch_index + n_interaction_card_deck_id +
-                               n_select_from_batch_index + n_select_from + n_node_is_leaf + n_node_logical_operator +
-                               n_node_depth + n_child_ptr + n_child_idx + n_leaf_node_index + n_leaf_int_range +
-                               n_leaf_selection_qualifier + n_root_node_index + n_root_target_data_index;
+    const size_t total_int64 =
+        n_game_interaction_types + n_game_interaction_data_types + n_game_interaction_data_type_offsets +
+        n_number_data_batch_index + n_number_data + n_target_data_batch_index +
+        n_target_data_possible_targets_deck_ids + n_target_data_possible_targets_deck_ids_length +
+        n_target_data_target_action + n_target_data_remainder_action + n_target_data_number_of_targets +
+        n_interaction_card_batch_index + n_interaction_card_deck_id + n_select_from_batch_index + n_select_from +
+        n_node_is_leaf + n_node_logical_operator + n_node_depth + n_child_ptr + n_child_idx + n_leaf_node_index +
+        n_leaf_int_range + n_leaf_selection_qualifier + n_root_node_index + n_root_target_data_index;
 
     std::vector<int64_t> int64_host;
     int64_host.reserve(total_int64);
@@ -338,19 +336,19 @@ FlatGameInteractionBatchTensors flat_game_interaction_batch_to_tensors(const Fla
     auto int64_buf = torch::tensor(int64_host, index_options);
 
     FlatGameInteractionBatchTensors out;
-    out.game_interaction_types = int64_buf.narrow(0, off_game_interaction_types, static_cast<int64_t>(n_game_interaction_types));
+    out.game_interaction_types =
+        int64_buf.narrow(0, off_game_interaction_types, static_cast<int64_t>(n_game_interaction_types));
     out.game_interaction_data_types =
         int64_buf.narrow(0, off_game_interaction_data_types, static_cast<int64_t>(n_game_interaction_data_types));
-    out.game_interaction_data_type_offsets = int64_buf.narrow(0, off_game_interaction_data_type_offsets,
-                                                              static_cast<int64_t>(n_game_interaction_data_type_offsets));
+    out.game_interaction_data_type_offsets = int64_buf.narrow(
+        0, off_game_interaction_data_type_offsets, static_cast<int64_t>(n_game_interaction_data_type_offsets));
     out.number_data_batch_index =
         int64_buf.narrow(0, off_number_data_batch_index, static_cast<int64_t>(n_number_data_batch_index));
     out.number_data = int64_buf.narrow(0, off_number_data, static_cast<int64_t>(n_number_data));
     out.target_data_batch_index =
         int64_buf.narrow(0, off_target_data_batch_index, static_cast<int64_t>(n_target_data_batch_index));
-    out.target_data_possible_targets_deck_ids =
-        int64_buf.narrow(0, off_target_data_possible_targets_deck_ids,
-                         static_cast<int64_t>(n_target_data_possible_targets_deck_ids));
+    out.target_data_possible_targets_deck_ids = int64_buf.narrow(
+        0, off_target_data_possible_targets_deck_ids, static_cast<int64_t>(n_target_data_possible_targets_deck_ids));
     out.target_data_possible_targets_deck_ids_length =
         int64_buf.narrow(0, off_target_data_possible_targets_deck_ids_length,
                          static_cast<int64_t>(n_target_data_possible_targets_deck_ids_length));
@@ -377,8 +375,8 @@ FlatGameInteractionBatchTensors flat_game_interaction_batch_to_tensors(const Fla
     qt.child_idx = int64_buf.narrow(0, off_child_idx, static_cast<int64_t>(n_child_idx));
     qt.leaf_node_index = int64_buf.narrow(0, off_leaf_node_index, static_cast<int64_t>(n_leaf_node_index));
     const auto num_leaves = static_cast<int64_t>(n_leaf_node_index);
-    qt.leaf_int_range = int64_buf.narrow(0, off_leaf_int_range, static_cast<int64_t>(n_leaf_int_range))
-                            .view({num_leaves, 2});
+    qt.leaf_int_range =
+        int64_buf.narrow(0, off_leaf_int_range, static_cast<int64_t>(n_leaf_int_range)).view({num_leaves, 2});
     qt.leaf_selection_qualifier =
         int64_buf.narrow(0, off_leaf_selection_qualifier, static_cast<int64_t>(n_leaf_selection_qualifier));
     qt.root_node_index = int64_buf.narrow(0, off_root_node_index, static_cast<int64_t>(n_root_node_index));
@@ -392,10 +390,7 @@ FlatGameInteractionBatchTensors flat_game_interaction_batch_to_tensors(const Fla
 GameInteractionEmbeddingImpl::GameInteractionEmbeddingImpl(
     std::shared_ptr<SharedEmbeddingHolderImpl> shared_embedding_holder, int64_t dimension_out, torch::Device device,
     torch::Dtype dtype)
-    : shared_embedding_holder_(shared_embedding_holder),
-      dimension_out_(dimension_out),
-      device_(device),
-      dtype_(dtype) {
+    : shared_embedding_holder_(shared_embedding_holder), dimension_out_(dimension_out), device_(device), dtype_(dtype) {
     instruction_data_embedding_ =
         register_module("instruction_data_embedding",
                         InstructionDataEmbedding(shared_embedding_holder_.ptr(), dimension_out, device, dtype));
@@ -407,57 +402,79 @@ GameInteractionEmbeddingImpl::GameInteractionEmbeddingImpl(
                                                   dimension_out, device, dtype));
     attack_embedding_ = register_module("attack_embedding", AttackEmbedding(dimension_out, device, dtype));
     ability_embedding_ = register_module("ability_embedding", AbilityEmbedding(dimension_out, device, dtype));
+    register_game_interaction_specific_modules(device, dtype);
+    to(device, dtype);
+}
+
+GameInteractionEmbeddingImpl::GameInteractionEmbeddingImpl(
+    std::shared_ptr<SharedEmbeddingHolderImpl> shared_embedding_holder, int64_t dimension_out,
+    const SharedInstructionEmbeddings& shared_instruction_embeddings, torch::Device device, torch::Dtype dtype)
+    : shared_embedding_holder_(shared_embedding_holder), dimension_out_(dimension_out), device_(device), dtype_(dtype) {
+    instruction_data_embedding_ = shared_instruction_embeddings.instruction_data_embedding;
+    instruction_embedding_ = shared_instruction_embeddings.instruction_embedding;
+    condition_embedding_ = shared_instruction_embeddings.condition_embedding;
+    attack_embedding_ = shared_instruction_embeddings.attack_embedding;
+    ability_embedding_ = shared_instruction_embeddings.ability_embedding;
+    register_game_interaction_specific_modules(device, dtype);
+    to(device, dtype);
+}
+
+void GameInteractionEmbeddingImpl::register_game_interaction_specific_modules(torch::Device device,
+                                                                              torch::Dtype dtype) {
     mask_tensor_options_ = torch::TensorOptions().device(device_).dtype(torch::kBool);
     index_tensor_options_ = torch::TensorOptions().device(device_).dtype(torch::kInt64);
     float_tensor_options_ = torch::TensorOptions().device(device_).dtype(dtype_);
     game_interaction_type_embedding_ = register_module(
-        "game_interaction_type_embedding", torch::nn::Embedding(NUMBER_GAME_INTERACTION_TYPES, dimension_out));
-    game_interaction_data_type_embedding_ = register_module(
-        "game_interaction_data_type_embedding",
-        torch::nn::Embedding(NUMBER_GAME_INTERACTION_DATA_TYPES, dimension_out));
+        "game_interaction_type_embedding", torch::nn::Embedding(NUMBER_GAME_INTERACTION_TYPES, dimension_out_));
+    game_interaction_data_type_embedding_ =
+        register_module("game_interaction_data_type_embedding",
+                        torch::nn::Embedding(NUMBER_GAME_INTERACTION_DATA_TYPES, dimension_out_));
     conditional_query_int_range_embedding_ =
         register_module("conditional_query_int_range_embedding",
-                        NormalizedLinear(2, dimension_out, static_cast<double>(DECK_SIZE), device, dtype));
+                        NormalizedLinear(2, dimension_out_, static_cast<double>(DECK_SIZE), device, dtype));
     conditional_query_selection_qualifier_embedding_ =
         register_module("conditional_query_selection_qualifier_embedding",
-                        torch::nn::Embedding(NUMBER_SELECTION_QUALIFIERS, dimension_out));
+                        torch::nn::Embedding(NUMBER_SELECTION_QUALIFIERS, dimension_out_));
     conditional_query_leaf_projection_ =
-        register_module("conditional_query_leaf_projection", torch::nn::Linear(2 * dimension_out, dimension_out));
+        register_module("conditional_query_leaf_projection", torch::nn::Linear(2 * dimension_out_, dimension_out_));
     conditional_query_operator_embedding_ = register_module(
-        "conditional_query_operator_embedding", torch::nn::Embedding(NUMBER_LOGICAL_QUERY_OPERATORS, dimension_out));
+        "conditional_query_operator_embedding", torch::nn::Embedding(NUMBER_LOGICAL_QUERY_OPERATORS, dimension_out_));
     conditional_query_attention_ =
         register_module("conditional_query_attention",
-                        MultiHeadAttention(dimension_out, dimension_out, dimension_out,
-                                           std::max<int64_t>(dimension_out / 16, 1), 2, 0.0, false, device, dtype));
+                        MultiHeadAttention(dimension_out_, dimension_out_, dimension_out_,
+                                           std::max<int64_t>(dimension_out_ / 16, 1), 2, 0.0, false, device, dtype));
     target_data_attention_ =
         register_module("target_data_attention",
-                        MultiHeadAttention(dimension_out, dimension_out, dimension_out,
-                                           std::max<int64_t>(dimension_out / 16, 1), 4, 0.0, false, device, dtype));
+                        MultiHeadAttention(dimension_out_, dimension_out_, dimension_out_,
+                                           std::max<int64_t>(dimension_out_ / 16, 1), 4, 0.0, false, device, dtype));
     game_interaction_attention_ =
         register_module("game_interaction_attention",
-                        MultiHeadAttention(dimension_out, dimension_out, dimension_out,
-                                           std::max<int64_t>(dimension_out / 16, 1), 6, 0.0, false, device, dtype));
-    action_on_selection_embedding_ =
-        register_module("action_on_selection_embedding", torch::nn::Embedding(NUMBER_ACTION_ON_SELECTION, dimension_out));
+                        MultiHeadAttention(dimension_out_, dimension_out_, dimension_out_,
+                                           std::max<int64_t>(dimension_out_ / 16, 1), 6, 0.0, false, device, dtype));
+    action_on_selection_embedding_ = register_module("action_on_selection_embedding",
+                                                     torch::nn::Embedding(NUMBER_ACTION_ON_SELECTION, dimension_out_));
     target_data_addition_embedding_ =
-        register_module("target_data_addition_embedding", torch::nn::Embedding(1, dimension_out));
+        register_module("target_data_addition_embedding", torch::nn::Embedding(1, dimension_out_));
     remainder_data_addition_embedding_ =
-        register_module("remainder_data_addition_embedding", torch::nn::Embedding(1, dimension_out));
+        register_module("remainder_data_addition_embedding", torch::nn::Embedding(1, dimension_out_));
     number_of_targets_embedding_ =
-        register_module("number_of_targets_embedding", NormalizedLinear(1, dimension_out, 5.0, device, dtype));
+        register_module("number_of_targets_embedding", NormalizedLinear(1, dimension_out_, 5.0, device, dtype));
     number_data_embedding_ =
-        register_module("number_data_embedding", NormalizedLinear(1, dimension_out, 5.0, device, dtype));
+        register_module("number_data_embedding", NormalizedLinear(1, dimension_out_, 5.0, device, dtype));
     select_from_embedding_ =
-        register_module("select_from_embedding", torch::nn::Embedding(NUMBER_SELECT_FROM, dimension_out));
-    to(device, dtype);
+        register_module("select_from_embedding", torch::nn::Embedding(NUMBER_SELECT_FROM, dimension_out_));
 }
 
 torch::Tensor GameInteractionEmbeddingImpl::embed_target_action(const torch::Tensor& target_action) {
-    return action_on_selection_embedding_(target_action) + target_data_addition_embedding_(torch::tensor(0, torch::TensorOptions().device(device_).dtype(torch::kLong)));
+    return action_on_selection_embedding_(target_action) +
+           target_data_addition_embedding_(
+               torch::tensor(0, torch::TensorOptions().device(device_).dtype(torch::kLong)));
 }
 
 torch::Tensor GameInteractionEmbeddingImpl::embed_remainder_action(const torch::Tensor& remainder_action) {
-    return action_on_selection_embedding_(remainder_action) + remainder_data_addition_embedding_(torch::tensor(0, torch::TensorOptions().device(device_).dtype(torch::kLong)));
+    return action_on_selection_embedding_(remainder_action) +
+           remainder_data_addition_embedding_(
+               torch::tensor(0, torch::TensorOptions().device(device_).dtype(torch::kLong)));
 }
 
 torch::Tensor GameInteractionEmbeddingImpl::embed_conditional_target_queries(
@@ -524,15 +541,16 @@ torch::Tensor GameInteractionEmbeddingImpl::embed_conditional_target_queries(
     return node_embeddings.index_select(0, flat.root_node_index);
 }
 
-torch::Tensor GameInteractionEmbeddingImpl::embed_target_data(const FlatGameInteractionBatchTensors& flat_game_interaction_batch, torch::Tensor card_indices, torch::Tensor cards) {
+torch::Tensor GameInteractionEmbeddingImpl::embed_target_data(
+    const FlatGameInteractionBatchTensors& flat_game_interaction_batch, torch::Tensor card_indices,
+    torch::Tensor cards) {
     const auto num_target_data = flat_game_interaction_batch.target_data_target_action.size(0);
     if (num_target_data == 0) {
         return torch::empty({0, dimension_out_}, torch::TensorOptions().device(device_).dtype(dtype_));
     }
 
     auto embedded_selection_target_data =
-        torch::zeros({num_target_data, dimension_out_},
-                     torch::TensorOptions().device(device_).dtype(dtype_));
+        torch::zeros({num_target_data, dimension_out_}, torch::TensorOptions().device(device_).dtype(dtype_));
 
     const auto number_of_targets = flat_game_interaction_batch.target_data_number_of_targets;
     const auto has_number_of_targets_mask = number_of_targets.ne(-1);
@@ -553,27 +571,27 @@ torch::Tensor GameInteractionEmbeddingImpl::embed_target_data(const FlatGameInte
     }
 
     const auto embedded_target_actions = embed_target_action(flat_game_interaction_batch.target_data_target_action);
-    const auto embedded_remainder_actions = embed_remainder_action(flat_game_interaction_batch.target_data_remainder_action);
+    const auto embedded_remainder_actions =
+        embed_remainder_action(flat_game_interaction_batch.target_data_remainder_action);
 
-    const auto possible_targets_indices = card_indices.index_select(0, flat_game_interaction_batch.target_data_possible_targets_deck_ids);
+    const auto possible_targets_indices =
+        card_indices.index_select(0, flat_game_interaction_batch.target_data_possible_targets_deck_ids);
     const auto possible_targets_cards = cards.index_select(0, possible_targets_indices);
 
     const auto& lengths = flat_game_interaction_batch.target_data_possible_targets_deck_ids_length;
     const auto max_possible_targets = lengths.max().item<int64_t>();
-    const auto possible_targets_offsets =
-        torch::cat({torch::zeros({1}, lengths.options()), lengths.cumsum(0)}, 0);
+    const auto possible_targets_offsets = torch::cat({torch::zeros({1}, lengths.options()), lengths.cumsum(0)}, 0);
     auto [padded_possible_targets, possible_targets_mask] = tensor_utils::pad_by_offsets(
         possible_targets_cards, possible_targets_offsets, dimension_out_, max_possible_targets);
 
-    const auto prefix = torch::stack(
-        {embedded_target_actions, embedded_remainder_actions, embedded_selection_target_data}, 1);
+    const auto prefix =
+        torch::stack({embedded_target_actions, embedded_remainder_actions, embedded_selection_target_data}, 1);
     const auto padded_sequences = torch::cat({prefix, padded_possible_targets}, 1);
     const auto mask_options = torch::TensorOptions().device(device_).dtype(torch::kBool);
     const auto valid_token_mask =
         torch::cat({torch::ones({num_target_data, 3}, mask_options), possible_targets_mask}, 1);
 
-    return attention_utils::masked_self_attention_reduce(target_data_attention_, padded_sequences,
-                                                         valid_token_mask);
+    return attention_utils::masked_self_attention_reduce(target_data_attention_, padded_sequences, valid_token_mask);
 }
 
 torch::Tensor GameInteractionEmbeddingImpl::embed_attack_energy_costs(
@@ -583,8 +601,7 @@ torch::Tensor GameInteractionEmbeddingImpl::embed_attack_energy_costs(
     }
     const auto num_energy = static_cast<int64_t>(instructions_and_conditions.energy_flat.size());
     auto energy_types = torch::tensor(instructions_and_conditions.energy_flat, index_tensor_options_);
-    auto contexts =
-        torch::full({num_energy}, static_cast<int64_t>(ATTACK_COST), index_tensor_options_);
+    auto contexts = torch::full({num_energy}, static_cast<int64_t>(ATTACK_COST), index_tensor_options_);
     return shared_embedding_holder_->energy_type_embedding_->forward(energy_types, contexts);
 }
 
@@ -664,8 +681,8 @@ torch::Tensor GameInteractionEmbeddingImpl::embed_number_data(const torch::Tenso
 
 namespace {
 
-void index_copy_payload_for_data_type(torch::Tensor& payload, const torch::Tensor& data_types,
-                                      int64_t data_type_value, const torch::Tensor& values) {
+void index_copy_payload_for_data_type(torch::Tensor& payload, const torch::Tensor& data_types, int64_t data_type_value,
+                                      const torch::Tensor& values) {
     const auto positions = torch::nonzero(data_types.eq(data_type_value)).squeeze(1);
     if (positions.numel() == 0 || values.numel() == 0) {
         return;
@@ -675,11 +692,13 @@ void index_copy_payload_for_data_type(torch::Tensor& payload, const torch::Tenso
 
 }  // namespace
 
-torch::Tensor GameInteractionEmbeddingImpl::embed_interaction_data(
-    const FlatGameInteractionBatchTensors& flat_tensors, const torch::Tensor& embedded_target_data,
-    const torch::Tensor& embedded_number_data, const torch::Tensor& interaction_card_data,
-    const torch::Tensor& embedded_attack_data, const torch::Tensor& embedded_ability_data,
-    const torch::Tensor& embedded_select_from) {
+torch::Tensor GameInteractionEmbeddingImpl::embed_interaction_data(const FlatGameInteractionBatchTensors& flat_tensors,
+                                                                   const torch::Tensor& embedded_target_data,
+                                                                   const torch::Tensor& embedded_number_data,
+                                                                   const torch::Tensor& interaction_card_data,
+                                                                   const torch::Tensor& embedded_attack_data,
+                                                                   const torch::Tensor& embedded_ability_data,
+                                                                   const torch::Tensor& embedded_select_from) {
     const auto& data_types = flat_tensors.game_interaction_data_types;
     const auto num_data_rows = data_types.size(0);
     if (num_data_rows == 0) {
@@ -689,30 +708,34 @@ torch::Tensor GameInteractionEmbeddingImpl::embed_interaction_data(
     auto payload = torch::zeros({num_data_rows, dimension_out_}, float_tensor_options_);
 
     index_copy_payload_for_data_type(
-        payload, data_types, static_cast<int64_t>(ProtoBufGameInteractionDataType::GAME_INTERACTION_DATA_TYPE_NUMBER_DATA),
+        payload, data_types,
+        static_cast<int64_t>(ProtoBufGameInteractionDataType::GAME_INTERACTION_DATA_TYPE_NUMBER_DATA),
         embedded_number_data);
     index_copy_payload_for_data_type(
-        payload, data_types, static_cast<int64_t>(ProtoBufGameInteractionDataType::GAME_INTERACTION_DATA_TYPE_TARGET_DATA),
+        payload, data_types,
+        static_cast<int64_t>(ProtoBufGameInteractionDataType::GAME_INTERACTION_DATA_TYPE_TARGET_DATA),
         embedded_target_data);
-    index_copy_payload_for_data_type(payload, data_types,
-                                     static_cast<int64_t>(
-                                         ProtoBufGameInteractionDataType::GAME_INTERACTION_DATA_TYPE_INTERACTION_CARD_DATA),
-                                     interaction_card_data);
+    index_copy_payload_for_data_type(
+        payload, data_types,
+        static_cast<int64_t>(ProtoBufGameInteractionDataType::GAME_INTERACTION_DATA_TYPE_INTERACTION_CARD_DATA),
+        interaction_card_data);
     index_copy_payload_for_data_type(
         payload, data_types,
         static_cast<int64_t>(ProtoBufGameInteractionDataType::GAME_INTERACTION_DATA_TYPE_SELECT_FROM_DATA),
         embedded_select_from);
 
-    const auto attack_positions = torch::nonzero(
-        data_types.eq(static_cast<int64_t>(ProtoBufGameInteractionDataType::GAME_INTERACTION_DATA_TYPE_ATTACK_DATA)))
-                                      .squeeze(1);
+    const auto attack_positions =
+        torch::nonzero(data_types.eq(static_cast<int64_t>(
+                           ProtoBufGameInteractionDataType::GAME_INTERACTION_DATA_TYPE_ATTACK_DATA)))
+            .squeeze(1);
     if (attack_positions.numel() > 0 && embedded_attack_data.size(0) > 0) {
         payload.index_copy_(0, attack_positions, embedded_attack_data);
     }
 
-    const auto ability_positions = torch::nonzero(
-        data_types.eq(static_cast<int64_t>(ProtoBufGameInteractionDataType::GAME_INTERACTION_DATA_TYPE_ABILITY_DATA)))
-                                       .squeeze(1);
+    const auto ability_positions =
+        torch::nonzero(data_types.eq(static_cast<int64_t>(
+                           ProtoBufGameInteractionDataType::GAME_INTERACTION_DATA_TYPE_ABILITY_DATA)))
+            .squeeze(1);
     if (ability_positions.numel() > 0 && embedded_ability_data.size(0) > 0) {
         payload.index_copy_(0, ability_positions, embedded_ability_data);
     }
@@ -741,8 +764,7 @@ torch::Tensor GameInteractionEmbeddingImpl::reduce_game_interactions(
     const auto interaction_type_tokens =
         game_interaction_type_embedding_(flat_tensors.game_interaction_types).unsqueeze(1);
     const auto padded_sequences = torch::cat({interaction_type_tokens, padded_data}, 1);
-    const auto valid_token_mask =
-        torch::cat({torch::ones({batch_size, 1}, mask_tensor_options_), data_mask}, 1);
+    const auto valid_token_mask = torch::cat({torch::ones({batch_size, 1}, mask_tensor_options_), data_mask}, 1);
 
     return attention_utils::masked_self_attention_reduce(game_interaction_attention_, padded_sequences,
                                                          valid_token_mask);
@@ -757,9 +779,8 @@ torch::Tensor GameInteractionEmbeddingImpl::forward(const std::vector<ProtoBufGa
     auto embedded_instructions_pair = instruction_embedding_->forward(ic.instructions);
     auto embedded_conditions_pair = condition_embedding_->forward(ic.conditions);
     auto attack_energy_costs = embed_attack_energy_costs(ic);
-    const auto embedded_attack_data =
-        embed_attacks(embedded_instructions_pair, ic.instruction_attack_indices, attack_energy_costs,
-                      ic.energy_slot_per_token);
+    const auto embedded_attack_data = embed_attacks(embedded_instructions_pair, ic.instruction_attack_indices,
+                                                    attack_energy_costs, ic.energy_slot_per_token);
     const auto embedded_ability_data =
         embed_ability(embedded_instructions_pair, ic.instruction_ability_indices, embedded_conditions_pair,
                       ic.ability_condition_row_for_instruction_ability);
@@ -770,8 +791,8 @@ torch::Tensor GameInteractionEmbeddingImpl::forward(const std::vector<ProtoBufGa
         cards.index_select(0, card_indices.index_select(0, flat_tensors.interaction_card_deck_id));
     const auto embedded_select_from = select_from_embedding_(flat_tensors.select_from);
 
-    const auto embedded_interaction_data = embed_interaction_data(
-        flat_tensors, embedded_target_data, embedded_number_data, interaction_card_data, embedded_attack_data,
-        embedded_ability_data, embedded_select_from);
+    const auto embedded_interaction_data =
+        embed_interaction_data(flat_tensors, embedded_target_data, embedded_number_data, interaction_card_data,
+                               embedded_attack_data, embedded_ability_data, embedded_select_from);
     return reduce_game_interactions(flat_tensors, embedded_interaction_data);
 }

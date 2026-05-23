@@ -19,6 +19,7 @@
 #include "network/include/NormalizedLinear.h"
 #include "network/include/SaveLoadMixin.h"
 #include "network/include/SharedEmbeddingHolder.h"
+#include "network/include/SharedInstructionEmbeddings.h"
 #include "network/src/serialization/gamecore_serialization.pb.h"
 
 using ProtoBufGameInteraction = gamecore::serialization::ProtoBufGameInteraction;
@@ -94,6 +95,9 @@ struct GameInteractionEmbeddingImpl : torch::nn::Module, SaveLoadMixin<GameInter
     GameInteractionEmbeddingImpl(std::shared_ptr<SharedEmbeddingHolderImpl> shared_embedding_holder,
                                  int64_t dimension_out, torch::Device device = torch::kCPU,
                                  torch::Dtype dtype = torch::kFloat);
+    GameInteractionEmbeddingImpl(std::shared_ptr<SharedEmbeddingHolderImpl> shared_embedding_holder,
+                                 int64_t dimension_out, const SharedInstructionEmbeddings& shared_instruction_embeddings,
+                                 torch::Device device = torch::kCPU, torch::Dtype dtype = torch::kFloat);
 
     /// \param game_interactions The game interactions to embed.
     /// \param card_indices A tensor holding the indices of cards, where the index is the deck id.
@@ -102,6 +106,8 @@ struct GameInteractionEmbeddingImpl : torch::nn::Module, SaveLoadMixin<GameInter
                           torch::Tensor cards);
 
    private:
+    void register_game_interaction_specific_modules(torch::Device device, torch::Dtype dtype);
+
     torch::Tensor embed_conditional_target_queries(const FlatConditionalTargetQueryTensors& flat);
     torch::Tensor embed_target_action(const torch::Tensor& target_action);
     torch::Tensor embed_remainder_action(const torch::Tensor& remainder_action);

@@ -10,6 +10,7 @@
 #include "network/include/NormalizedLinear.h"
 #include "network/include/SaveLoadMixin.h"
 #include "network/include/SharedEmbeddingHolder.h"
+#include "network/include/SharedInstructionEmbeddings.h"
 
 using ProtoBufCardState = gamecore::serialization::ProtoBufCardState;
 
@@ -31,10 +32,15 @@ struct RgcnLayerWeights {
 struct CardStateEmbeddingImpl : torch::nn::Module, SaveLoadMixin<CardStateEmbeddingImpl> {
     CardStateEmbeddingImpl(int64_t dimension_out, torch::Device device = torch::kCPU,
                            torch::Dtype dtype = torch::kFloat);
+    CardStateEmbeddingImpl(std::shared_ptr<SharedEmbeddingHolderImpl> shared_embedding_holder, int64_t dimension_out,
+                           const SharedInstructionEmbeddings& shared_instruction_embeddings,
+                           torch::Device device = torch::kCPU, torch::Dtype dtype = torch::kFloat);
 
     torch::Tensor forward(const google::protobuf::RepeatedPtrField<ProtoBufCardState>& card_state_batch);
 
    private:
+    void register_card_state_specific_modules(torch::Device device, torch::Dtype dtype);
+
     int64_t dimension_out_;
     torch::Device device_;
     torch::Dtype dtype_;

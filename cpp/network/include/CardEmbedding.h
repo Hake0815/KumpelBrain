@@ -14,6 +14,7 @@
 #include "../include/InstructionEmbedding.h"
 #include "../include/SaveLoadMixin.h"
 #include "../include/SharedEmbeddingHolder.h"
+#include "../include/SharedInstructionEmbeddings.h"
 #include "../src/serialization/gamecore_serialization.pb.h"
 #include "network/include/AbilityEmbedding.h"
 #include "network/include/AttackEmbedding.h"
@@ -115,6 +116,9 @@ struct StagedTensors {
 struct CardEmbeddingImpl : torch::nn::Module, SaveLoadMixin<CardEmbeddingImpl> {
     CardEmbeddingImpl(std::shared_ptr<SharedEmbeddingHolderImpl> shared_embedding_holder, int64_t dimension_out,
                       torch::Device device = torch::kCPU, torch::Dtype dtype = torch::kFloat);
+    CardEmbeddingImpl(std::shared_ptr<SharedEmbeddingHolderImpl> shared_embedding_holder, int64_t dimension_out,
+                      const SharedInstructionEmbeddings& shared_instruction_embeddings,
+                      torch::Device device = torch::kCPU, torch::Dtype dtype = torch::kFloat);
 
     std::pair<torch::Tensor, AdjacencyMatrices> forward(
         const google::protobuf::RepeatedPtrField<ProtoBufCardState>& card_batch);
@@ -147,6 +151,8 @@ struct CardEmbeddingImpl : torch::nn::Module, SaveLoadMixin<CardEmbeddingImpl> {
     MultiHeadAttention card_pooling_multi_head_attention_{nullptr};
     torch::nn::Embedding card_pooling_query_embedding_{nullptr};
     torch::nn::Embedding token_type_embedding_{nullptr};
+
+    void register_card_specific_modules(torch::Device device, torch::Dtype dtype);
 
     CardFeatures collect_card_features(const google::protobuf::RepeatedPtrField<ProtoBufCardState>& card_batch);
 
