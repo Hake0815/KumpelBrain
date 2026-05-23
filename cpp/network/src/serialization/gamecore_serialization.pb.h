@@ -1319,6 +1319,7 @@ template <>
 enum ProtoBufLogicalQueryOperator : int {
   LOGICAL_QUERY_OPERATOR_AND = 0,
   LOGICAL_QUERY_OPERATOR_OR = 1,
+  LOGICAL_QUERY_OPERATOR_XOR = 2,
   ProtoBufLogicalQueryOperator_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   ProtoBufLogicalQueryOperator_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -1329,11 +1330,11 @@ extern const uint32_t ProtoBufLogicalQueryOperator_internal_data_[];
 inline constexpr ProtoBufLogicalQueryOperator ProtoBufLogicalQueryOperator_MIN =
     static_cast<ProtoBufLogicalQueryOperator>(0);
 inline constexpr ProtoBufLogicalQueryOperator ProtoBufLogicalQueryOperator_MAX =
-    static_cast<ProtoBufLogicalQueryOperator>(1);
+    static_cast<ProtoBufLogicalQueryOperator>(2);
 [[nodiscard]] inline bool ProtoBufLogicalQueryOperator_IsValid(int value) {
-  return 0 <= value && value <= 1;
+  return 0 <= value && value <= 2;
 }
-inline constexpr int ProtoBufLogicalQueryOperator_ARRAYSIZE = 1 + 1;
+inline constexpr int ProtoBufLogicalQueryOperator_ARRAYSIZE = 2 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 ProtoBufLogicalQueryOperator_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(ProtoBufLogicalQueryOperator) {
@@ -1348,7 +1349,7 @@ template <typename T>
 }
 template <>
 [[nodiscard]] inline const ::std::string& ProtoBufLogicalQueryOperator_Name(ProtoBufLogicalQueryOperator value) {
-  return ::google::protobuf::internal::NameOfDenseEnum<ProtoBufLogicalQueryOperator_descriptor, 0, 1>(
+  return ::google::protobuf::internal::NameOfDenseEnum<ProtoBufLogicalQueryOperator_descriptor, 0, 2>(
       static_cast<int>(value));
 }
 [[nodiscard]] inline bool ProtoBufLogicalQueryOperator_Parse(
@@ -5330,8 +5331,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ProtoBufTargetData final : public :
         &_ProtoBufTargetData_default_instance_);
   }
   enum TargetToChooseCase {
-    kNumberOfTargets = 4,
-    kConditionalTargetQuery = 5,
+    kNumberOfTargets = 5,
+    kConditionalTargetQuery = 6,
     TARGET_TO_CHOOSE_NOT_SET = 0,
   };
   static constexpr int kIndexInFileMessages = 23;
@@ -5427,8 +5428,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ProtoBufTargetData final : public :
     kPossibleTargetsFieldNumber = 1,
     kTargetActionFieldNumber = 2,
     kRemainderActionFieldNumber = 3,
-    kNumberOfTargetsFieldNumber = 4,
-    kConditionalTargetQueryFieldNumber = 5,
+    kAllowMultipleTimesFieldNumber = 4,
+    kNumberOfTargetsFieldNumber = 5,
+    kConditionalTargetQueryFieldNumber = 6,
   };
   // repeated int32 possible_targets = 1;
   [[nodiscard]] int possible_targets_size()
@@ -5469,7 +5471,17 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ProtoBufTargetData final : public :
   void _internal_set_remainder_action(::gamecore::serialization::ProtoBufActionOnSelection value);
 
   public:
-  // int32 number_of_targets = 4;
+  // bool allow_multiple_times = 4;
+  void clear_allow_multiple_times() ;
+  [[nodiscard]] bool allow_multiple_times() const;
+  void set_allow_multiple_times(bool value);
+
+  private:
+  bool _internal_allow_multiple_times() const;
+  void _internal_set_allow_multiple_times(bool value);
+
+  public:
+  // int32 number_of_targets = 5;
   [[nodiscard]] bool has_number_of_targets()
       const;
   void clear_number_of_targets() ;
@@ -5481,7 +5493,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ProtoBufTargetData final : public :
   void _internal_set_number_of_targets(::int32_t value);
 
   public:
-  // .gamecore.serialization.ProtoBufConditionalTargetQuery conditional_target_query = 5;
+  // .gamecore.serialization.ProtoBufConditionalTargetQuery conditional_target_query = 6;
   [[nodiscard]] bool has_conditional_target_query()
       const;
   private:
@@ -5511,7 +5523,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ProtoBufTargetData final : public :
   [[nodiscard]] inline bool has_target_to_choose() const;
   inline void clear_has_target_to_choose();
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<2, 5,
+  static const ::google::protobuf::internal::TcParseTable<2, 6,
                                    1, 0,
                                    2>
       _table_;
@@ -5539,6 +5551,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ProtoBufTargetData final : public :
     ::google::protobuf::internal::CachedSize _possible_targets_cached_byte_size_;
     int target_action_;
     int remainder_action_;
+    bool allow_multiple_times_;
     union TargetToChooseUnion {
       constexpr TargetToChooseUnion() : _constinit_{} {}
       ::google::protobuf::internal::ConstantInitialized _constinit_;
@@ -13608,7 +13621,32 @@ inline void ProtoBufTargetData::_internal_set_remainder_action(::gamecore::seria
   _impl_.remainder_action_ = value;
 }
 
-// int32 number_of_targets = 4;
+// bool allow_multiple_times = 4;
+inline void ProtoBufTargetData::clear_allow_multiple_times() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.allow_multiple_times_ = false;
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000008U);
+}
+inline bool ProtoBufTargetData::allow_multiple_times() const {
+  // @@protoc_insertion_point(field_get:gamecore.serialization.ProtoBufTargetData.allow_multiple_times)
+  return _internal_allow_multiple_times();
+}
+inline void ProtoBufTargetData::set_allow_multiple_times(bool value) {
+  _internal_set_allow_multiple_times(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:gamecore.serialization.ProtoBufTargetData.allow_multiple_times)
+}
+inline bool ProtoBufTargetData::_internal_allow_multiple_times() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.allow_multiple_times_;
+}
+inline void ProtoBufTargetData::_internal_set_allow_multiple_times(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.allow_multiple_times_ = value;
+}
+
+// int32 number_of_targets = 5;
 inline bool ProtoBufTargetData::has_number_of_targets() const {
   return target_to_choose_case() == kNumberOfTargets;
 }
@@ -13641,7 +13679,7 @@ inline ::int32_t ProtoBufTargetData::_internal_number_of_targets() const {
   return 0;
 }
 
-// .gamecore.serialization.ProtoBufConditionalTargetQuery conditional_target_query = 5;
+// .gamecore.serialization.ProtoBufConditionalTargetQuery conditional_target_query = 6;
 inline bool ProtoBufTargetData::has_conditional_target_query() const {
   return target_to_choose_case() == kConditionalTargetQuery;
 }
@@ -13711,7 +13749,7 @@ inline ::gamecore::serialization::ProtoBufConditionalTargetQuery* PROTOBUF_NONNU
   if (target_to_choose_case() != kConditionalTargetQuery) {
     clear_target_to_choose();
     set_has_conditional_target_query();
-    _impl_.target_to_choose_.conditional_target_query_ =
+    _impl_.target_to_choose_.conditional_target_query_ = 
         ::google::protobuf::Message::DefaultConstruct<::gamecore::serialization::ProtoBufConditionalTargetQuery>(GetArena());
   }
   return _impl_.target_to_choose_.conditional_target_query_;

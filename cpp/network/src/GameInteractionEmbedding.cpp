@@ -67,6 +67,8 @@ void GameInteractionEmbeddingImpl::register_game_interaction_specific_modules(to
         register_module("target_data_addition_embedding", torch::nn::Embedding(1, dimension_out_));
     remainder_data_addition_embedding_ =
         register_module("remainder_data_addition_embedding", torch::nn::Embedding(1, dimension_out_));
+    allow_multiple_times_embedding_ =
+        register_module("allow_multiple_times_embedding", torch::nn::Embedding(2, dimension_out_));
     number_of_targets_embedding_ =
         register_module("number_of_targets_embedding", NormalizedLinear(1, dimension_out_, 5.0, device, dtype));
     number_data_embedding_ =
@@ -81,8 +83,7 @@ torch::Tensor GameInteractionEmbeddingImpl::embed_target_action(const torch::Ten
 }
 
 torch::Tensor GameInteractionEmbeddingImpl::embed_remainder_action(const torch::Tensor& remainder_action) {
-    return action_on_selection_embedding_(remainder_action) +
-           remainder_data_addition_embedding_(scalar_zero_index_);
+    return action_on_selection_embedding_(remainder_action) + remainder_data_addition_embedding_(scalar_zero_index_);
 }
 
 torch::Tensor GameInteractionEmbeddingImpl::embed_conditional_target_queries(
@@ -181,10 +182,12 @@ torch::Tensor GameInteractionEmbeddingImpl::embed_target_data(
     const auto embedded_target_actions = embed_target_action(flat_game_interaction_batch.target_data_target_action);
     const auto embedded_remainder_actions =
         embed_remainder_action(flat_game_interaction_batch.target_data_remainder_action);
+    const auto embedded_allow_multiple_times =
+        allow_multiple_times_embedding_(flat_game_interaction_batch.target_data_allow_multiple_times);
 
-    const auto possible_targets_cards = resolve_cards_from_deck_ids(
-        flat_game_interaction_batch.target_data_possible_targets_deck_ids, card_indices, cards,
-        "embedGameInteraction target_data possible_targets");
+    const auto possible_targets_cards =
+        resolve_cards_from_deck_ids(flat_game_interaction_batch.target_data_possible_targets_deck_ids, card_indices,
+                                    cards, "embedGameInteraction target_data possible_targets");
 
     const auto& lengths = flat_game_interaction_batch.target_data_possible_targets_deck_ids_length;
     const auto max_possible_targets = lengths.max().item<int64_t>();
@@ -192,12 +195,13 @@ torch::Tensor GameInteractionEmbeddingImpl::embed_target_data(
     auto [padded_possible_targets, possible_targets_mask] = tensor_utils::pad_by_offsets(
         possible_targets_cards, possible_targets_offsets, dimension_out_, max_possible_targets);
 
-    const auto prefix =
-        torch::stack({embedded_target_actions, embedded_remainder_actions, embedded_selection_target_data}, 1);
+    const auto prefix = torch::stack({embedded_target_actions, embedded_remainder_actions,
+                                      embedded_selection_target_data, embedded_allow_multiple_times},
+                                     1);
     const auto padded_sequences = torch::cat({prefix, padded_possible_targets}, 1);
     const auto mask_options = torch::TensorOptions().device(device_).dtype(torch::kBool);
     const auto valid_token_mask =
-        torch::cat({torch::ones({num_target_data, 3}, mask_options), possible_targets_mask}, 1);
+        torch::cat({torch::ones({num_target_data, 4}, mask_options), possible_targets_mask}, 1);
 
     return attention_utils::masked_self_attention_reduce(target_data_attention_, padded_sequences, valid_token_mask);
 }
@@ -403,8 +407,8 @@ torch::Tensor GameInteractionEmbeddingImpl::forward(const std::vector<ProtoBufGa
 
     const auto embedded_target_data = embed_target_data(flat_tensors, card_indices, cards);
     const auto embedded_number_data = embed_number_data(flat_tensors.number_data);
-    const auto interaction_card_data = resolve_cards_from_deck_ids(
-        flat_tensors.interaction_card_deck_id, card_indices, cards, "embedGameInteraction interaction_card_data");
+    const auto interaction_card_data = resolve_cards_from_deck_ids(flat_tensors.interaction_card_deck_id, card_indices,
+                                                                   cards, "embedGameInteraction interaction_card_data");
     const auto embedded_select_from = select_from_embedding_(flat_tensors.select_from);
 
     const auto embedded_interaction_data =

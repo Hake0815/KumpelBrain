@@ -148,6 +148,8 @@ void flatten_game_interaction_data(
                     game_interaction_data.target_data().possible_targets_size());
                 flat.target_data_target_action.push_back(game_interaction_data.target_data().target_action());
                 flat.target_data_remainder_action.push_back(game_interaction_data.target_data().remainder_action());
+                flat.target_data_allow_multiple_times.push_back(
+                    game_interaction_data.target_data().allow_multiple_times() ? 1 : 0);
                 if (game_interaction_data.target_data().has_number_of_targets()) {
                     flat.target_data_number_of_targets.push_back(
                         game_interaction_data.target_data().number_of_targets());
@@ -219,6 +221,7 @@ FlatGameInteractionBatchTensors flat_game_interaction_batch_to_tensors(const Fla
     const size_t n_target_data_target_action = flat.target_data_target_action.size();
     const size_t n_target_data_remainder_action = flat.target_data_remainder_action.size();
     const size_t n_target_data_number_of_targets = flat.target_data_number_of_targets.size();
+    const size_t n_target_data_allow_multiple_times = flat.target_data_allow_multiple_times.size();
     const size_t n_interaction_card_batch_index = flat.interaction_card_batch_index.size();
     const size_t n_interaction_card_deck_id = flat.interaction_card_deck_id.size();
     const size_t n_select_from_batch_index = flat.select_from_batch_index.size();
@@ -240,7 +243,8 @@ FlatGameInteractionBatchTensors flat_game_interaction_batch_to_tensors(const Fla
         n_number_data_batch_index + n_number_data + n_target_data_batch_index +
         n_target_data_possible_targets_deck_ids + n_target_data_possible_targets_deck_ids_length +
         n_target_data_target_action + n_target_data_remainder_action + n_target_data_number_of_targets +
-        n_interaction_card_batch_index + n_interaction_card_deck_id + n_select_from_batch_index + n_select_from +
+        n_target_data_allow_multiple_times + n_interaction_card_batch_index + n_interaction_card_deck_id +
+        n_select_from_batch_index + n_select_from +
         n_node_is_leaf + n_node_logical_operator + n_node_depth + n_child_ptr + n_child_idx + n_leaf_node_index +
         n_leaf_int_range + n_leaf_selection_qualifier + n_root_node_index + n_root_target_data_index;
 
@@ -285,6 +289,9 @@ FlatGameInteractionBatchTensors flat_game_interaction_batch_to_tensors(const Fla
     const int64_t off_target_data_number_of_targets = off;
     push_block(flat.target_data_number_of_targets);
     off += static_cast<int64_t>(n_target_data_number_of_targets);
+    const int64_t off_target_data_allow_multiple_times = off;
+    push_block(flat.target_data_allow_multiple_times);
+    off += static_cast<int64_t>(n_target_data_allow_multiple_times);
     const int64_t off_interaction_card_batch_index = off;
     push_block(flat.interaction_card_batch_index);
     off += static_cast<int64_t>(n_interaction_card_batch_index);
@@ -355,6 +362,8 @@ FlatGameInteractionBatchTensors flat_game_interaction_batch_to_tensors(const Fla
         int64_buf.narrow(0, off_target_data_remainder_action, static_cast<int64_t>(n_target_data_remainder_action));
     out.target_data_number_of_targets =
         int64_buf.narrow(0, off_target_data_number_of_targets, static_cast<int64_t>(n_target_data_number_of_targets));
+    out.target_data_allow_multiple_times = int64_buf.narrow(
+        0, off_target_data_allow_multiple_times, static_cast<int64_t>(n_target_data_allow_multiple_times));
     out.interaction_card_batch_index =
         int64_buf.narrow(0, off_interaction_card_batch_index, static_cast<int64_t>(n_interaction_card_batch_index));
     out.interaction_card_deck_id =

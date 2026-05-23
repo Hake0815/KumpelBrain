@@ -121,6 +121,7 @@ def _make_game_interaction_data_for_type(
         target.possible_targets.extend(target_deck_ids)
         target.target_action = pb2.ACTION_ON_SELECTION_DISCARD
         target.remainder_action = pb2.ACTION_ON_SELECTION_TAKE_TO_HAND
+        target.allow_multiple_times = seed % 2 == 0
         if use_conditional_target_query:
             target.conditional_target_query.CopyFrom(
                 _conditional_target_query_leaf(pb2, min_targets=1, max_targets=2)
