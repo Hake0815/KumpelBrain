@@ -76,12 +76,29 @@ def test_cpp_condition_embedding_one_empty_group_cpu():
     assert mask.shape == (1, 0)
 
 
+def test_cpp_card_embedding_empty_batch_cpu():
+    dim = 32
+    device = torch.device("cpu")
+    shared = kumpel_embedding.SharedEmbeddingHolder(dim, device=device)
+    model = kumpel_embedding.make_card_embedding(shared, dim, device=device)
+    model.eval()
+    with torch.inference_mode():
+        embedding, _adjacency, card_indices = model.forward([])
+    assert embedding.shape == (0, dim)
+    assert card_indices.shape == (0,)
+    assert card_indices.dtype == torch.long
+    assert torch.all(card_indices == -1)
+
+
 def test_cpp_card_state_embedding_empty_batch_cpu():
     dim = 32
     device = torch.device("cpu")
-    model = kumpel_embedding.CardStateEmbedding(dim, device=device)
+    model = kumpel_embedding.make_card_state_embedding(dim, device=device)
     model.eval()
     with torch.inference_mode():
-        out = model.forward([])
-    assert out.shape == (0, dim)
-    assert out.device.type == device.type
+        embedding, card_indices = model.forward([])
+    assert embedding.shape == (0, dim)
+    assert card_indices.shape == (0,)
+    assert card_indices.dtype == torch.long
+    assert torch.all(card_indices == -1)
+    assert embedding.device.type == device.type

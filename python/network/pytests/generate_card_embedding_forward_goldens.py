@@ -59,7 +59,7 @@ def _build_model(device: torch.device) -> kumpel_embedding.CardEmbedding:
     shared = kumpel_embedding.SharedEmbeddingHolder(
         fixtures.FIXTURE_DIMENSION_OUT, device=device, dtype=torch.float32
     )
-    m = kumpel_embedding.CardEmbedding(
+    m = kumpel_embedding.make_card_embedding(
         shared,
         fixtures.FIXTURE_DIMENSION_OUT,
         device=device,
@@ -71,7 +71,7 @@ def _build_model(device: torch.device) -> kumpel_embedding.CardEmbedding:
 
 def _forward_case(model, card_bytes: list[bytes]) -> torch.Tensor:
     with torch.inference_mode():
-        embedding, _adjacency = model.forward(card_bytes)
+        embedding, _adjacency, _card_indices = model.forward(card_bytes)
         return embedding
 
 

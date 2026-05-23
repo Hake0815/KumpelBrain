@@ -6,15 +6,17 @@
 #include "network/include/CardStateEmbedding.h"
 #include "network/include/PlayerStateEmbedding.h"
 #include "network/include/SaveLoadMixin.h"
+#include "network/include/SharedInstructionEmbeddings.h"
 #include "network/src/serialization/gamecore_serialization.pb.h"
 
 using ProtoBufGameState = gamecore::serialization::ProtoBufGameState;
 
 struct GameStateEmbeddingImpl : torch::nn::Module, SaveLoadMixin<GameStateEmbeddingImpl> {
-    GameStateEmbeddingImpl(int64_t dimension_out, torch::Device device = torch::kCPU,
-                           torch::Dtype dtype = torch::kFloat);
+    GameStateEmbeddingImpl(std::shared_ptr<SharedEmbeddingHolderImpl> shared_embedding_holder, int64_t dimension_out,
+                           const SharedInstructionEmbeddings& shared_instruction_embeddings,
+                           torch::Device device = torch::kCPU, torch::Dtype dtype = torch::kFloat);
 
-    torch::Tensor forward(const ProtoBufGameState& game_state);
+    std::pair<torch::Tensor, torch::Tensor> forward(const ProtoBufGameState& game_state);
 
    private:
     int64_t dimension_out_;

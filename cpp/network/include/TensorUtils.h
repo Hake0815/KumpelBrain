@@ -28,7 +28,7 @@ std::pair<torch::Tensor, torch::Tensor> pad_by_offsets(const torch::Tensor& flat
 torch::Tensor make_padding_attention_mask(const torch::Tensor& valid_token_mask, int64_t query_seq_len,
                                           torch::Dtype dtype);
 
-torch::Tensor masked_sequence_sum(const torch::Tensor& sequence_tensor, const torch::Tensor& valid_token_mask);
+torch::Tensor masked_sequence_mean(const torch::Tensor& sequence_tensor, const torch::Tensor& valid_token_mask);
 
 }  // namespace tensor_utils
 

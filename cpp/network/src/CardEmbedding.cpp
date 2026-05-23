@@ -113,51 +113,16 @@ void reserve_card_features(CardFeatures& f, int64_t batch_size) {
 }  // namespace
 
 CardEmbeddingImpl::CardEmbeddingImpl(std::shared_ptr<SharedEmbeddingHolderImpl> shared_embedding_holder,
-                                     int64_t dimension_out, torch::Device device, torch::Dtype dtype)
+                                     int64_t dimension_out,
+                                     const SharedInstructionEmbeddings& shared_instruction_embeddings,
+                                     torch::Device device, torch::Dtype dtype)
     : shared_embedding_holder_(shared_embedding_holder), dimension_out_(dimension_out), device_(device), dtype_(dtype) {
-    instruction_data_embedding_ =
-        register_module("instruction_data_embedding",
-                        InstructionDataEmbedding(shared_embedding_holder_.ptr(), dimension_out, device, dtype));
-    instruction_embedding_ = register_module(
-        "instruction_embedding", InstructionEmbedding(instruction_data_embedding_.ptr(), shared_embedding_holder_.ptr(),
-                                                      dimension_out, device, dtype));
-    condition_embedding_ = register_module(
-        "condition_embedding", ConditionEmbedding(instruction_data_embedding_.ptr(), shared_embedding_holder_.ptr(),
-                                                  dimension_out, device, dtype));
-    ability_embedding_ = register_module("ability_embedding", AbilityEmbedding(dimension_out, device, dtype));
-    attack_embedding_ = register_module("attack_embedding", AttackEmbedding(dimension_out, device, dtype));
-    card_instructions_multi_head_attention_ =
-        register_module("card_instructions_multi_head_attention",
-                        MultiHeadAttention(dimension_out, dimension_out, dimension_out,
-                                           std::max<int64_t>(dimension_out_ / 16, 4), 4, 0.0, true, device, dtype));
-    card_conditions_multi_head_attention_ =
-        register_module("card_conditions_multi_head_attention",
-                        MultiHeadAttention(dimension_out, dimension_out, dimension_out,
-                                           std::max<int64_t>(dimension_out_ / 16, 4), 4, 0.0, true, device, dtype));
-    card_instruction_query_embedding_ =
-        register_module("card_instruction_query_embedding", torch::nn::Embedding(1, dimension_out));
-    card_condition_query_embedding_ =
-        register_module("card_condition_query_embedding", torch::nn::Embedding(1, dimension_out));
-    card_pooling_multi_head_attention_ =
-        register_module("card_pooling_multi_head_attention",
-                        MultiHeadAttention(dimension_out, dimension_out, dimension_out,
-                                           std::max<int64_t>(dimension_out_ / 16, 4), 8, 0.0, true, device, dtype));
-    card_pooling_query_embedding_ =
-        register_module("card_pooling_query_embedding", torch::nn::Embedding(1, dimension_out));
-    retreat_cost_embedding_ =
-        register_module("retreat_cost_embedding", NormalizedLinear(1, dimension_out, 10.0, device, dtype));
-    number_of_prize_cards_on_knockout_embedding_ = register_module(
-        "number_of_prize_cards_on_knockout_embedding", NormalizedLinear(1, dimension_out, 6.0, device, dtype));
-    current_damage_embedding_ =
-        register_module("current_damage_embedding", NormalizedLinear(1, dimension_out, 400.0, device, dtype));
-    pokemon_turn_trait_embedding_ = register_module("pokemon_turn_trait_embedding",
-                                                    torch::nn::Embedding(NUMBER_POKEMON_TURN_TRAITS, dimension_out));
-    card_self_multi_head_attention_ =
-        register_module("card_self_multi_head_attention",
-                        MultiHeadAttention(dimension_out, dimension_out, dimension_out,
-                                           std::max<int64_t>(dimension_out_ / 16, 4), 8, 0.0, true, device, dtype));
-    token_type_embedding_ =
-        register_module("token_type_embedding", torch::nn::Embedding(NUM_CARD_TOKEN_TYPES, dimension_out));
+    instruction_data_embedding_ = shared_instruction_embeddings.instruction_data_embedding;
+    instruction_embedding_ = shared_instruction_embeddings.instruction_embedding;
+    condition_embedding_ = shared_instruction_embeddings.condition_embedding;
+    attack_embedding_ = shared_instruction_embeddings.attack_embedding;
+    ability_embedding_ = shared_instruction_embeddings.ability_embedding;
+    register_card_specific_modules(device, dtype);
     mask_tensor_options_ = torch::TensorOptions().device(device_).dtype(torch::kBool);
     index_tensor_options_ = torch::TensorOptions().device(device_).dtype(torch::kInt64);
     float_tensor_options_ = torch::TensorOptions().device(device_).dtype(dtype);
@@ -165,8 +130,48 @@ CardEmbeddingImpl::CardEmbeddingImpl(std::shared_ptr<SharedEmbeddingHolderImpl> 
     to(device, dtype);
 }
 
-std::pair<torch::Tensor, AdjacencyMatrices> CardEmbeddingImpl::forward(
+void CardEmbeddingImpl::register_card_specific_modules(torch::Device device, torch::Dtype dtype) {
+    card_instructions_multi_head_attention_ =
+        register_module("card_instructions_multi_head_attention",
+                        MultiHeadAttention(dimension_out_, dimension_out_, dimension_out_,
+                                           std::max<int64_t>(dimension_out_ / 16, 4), 4, 0.0, true, device, dtype));
+    card_conditions_multi_head_attention_ =
+        register_module("card_conditions_multi_head_attention",
+                        MultiHeadAttention(dimension_out_, dimension_out_, dimension_out_,
+                                           std::max<int64_t>(dimension_out_ / 16, 4), 4, 0.0, true, device, dtype));
+    card_instruction_query_embedding_ =
+        register_module("card_instruction_query_embedding", torch::nn::Embedding(1, dimension_out_));
+    card_condition_query_embedding_ =
+        register_module("card_condition_query_embedding", torch::nn::Embedding(1, dimension_out_));
+    card_pooling_multi_head_attention_ =
+        register_module("card_pooling_multi_head_attention",
+                        MultiHeadAttention(dimension_out_, dimension_out_, dimension_out_,
+                                           std::max<int64_t>(dimension_out_ / 16, 4), 8, 0.0, true, device, dtype));
+    card_pooling_query_embedding_ =
+        register_module("card_pooling_query_embedding", torch::nn::Embedding(1, dimension_out_));
+    retreat_cost_embedding_ =
+        register_module("retreat_cost_embedding", NormalizedLinear(1, dimension_out_, 10.0, device, dtype));
+    number_of_prize_cards_on_knockout_embedding_ = register_module(
+        "number_of_prize_cards_on_knockout_embedding", NormalizedLinear(1, dimension_out_, 6.0, device, dtype));
+    current_damage_embedding_ =
+        register_module("current_damage_embedding", NormalizedLinear(1, dimension_out_, 400.0, device, dtype));
+    pokemon_turn_trait_embedding_ = register_module("pokemon_turn_trait_embedding",
+                                                      torch::nn::Embedding(NUMBER_POKEMON_TURN_TRAITS, dimension_out_));
+    card_self_multi_head_attention_ =
+        register_module("card_self_multi_head_attention",
+                        MultiHeadAttention(dimension_out_, dimension_out_, dimension_out_,
+                                           std::max<int64_t>(dimension_out_ / 16, 4), 8, 0.0, true, device, dtype));
+    token_type_embedding_ =
+        register_module("token_type_embedding", torch::nn::Embedding(NUM_CARD_TOKEN_TYPES, dimension_out_));
+}
+
+std::tuple<torch::Tensor, AdjacencyMatrices, torch::Tensor> CardEmbeddingImpl::forward(
     const google::protobuf::RepeatedPtrField<ProtoBufCardState>& card_batch) {
+    if (card_batch.empty()) {
+        auto card_features = collect_card_features(card_batch);
+        return {torch::empty({0, dimension_out_}, float_tensor_options_), card_features.adjacency_matrices,
+                card_features.card_indices};
+    }
     const int64_t batch_size = static_cast<int64_t>(card_batch.size());
     auto card_features = collect_card_features(card_batch);
     auto staged = stage_features(card_features);
@@ -177,7 +182,7 @@ std::pair<torch::Tensor, AdjacencyMatrices> CardEmbeddingImpl::forward(
     auto query =
         card_pooling_query_embedding_->weight.view({1, 1, dimension_out_}).expand({batch_size, 1, dimension_out_});
     return {attention_utils::masked_attention_pooling(card_pooling_multi_head_attention_, query, self_attended, mask),
-            card_features.adjacency_matrices};
+            card_features.adjacency_matrices, card_features.card_indices};
 }
 
 void CardEmbeddingImpl::append_card_instructions_and_conditions(const ProtoBufCard& card,
@@ -370,6 +375,20 @@ CardFeatures CardEmbeddingImpl::collect_card_features(
         adjacency_from_ptr_map(attached_energy_cards_matrix, num_cards, dtype_, device_);
     card_features.adjacency_matrices.pre_evolutions_adjacency =
         adjacency_from_ptr_map(pre_evolutions_matrix, num_cards, dtype_, device_);
+
+    int64_t max_deck_id = -1;
+    for (const auto& [deck_id, batch_index_ptr] : deck_id_to_card_index) {
+        if (deck_id >= 0 && batch_index_ptr) {
+            max_deck_id = std::max(max_deck_id, deck_id);
+        }
+    }
+    std::vector<int64_t> card_indices_host(static_cast<size_t>(max_deck_id + 1), -1);
+    for (const auto& [deck_id, batch_index_ptr] : deck_id_to_card_index) {
+        if (deck_id >= 0 && batch_index_ptr) {
+            card_indices_host[static_cast<size_t>(deck_id)] = *batch_index_ptr;
+        }
+    }
+    card_features.card_indices = torch::tensor(card_indices_host, index_tensor_options_);
     return card_features;
 }
 

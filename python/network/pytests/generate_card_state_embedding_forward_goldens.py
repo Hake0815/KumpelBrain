@@ -52,7 +52,7 @@ def _seed_for_device(device: torch.device) -> None:
 
 def _build_model(device: torch.device) -> kumpel_embedding.CardStateEmbedding:
     _seed_for_device(device)
-    m = kumpel_embedding.CardStateEmbedding(
+    m = kumpel_embedding.make_card_state_embedding(
         fixtures.FIXTURE_DIMENSION_OUT, device=device, dtype=torch.float32
     )
     m.eval()
@@ -61,7 +61,8 @@ def _build_model(device: torch.device) -> kumpel_embedding.CardStateEmbedding:
 
 def _forward_case(model, state_bytes: list[bytes]) -> torch.Tensor:
     with torch.inference_mode():
-        return model.forward(state_bytes)
+        embedding, _card_indices = model.forward(state_bytes)
+        return embedding
 
 
 def generate_for_device(device: torch.device) -> dict[str, torch.Tensor]:

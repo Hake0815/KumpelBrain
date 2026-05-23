@@ -1,4 +1,4 @@
-"""C++ PlayerStateEmbedding / GameStateEmbedding / CardPositionEmbedding smoke and uneven-trait tests.
+"""C++ PlayerStateEmbedding / GameEmbedding / CardPositionEmbedding smoke and uneven-trait tests.
 
 Run: python -m pytest python/network/pytests/test_player_game_state_embedding_cpp.py -v
 """
@@ -19,6 +19,7 @@ for _p in (_CPP_BUILD, _PYTESTS_DIR, _NETWORK_SRC_DIR):
     if _s not in sys.path:
         sys.path.insert(0, _s)
 
+import game_embedding_fixtures as game_fixtures  # noqa: E402
 import kumpel_embedding  # noqa: E402
 import proto_serialization  # noqa: E402
 
@@ -87,26 +88,30 @@ def test_player_state_embedding_uneven_traits_cpu():
 def test_game_state_embedding_zero_cards_uneven_traits_cpu():
     dim = 32
     device = torch.device("cpu")
-    m = kumpel_embedding.GameStateEmbedding(dim, device=device, dtype=torch.float32)
+    m = kumpel_embedding.GameEmbedding(dim, device=device, dtype=torch.float32)
     m.eval()
     payload = _game_state_bytes(self_traits=0, opp_traits=4, num_card_rows=0)
     with torch.inference_mode():
-        out = m.forward(payload)
-    assert out.shape == (2, dim)
-    assert torch.isfinite(out).all()
+        embedding, card_indices = m.embedGameState(payload)
+    assert embedding.shape == (2, dim)
+    assert card_indices.shape == (0,)
+    assert torch.isfinite(embedding).all()
 
 
 def test_game_state_embedding_with_cards_uneven_traits_cpu():
     dim = 32
     device = torch.device("cpu")
-    m = kumpel_embedding.GameStateEmbedding(dim, device=device, dtype=torch.float32)
+    m = kumpel_embedding.GameEmbedding(dim, device=device, dtype=torch.float32)
     m.eval()
     n_cards = 3
     payload = _game_state_bytes(self_traits=1, opp_traits=3, num_card_rows=n_cards)
     with torch.inference_mode():
-        out = m.forward(payload)
-    assert out.shape == (2 + n_cards, dim)
-    assert torch.isfinite(out).all()
+        embedding, card_indices = m.embedGameState(payload)
+    assert embedding.shape == (2 + n_cards, dim)
+    expected_indices = game_fixtures.build_expected_game_state_card_indices(payload, device)
+    assert card_indices.shape == expected_indices.shape
+    torch.testing.assert_close(card_indices, expected_indices)
+    assert torch.isfinite(embedding).all()
 
 
 def test_card_position_embedding_smoke_cpu():

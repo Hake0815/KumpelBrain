@@ -53,5 +53,5 @@ torch::Tensor FilterConditionEmbeddingImpl::forward(const torch::Tensor& field_t
 
     auto query = torch::stack({field_embedding, operation_embedding, value_embedding}, 1);
     auto updated_query = multi_head_attention_(query, query, query) + query;
-    return torch::sum(updated_query, 1);
+    return torch::mean(updated_query, 1);
 }

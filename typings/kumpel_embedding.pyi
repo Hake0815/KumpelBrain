@@ -3,7 +3,7 @@ import collections.abc
 import torch
 import torch._C.cpp.nn
 import typing
-__all__: list[str] = ['AdjacencyMatrices', 'AttackDataEmbedding', 'CardAmountDataEmbedding', 'CardEmbedding', 'CardPositionEmbedding', 'CardStateEmbedding', 'ConditionEmbedding', 'DiscardDataEmbedding', 'FilterConditionEmbedding', 'FilterEmbedding', 'GameStateEmbedding', 'InstructionDataEmbedding', 'InstructionEmbedding', 'MultiHeadAttention', 'NormalizedLinear', 'PlayerStateEmbedding', 'PlayerTargetDataEmbedding', 'PositionalEmbedding', 'ReturnToDeckTypeDataEmbedding', 'SharedEmbeddingHolder', 'nesting_flatten_filter', 'nesting_reduce', 'nesting_traverse_filter']
+__all__: list[str] = ['AdjacencyMatrices', 'AttackDataEmbedding', 'CardAmountDataEmbedding', 'CardEmbedding', 'CardPositionEmbedding', 'CardStateEmbedding', 'ConditionEmbedding', 'DiscardDataEmbedding', 'FilterConditionEmbedding', 'FilterEmbedding', 'GameEmbedding', 'InstructionDataEmbedding', 'InstructionEmbedding', 'MultiHeadAttention', 'NormalizedLinear', 'PlayerStateEmbedding', 'PlayerTargetDataEmbedding', 'PositionalEmbedding', 'ReturnToDeckTypeDataEmbedding', 'SharedEmbeddingHolder', 'make_card_embedding', 'make_card_state_embedding', 'nesting_flatten_filter', 'nesting_reduce', 'nesting_traverse_filter']
 class AdjacencyMatrices:
     @property
     def attached_energy_adjacency(self) -> torch.Tensor:
@@ -33,9 +33,7 @@ class CardAmountDataEmbedding(torch._C.cpp.nn.Module):
     def save_weights(self, arg0: str) -> None:
         ...
 class CardEmbedding(torch._C.cpp.nn.Module):
-    def __init__(self, shared_embedding_holder: SharedEmbeddingHolder, dimension_out: typing.SupportsInt | typing.SupportsIndex, device: torch.device = ..., dtype: torch.dtype = ...) -> None:
-        ...
-    def forward(self, arg0: collections.abc.Iterable) -> tuple[torch.Tensor, AdjacencyMatrices]:
+    def forward(self, arg0: collections.abc.Iterable) -> tuple[torch.Tensor, AdjacencyMatrices, torch.Tensor]:
         ...
     def load_weights(self, arg0: str) -> None:
         ...
@@ -51,9 +49,7 @@ class CardPositionEmbedding(torch._C.cpp.nn.Module):
     def save_weights(self, arg0: str) -> None:
         ...
 class CardStateEmbedding(torch._C.cpp.nn.Module):
-    def __init__(self, dimension_out: typing.SupportsInt | typing.SupportsIndex, device: torch.device = ..., dtype: torch.dtype = ...) -> None:
-        ...
-    def forward(self, arg0: collections.abc.Iterable) -> torch.Tensor:
+    def forward(self, arg0: collections.abc.Iterable) -> tuple[torch.Tensor, torch.Tensor]:
         ...
     def load_weights(self, arg0: str) -> None:
         ...
@@ -95,10 +91,28 @@ class FilterEmbedding(torch._C.cpp.nn.Module):
         ...
     def save_weights(self, arg0: str) -> None:
         ...
-class GameStateEmbedding(torch._C.cpp.nn.Module):
+class GameEmbedding(torch._C.cpp.nn.Module):
     def __init__(self, dimension_out: typing.SupportsInt | typing.SupportsIndex, device: torch.device = ..., dtype: torch.dtype = ...) -> None:
         ...
-    def forward(self, arg0: typing.Any) -> torch.Tensor:
+    def embedGameInteraction(
+        self,
+        game_interactions: collections.abc.Iterable,
+        card_indices: torch.Tensor,
+        cards: torch.Tensor,
+    ) -> torch.Tensor:
+        """Embed legal interactions against a fixed game state.
+
+        ``card_indices`` has shape ``[max_deck_id + 1]``; entry ``card_indices[deck_id]`` is the row in
+        ``cards`` for that deck id, or ``-1`` if absent. ``cards`` must be ``embedGameState(...)[0][2:]``
+        (card rows only, not player rows). Returns shape ``[num_interactions, dimension_out]``.
+        """
+        ...
+    def embedGameState(self, game_state: typing.Any) -> tuple[torch.Tensor, torch.Tensor]:
+        """Return ``(embedding, card_indices)``.
+
+        ``embedding`` shape is ``[2 + num_cards, dimension_out]`` (two player rows, then cards).
+        ``card_indices`` is deck-id indexed with shape ``[max_deck_id + 1]``.
+        """
         ...
     def load_weights(self, arg0: str) -> None:
         ...
@@ -181,6 +195,16 @@ class SharedEmbeddingHolder(torch._C.cpp.nn.Module):
         ...
     def save_weights(self, arg0: str) -> None:
         ...
+def make_card_embedding(
+    shared_embedding_holder: SharedEmbeddingHolder | None,
+    dimension_out: typing.SupportsInt | typing.SupportsIndex,
+    device: torch.device = ...,
+    dtype: torch.dtype = ...,
+) -> CardEmbedding:
+    """Test/debug helper. ``shared_embedding_holder`` is caller-owned; use ``GameEmbedding`` for training persistence."""
+    ...
+def make_card_state_embedding(dimension_out: typing.SupportsInt | typing.SupportsIndex, device: torch.device = ..., dtype: torch.dtype = ...) -> CardStateEmbedding:
+    ...
 def nesting_flatten_filter(arg0: collections.abc.Iterable) -> tuple[list[list[int]], list, dict]:
     ...
 def nesting_reduce(arg0: torch.Tensor, arg1: list, arg2: dict, arg3: collections.abc.Callable) -> list:

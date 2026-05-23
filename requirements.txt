@@ -6,4 +6,5 @@ numpy
 pybind11
 pybind11_stubgen
 pytest
+protobuf==7.34.1
 # sympy

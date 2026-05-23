@@ -166,7 +166,7 @@ class FilterConditionEmbedding(nn.Module, SaveLoadMixin):
             [field_embedding, operation_embedding, value_embedding], dim=1
         )
         updated_query = self.multi_head_attention(query, query, query) + query
-        return torch.sum(updated_query, dim=1)
+        return torch.mean(updated_query, dim=1)
 
 
 class FilterEmbedding(nn.Module, SaveLoadMixin):
@@ -245,7 +245,7 @@ class FilterEmbedding(nn.Module, SaveLoadMixin):
         updated_query = (
             self.multi_head_attention(query, query, query) + query
         ).squeeze(0)
-        return updated_query.sum(dim=0)
+        return updated_query.mean(dim=0)
 
 
 class AttackDataEmbedding(nn.Module, SaveLoadMixin):

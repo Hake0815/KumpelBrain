@@ -14,6 +14,8 @@
 #include "../include/InstructionEmbedding.h"
 #include "../include/SaveLoadMixin.h"
 #include "../include/SharedEmbeddingHolder.h"
+#include "../include/InstructionsAndConditions.h"
+#include "../include/SharedInstructionEmbeddings.h"
 #include "../src/serialization/gamecore_serialization.pb.h"
 #include "network/include/AbilityEmbedding.h"
 #include "network/include/AttackEmbedding.h"
@@ -22,27 +24,6 @@
 
 using ProtoBufCardState = gamecore::serialization::ProtoBufCardState;
 using ProtoBufCard = gamecore::serialization::ProtoBufCard;
-
-struct ParentIndex {
-    int card;
-    int slot;
-};
-
-struct InstructionsAndConditions {
-    std::vector<std::vector<ProtoBufInstruction>> instructions;
-    std::vector<std::vector<ProtoBufCondition>> conditions;
-    std::vector<ParentIndex> instruction_card_parent_indices;
-    std::vector<ParentIndex> condition_card_parent_indices;
-    std::vector<int64_t> instruction_card_indices;
-    std::vector<int64_t> instruction_ability_indices;
-    std::vector<int64_t> instruction_attack_indices;
-    std::vector<int64_t> condition_card_indices;
-    /// Same length as instruction_ability_indices: global condition row index for that ability's
-    /// instructions, or -1 if the ability has no conditions.
-    std::vector<int64_t> ability_condition_row_for_instruction_ability;
-    std::vector<int64_t> energy_flat;
-    std::vector<int64_t> energy_slot_per_token;
-};
 
 struct AdjacencyMatrices {
     /// Sparse COO float tensor of shape [num_cards, num_cards]; nonzero at (child, parent) when child evolves from
@@ -83,6 +64,8 @@ struct CardFeatures {
 
     AdjacencyMatrices adjacency_matrices;
     InstructionsAndConditions instructions_and_conditions;
+    /// Shape [max_deck_id + 1]; `card_indices[deck_id]` is the batch row for that deck id, or -1 if absent.
+    torch::Tensor card_indices;
 };
 
 /// Staged H2D buffers. All int64 scalar/index vectors packed into `int64_buf`;
@@ -114,9 +97,10 @@ struct StagedTensors {
 /// Embeds a batch of `ProtoBufCard` into shape [batch, dimension_out].
 struct CardEmbeddingImpl : torch::nn::Module, SaveLoadMixin<CardEmbeddingImpl> {
     CardEmbeddingImpl(std::shared_ptr<SharedEmbeddingHolderImpl> shared_embedding_holder, int64_t dimension_out,
+                      const SharedInstructionEmbeddings& shared_instruction_embeddings,
                       torch::Device device = torch::kCPU, torch::Dtype dtype = torch::kFloat);
 
-    std::pair<torch::Tensor, AdjacencyMatrices> forward(
+    std::tuple<torch::Tensor, AdjacencyMatrices, torch::Tensor> forward(
         const google::protobuf::RepeatedPtrField<ProtoBufCardState>& card_batch);
 
    private:
@@ -147,6 +131,8 @@ struct CardEmbeddingImpl : torch::nn::Module, SaveLoadMixin<CardEmbeddingImpl> {
     MultiHeadAttention card_pooling_multi_head_attention_{nullptr};
     torch::nn::Embedding card_pooling_query_embedding_{nullptr};
     torch::nn::Embedding token_type_embedding_{nullptr};
+
+    void register_card_specific_modules(torch::Device device, torch::Dtype dtype);
 
     CardFeatures collect_card_features(const google::protobuf::RepeatedPtrField<ProtoBufCardState>& card_batch);
 

@@ -91,14 +91,28 @@ def test_card_state_embedding_forward_golden_case(
 
     with _deterministic_algorithms(True):
         _seed(device)
-        model = kumpel_embedding.CardStateEmbedding(
+        model = kumpel_embedding.make_card_state_embedding(
             fixtures.FIXTURE_DIMENSION_OUT, device=device, dtype=torch.float32
         )
         model.eval()
         with torch.inference_mode():
-            actual = model.forward(states)
+            actual, _card_indices = model.forward(states)
         if device.type == "cuda":
             torch.cuda.synchronize()
+
+    import card_embedding_forward_fixtures as card_fixtures
+
+    expected_indices = card_fixtures.build_expected_card_indices(states, device)
+    assert _card_indices.dtype == torch.long
+    assert _card_indices.device.type == device.type
+    assert _card_indices.shape == expected_indices.shape
+    torch.testing.assert_close(
+        _card_indices.cpu(),
+        expected_indices.cpu(),
+        rtol=0.0,
+        atol=0.0,
+        msg=lambda msg: f"{case_id} card_indices on {device}: {msg}",
+    )
 
     torch.testing.assert_close(
         actual.cpu(),
@@ -117,7 +131,7 @@ def test_pre_evolutions_adjacency_differs_from_attached_energy_adjacency():
         shared = kumpel_embedding.SharedEmbeddingHolder(
             fixtures.FIXTURE_DIMENSION_OUT, device=device, dtype=torch.float32
         )
-        emb = kumpel_embedding.CardEmbedding(
+        emb = kumpel_embedding.make_card_embedding(
             shared,
             fixtures.FIXTURE_DIMENSION_OUT,
             device=device,
@@ -126,7 +140,7 @@ def test_pre_evolutions_adjacency_differs_from_attached_energy_adjacency():
         emb.eval()
         card_bytes = fixtures.build_adjacency_divergent_card_bytes()
         with torch.inference_mode():
-            _h, adj = emb.forward(card_bytes)
+            _h, adj, _card_indices = emb.forward(card_bytes)
 
     pre = adj.pre_evolutions_adjacency.coalesce().cpu().to_dense()
     att = adj.attached_energy_adjacency.coalesce().cpu().to_dense()
