@@ -126,7 +126,7 @@ def test_pre_evolutions_adjacency_differs_from_attached_energy_adjacency():
         emb.eval()
         card_bytes = fixtures.build_adjacency_divergent_card_bytes()
         with torch.inference_mode():
-            _h, adj = emb.forward(card_bytes)
+            _h, adj, _card_indices = emb.forward(card_bytes)
 
     pre = adj.pre_evolutions_adjacency.coalesce().cpu().to_dense()
     att = adj.attached_energy_adjacency.coalesce().cpu().to_dense()

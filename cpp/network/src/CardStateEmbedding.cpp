@@ -98,7 +98,8 @@ torch::Tensor CardStateEmbeddingImpl::forward(
     if (card_state_batch.empty()) {
         return torch::empty({0, dimension_out_}, torch::TensorOptions().dtype(dtype_).device(device_));
     }
-    auto [embedded_cards, adj] = card_embedding_->forward(card_state_batch);
+    auto [embedded_cards, adj, card_indices] = card_embedding_->forward(card_state_batch);
+    (void)card_indices;
     auto position_vec = position_embedding_->forward(card_state_batch);
 
     auto gate = torch::sigmoid(card_position_gate_(torch::cat({embedded_cards, position_vec}, 1)));

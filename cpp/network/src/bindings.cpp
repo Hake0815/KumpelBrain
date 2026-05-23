@@ -42,7 +42,7 @@ struct CardEmbeddingHolder : torch::nn::Module {
             CardEmbedding(shared_embedding_holder_, dimension_out_, shared_instruction_embeddings, device_, dtype_));
     }
 
-    std::pair<torch::Tensor, AdjacencyMatrices> forward(
+    std::tuple<torch::Tensor, AdjacencyMatrices, torch::Tensor> forward(
         const google::protobuf::RepeatedPtrField<serialization::ProtoBufCardState>& card_states) {
         return card_embedding_->forward(card_states);
     }
@@ -350,8 +350,8 @@ PYBIND11_MODULE(kumpel_embedding, m) {
              [](CardEmbeddingHolder& self, const pybind11::iterable& card_states) {
                  google::protobuf::RepeatedPtrField<serialization::ProtoBufCardState> parsed;
                  parse_card_state_batch_serialized(card_states, parsed);
-                 auto [embedding, adjacency] = self.forward(parsed);
-                 return pybind11::make_tuple(embedding, adjacency);
+                 auto [embedding, adjacency, card_indices] = self.forward(parsed);
+                 return pybind11::make_tuple(embedding, adjacency, card_indices);
              })
         .def("save_weights", &CardEmbeddingHolder::save_weights)
         .def("load_weights", &CardEmbeddingHolder::load_weights);

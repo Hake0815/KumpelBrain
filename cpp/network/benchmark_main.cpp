@@ -2,6 +2,7 @@
 #include <c10/core/Device.h>
 #include <torch/cuda.h>
 
+#include <algorithm>
 #include <chrono>
 #include <cstdint>
 #include <cstdlib>
@@ -420,10 +421,17 @@ bool tensor_device_matches_module(const torch::Tensor& tensor, const torch::Devi
 
 torch::Tensor build_card_indices_from_game_state(const serialization::ProtoBufGameState& game_state,
                                                  torch::Device device) {
-    auto indices = torch::full({DECK_SIZE}, -1, torch::TensorOptions().device(device).dtype(torch::kLong));
+    int64_t max_deck_id = -1;
     for (int i = 0; i < game_state.card_states_size(); ++i) {
         const auto deck_id = game_state.card_states(i).card().deck_id();
-        if (deck_id >= 0 && deck_id < DECK_SIZE) {
+        if (deck_id >= 0) {
+            max_deck_id = std::max(max_deck_id, deck_id);
+        }
+    }
+    auto indices = torch::full({max_deck_id + 1}, -1, torch::TensorOptions().device(device).dtype(torch::kLong));
+    for (int i = 0; i < game_state.card_states_size(); ++i) {
+        const auto deck_id = game_state.card_states(i).card().deck_id();
+        if (deck_id >= 0) {
             indices.index_put_({deck_id}, i);
         }
     }

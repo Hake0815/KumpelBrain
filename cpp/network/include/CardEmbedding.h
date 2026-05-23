@@ -84,6 +84,8 @@ struct CardFeatures {
 
     AdjacencyMatrices adjacency_matrices;
     InstructionsAndConditions instructions_and_conditions;
+    /// Shape [max_deck_id + 1]; `card_indices[deck_id]` is the batch row for that deck id, or -1 if absent.
+    torch::Tensor card_indices;
 };
 
 /// Staged H2D buffers. All int64 scalar/index vectors packed into `int64_buf`;
@@ -118,7 +120,7 @@ struct CardEmbeddingImpl : torch::nn::Module, SaveLoadMixin<CardEmbeddingImpl> {
                       const SharedInstructionEmbeddings& shared_instruction_embeddings,
                       torch::Device device = torch::kCPU, torch::Dtype dtype = torch::kFloat);
 
-    std::pair<torch::Tensor, AdjacencyMatrices> forward(
+    std::tuple<torch::Tensor, AdjacencyMatrices, torch::Tensor> forward(
         const google::protobuf::RepeatedPtrField<ProtoBufCardState>& card_batch);
 
    private:

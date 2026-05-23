@@ -71,7 +71,7 @@ def _build_model(device: torch.device) -> kumpel_embedding.CardEmbedding:
 
 def _forward_case(model, card_bytes: list[bytes]) -> torch.Tensor:
     with torch.inference_mode():
-        embedding, _adjacency = model.forward(card_bytes)
+        embedding, _adjacency, _card_indices = model.forward(card_bytes)
         return embedding
 
 

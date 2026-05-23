@@ -165,8 +165,13 @@ void CardEmbeddingImpl::register_card_specific_modules(torch::Device device, tor
         register_module("token_type_embedding", torch::nn::Embedding(NUM_CARD_TOKEN_TYPES, dimension_out_));
 }
 
-std::pair<torch::Tensor, AdjacencyMatrices> CardEmbeddingImpl::forward(
+std::tuple<torch::Tensor, AdjacencyMatrices, torch::Tensor> CardEmbeddingImpl::forward(
     const google::protobuf::RepeatedPtrField<ProtoBufCardState>& card_batch) {
+    if (card_batch.empty()) {
+        auto card_features = collect_card_features(card_batch);
+        return {torch::empty({0, dimension_out_}, float_tensor_options_), card_features.adjacency_matrices,
+                card_features.card_indices};
+    }
     const int64_t batch_size = static_cast<int64_t>(card_batch.size());
     auto card_features = collect_card_features(card_batch);
     auto staged = stage_features(card_features);
@@ -177,7 +182,7 @@ std::pair<torch::Tensor, AdjacencyMatrices> CardEmbeddingImpl::forward(
     auto query =
         card_pooling_query_embedding_->weight.view({1, 1, dimension_out_}).expand({batch_size, 1, dimension_out_});
     return {attention_utils::masked_attention_pooling(card_pooling_multi_head_attention_, query, self_attended, mask),
-            card_features.adjacency_matrices};
+            card_features.adjacency_matrices, card_features.card_indices};
 }
 
 void CardEmbeddingImpl::append_card_instructions_and_conditions(const ProtoBufCard& card,
@@ -370,6 +375,20 @@ CardFeatures CardEmbeddingImpl::collect_card_features(
         adjacency_from_ptr_map(attached_energy_cards_matrix, num_cards, dtype_, device_);
     card_features.adjacency_matrices.pre_evolutions_adjacency =
         adjacency_from_ptr_map(pre_evolutions_matrix, num_cards, dtype_, device_);
+
+    int64_t max_deck_id = -1;
+    for (const auto& [deck_id, batch_index_ptr] : deck_id_to_card_index) {
+        if (deck_id >= 0 && batch_index_ptr) {
+            max_deck_id = std::max(max_deck_id, deck_id);
+        }
+    }
+    std::vector<int64_t> card_indices_host(static_cast<size_t>(max_deck_id + 1), -1);
+    for (const auto& [deck_id, batch_index_ptr] : deck_id_to_card_index) {
+        if (deck_id >= 0 && batch_index_ptr) {
+            card_indices_host[static_cast<size_t>(deck_id)] = *batch_index_ptr;
+        }
+    }
+    card_features.card_indices = torch::tensor(card_indices_host, index_tensor_options_);
     return card_features;
 }
 

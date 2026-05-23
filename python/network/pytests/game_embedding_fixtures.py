@@ -12,7 +12,6 @@ from card_embedding_forward_fixtures import (
 from card_state_embedding_forward_fixtures import FIXTURE_CASES as CARD_STATE_FIXTURE_CASES
 
 FIXTURE_DIMENSION_OUT = 32
-DECK_SIZE = 60
 
 BENCHMARKED_GAME_INTERACTION_DATA_TYPES = (
     "GAME_INTERACTION_DATA_TYPE_NUMBER_DATA",
@@ -68,10 +67,17 @@ def build_card_indices(game_state_bytes: bytes, device: torch.device) -> torch.T
     pb2 = _pb2_mod()
     game_state = pb2.ProtoBufGameState()
     game_state.ParseFromString(game_state_bytes)
-    indices = torch.full((DECK_SIZE,), -1, dtype=torch.long, device=device)
+    max_deck_id = -1
+    for card_state in game_state.card_states:
+        deck_id = card_state.card.deck_id
+        if deck_id >= 0:
+            max_deck_id = max(max_deck_id, deck_id)
+    if max_deck_id < 0:
+        return torch.empty((0,), dtype=torch.long, device=device)
+    indices = torch.full((max_deck_id + 1,), -1, dtype=torch.long, device=device)
     for row_index in range(len(game_state.card_states)):
         deck_id = game_state.card_states[row_index].card.deck_id
-        if 0 <= deck_id < DECK_SIZE:
+        if deck_id >= 0:
             indices[deck_id] = row_index
     return indices
 

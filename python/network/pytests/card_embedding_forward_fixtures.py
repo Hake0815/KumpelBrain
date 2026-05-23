@@ -3,12 +3,38 @@
 Each row is `ProtoBufCardState` with `card` filled from the benchmark-equivalent `ProtoBufCard` and a
 minimal default `position` (CardEmbedding.forward only reads `card`).
 
-Used by golden tests for kumpel_embedding.CardEmbedding.forward (returns embedding and AdjacencyMatrices).
+Used by golden tests for kumpel_embedding.CardEmbedding.forward (returns embedding, AdjacencyMatrices, and card_indices).
 """
 
 from __future__ import annotations
 
 import proto_serialization
+import torch
+
+def build_expected_card_indices(
+    card_state_bytes: list[bytes], device: torch.device
+) -> torch.Tensor:
+    """Build deck-id lookup matching CardEmbedding.forward card_indices output."""
+    pb2 = _pb2_mod()
+    deck_id_to_batch_index: dict[int, int] = {}
+    for row_index, row in enumerate(card_state_bytes):
+        card_state = pb2.ProtoBufCardState()
+        card_state.ParseFromString(row)
+        card = card_state.card
+        deck_id = card.deck_id
+        if deck_id >= 0:
+            deck_id_to_batch_index[deck_id] = row_index
+        for energy_deck_id in card.attached_energy_cards:
+            deck_id_to_batch_index.setdefault(energy_deck_id, -1)
+        for pre_evolution_deck_id in card.pre_evolution_ids:
+            deck_id_to_batch_index.setdefault(pre_evolution_deck_id, -1)
+    if not deck_id_to_batch_index:
+        return torch.empty((0,), dtype=torch.long, device=device)
+    max_deck_id = max(deck_id_to_batch_index)
+    indices = torch.full((max_deck_id + 1,), -1, dtype=torch.long, device=device)
+    for deck_id, batch_index in deck_id_to_batch_index.items():
+        indices[deck_id] = batch_index
+    return indices
 
 
 def _pb2_mod():
