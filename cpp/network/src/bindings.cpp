@@ -21,6 +21,7 @@
 #include "../include/PlayerTargetDataEmbedding.h"
 #include "../include/PositionalEmbedding.h"
 #include "../include/ReturnToDeckTypeDataEmbedding.h"
+#include "../include/SaveLoadMixin.h"
 #include "../include/SharedEmbeddingHolder.h"
 #include "../include/SharedInstructionEmbeddingsFactory.h"
 
@@ -28,13 +29,15 @@ namespace {
 
 namespace serialization = gamecore::serialization;
 
-struct CardEmbeddingHolder : torch::nn::Module {
+struct CardEmbeddingHolder : torch::nn::Module, SaveLoadMixin<CardEmbeddingHolder> {
     CardEmbeddingHolder(std::shared_ptr<SharedEmbeddingHolderImpl> shared_embedding_holder, int64_t dimension_out,
                         torch::Device device, torch::Dtype dtype)
-        : shared_embedding_holder_(std::move(shared_embedding_holder)),
-          dimension_out_(dimension_out),
-          device_(device),
-          dtype_(dtype) {
+        : dimension_out_(dimension_out), device_(device), dtype_(dtype) {
+        if (!shared_embedding_holder) {
+            shared_embedding_holder =
+                std::make_shared<SharedEmbeddingHolderImpl>(dimension_out_, device_, dtype_);
+        }
+        shared_embedding_holder_ = std::move(shared_embedding_holder);
         const auto shared_instruction_embeddings = create_shared_instruction_embeddings(
             *this, shared_embedding_holder_, dimension_out_, device_, dtype_);
         card_embedding_ = register_module(
@@ -47,9 +50,6 @@ struct CardEmbeddingHolder : torch::nn::Module {
         return card_embedding_->forward(card_states);
     }
 
-    void save_weights(const std::string& path) { card_embedding_->save_weights(path); }
-    void load_weights(const std::string& path) { card_embedding_->load_weights(path); }
-
     std::shared_ptr<SharedEmbeddingHolderImpl> shared_embedding_holder_;
     int64_t dimension_out_;
     torch::Device device_;
@@ -57,7 +57,7 @@ struct CardEmbeddingHolder : torch::nn::Module {
     CardEmbedding card_embedding_{nullptr};
 };
 
-struct CardStateEmbeddingHolder : torch::nn::Module {
+struct CardStateEmbeddingHolder : torch::nn::Module, SaveLoadMixin<CardStateEmbeddingHolder> {
     CardStateEmbeddingHolder(int64_t dimension_out, torch::Device device, torch::Dtype dtype)
         : dimension_out_(dimension_out), device_(device), dtype_(dtype) {
         shared_embedding_holder_ =
@@ -74,9 +74,6 @@ struct CardStateEmbeddingHolder : torch::nn::Module {
         const google::protobuf::RepeatedPtrField<serialization::ProtoBufCardState>& card_states) {
         return card_state_embedding_->forward(card_states);
     }
-
-    void save_weights(const std::string& path) { card_state_embedding_->save_weights(path); }
-    void load_weights(const std::string& path) { card_state_embedding_->load_weights(path); }
 
     int64_t dimension_out_;
     torch::Device device_;
@@ -362,7 +359,7 @@ PYBIND11_MODULE(kumpel_embedding, m) {
              torch::Device device, torch::Dtype dtype) {
               return std::make_shared<CardEmbeddingHolder>(shared_embedding_holder, dimension_out, device, dtype);
           },
-          pybind11::arg("shared_embedding_holder"), pybind11::arg("dimension_out"),
+          pybind11::arg("shared_embedding_holder").none(true), pybind11::arg("dimension_out"),
           pybind11::arg("device") = torch::Device(torch::kCPU), pybind11::arg("dtype") = torch::Dtype(torch::kFloat));
 
     pybind11::class_<CardPositionEmbeddingImpl, torch::nn::Module, std::shared_ptr<CardPositionEmbeddingImpl>>(

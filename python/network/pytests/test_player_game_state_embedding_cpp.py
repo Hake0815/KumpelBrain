@@ -19,6 +19,7 @@ for _p in (_CPP_BUILD, _PYTESTS_DIR, _NETWORK_SRC_DIR):
     if _s not in sys.path:
         sys.path.insert(0, _s)
 
+import game_embedding_fixtures as game_fixtures  # noqa: E402
 import kumpel_embedding  # noqa: E402
 import proto_serialization  # noqa: E402
 
@@ -107,7 +108,9 @@ def test_game_state_embedding_with_cards_uneven_traits_cpu():
     with torch.inference_mode():
         embedding, card_indices = m.embedGameState(payload)
     assert embedding.shape == (2 + n_cards, dim)
-    assert card_indices.shape == (n_cards,)
+    expected_indices = game_fixtures.build_expected_game_state_card_indices(payload, device)
+    assert card_indices.shape == expected_indices.shape
+    torch.testing.assert_close(card_indices, expected_indices)
     assert torch.isfinite(embedding).all()
 
 

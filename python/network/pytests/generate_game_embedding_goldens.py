@@ -10,7 +10,6 @@ Requires built kumpel_embedding under cpp/build.
 
 from __future__ import annotations
 
-import contextlib
 import sys
 from pathlib import Path
 
@@ -20,7 +19,6 @@ _PYTESTS_DIR = Path(__file__).resolve().parent
 _NETWORK_SRC_DIR = _PYTESTS_DIR.parent
 _REPO_ROOT = _NETWORK_SRC_DIR.parent.parent
 _CPP_BUILD = _REPO_ROOT / "cpp" / "build"
-_FIXTURES_DIR = _PYTESTS_DIR / "fixtures"
 
 for _p in (_CPP_BUILD, _PYTESTS_DIR, _NETWORK_SRC_DIR):
     _s = str(_p)
@@ -29,29 +27,11 @@ for _p in (_CPP_BUILD, _PYTESTS_DIR, _NETWORK_SRC_DIR):
 
 import game_embedding_fixtures as fixtures  # noqa: E402
 import kumpel_embedding  # noqa: E402
-
-GOLDEN_SEED = 42
-
-
-@contextlib.contextmanager
-def _deterministic_algorithms(enabled: bool):
-    prev = torch.are_deterministic_algorithms_enabled()
-    prev_warn = torch.is_deterministic_algorithms_warn_only_enabled()
-    torch.use_deterministic_algorithms(enabled)
-    try:
-        yield
-    finally:
-        torch.use_deterministic_algorithms(prev, warn_only=prev_warn)
-
-
-def _seed_for_device(device: torch.device) -> None:
-    torch.manual_seed(GOLDEN_SEED)
-    if device.type == "cuda":
-        torch.cuda.manual_seed_all(GOLDEN_SEED)
+from golden_test_utils import FIXTURES_DIR, deterministic_algorithms, seed_for_device  # noqa: E402
 
 
 def _build_model(device: torch.device) -> kumpel_embedding.GameEmbedding:
-    _seed_for_device(device)
+    seed_for_device(device)
     model = kumpel_embedding.GameEmbedding(
         fixtures.FIXTURE_DIMENSION_OUT, device=device, dtype=torch.float32
     )
@@ -60,7 +40,7 @@ def _build_model(device: torch.device) -> kumpel_embedding.GameEmbedding:
 
 
 def generate_game_state_for_device(device: torch.device) -> dict[str, torch.Tensor]:
-    _seed_for_device(device)
+    seed_for_device(device)
     model = _build_model(device)
     gold: dict[str, torch.Tensor] = {}
     for case_id in sorted(fixtures.EMBED_GAME_STATE_CASES.keys()):
@@ -74,7 +54,7 @@ def generate_game_state_for_device(device: torch.device) -> dict[str, torch.Tens
 
 
 def generate_game_interaction_for_device(device: torch.device) -> dict[str, torch.Tensor]:
-    _seed_for_device(device)
+    seed_for_device(device)
     model = _build_model(device)
     gold: dict[str, torch.Tensor] = {}
     for case_id in sorted(fixtures.EMBED_GAME_INTERACTION_CASES.keys()):
@@ -90,30 +70,26 @@ def generate_game_interaction_for_device(device: torch.device) -> dict[str, torc
 
 
 def main() -> None:
-    _FIXTURES_DIR.mkdir(parents=True, exist_ok=True)
+    FIXTURES_DIR.mkdir(parents=True, exist_ok=True)
 
-    with _deterministic_algorithms(True):
-        state_cpu_path = _FIXTURES_DIR / "game_embedding_embed_game_state_golden_cpu.pt"
+    with deterministic_algorithms(True):
+        state_cpu_path = FIXTURES_DIR / "game_embedding_embed_game_state_golden_cpu.pt"
         state_cpu_gold = generate_game_state_for_device(torch.device("cpu"))
         torch.save(state_cpu_gold, state_cpu_path)
         print(f"Wrote {state_cpu_path} ({len(state_cpu_gold)} cases)")
 
-        interaction_cpu_path = (
-            _FIXTURES_DIR / "game_embedding_embed_game_interaction_golden_cpu.pt"
-        )
+        interaction_cpu_path = FIXTURES_DIR / "game_embedding_embed_game_interaction_golden_cpu.pt"
         interaction_cpu_gold = generate_game_interaction_for_device(torch.device("cpu"))
         torch.save(interaction_cpu_gold, interaction_cpu_path)
         print(f"Wrote {interaction_cpu_path} ({len(interaction_cpu_gold)} cases)")
 
         if torch.cuda.is_available():
-            state_cuda_path = _FIXTURES_DIR / "game_embedding_embed_game_state_golden_cuda.pt"
+            state_cuda_path = FIXTURES_DIR / "game_embedding_embed_game_state_golden_cuda.pt"
             state_cuda_gold = generate_game_state_for_device(torch.device("cuda", 0))
             torch.save(state_cuda_gold, state_cuda_path)
             print(f"Wrote {state_cuda_path} ({len(state_cuda_gold)} cases)")
 
-            interaction_cuda_path = (
-                _FIXTURES_DIR / "game_embedding_embed_game_interaction_golden_cuda.pt"
-            )
+            interaction_cuda_path = FIXTURES_DIR / "game_embedding_embed_game_interaction_golden_cuda.pt"
             interaction_cuda_gold = generate_game_interaction_for_device(
                 torch.device("cuda", 0)
             )

@@ -9,7 +9,6 @@ Run: python -m pytest python/network/pytests/test_game_embedding_embed_game_stat
 
 from __future__ import annotations
 
-import contextlib
 import sys
 from pathlib import Path
 
@@ -17,7 +16,6 @@ _PYTESTS_DIR = Path(__file__).resolve().parent
 _NETWORK_SRC_DIR = _PYTESTS_DIR.parent
 _REPO_ROOT = _NETWORK_SRC_DIR.parent.parent
 _CPP_BUILD = _REPO_ROOT / "cpp" / "build"
-_FIXTURES_DIR = _PYTESTS_DIR / "fixtures"
 
 for _p in (_CPP_BUILD, _PYTESTS_DIR, _NETWORK_SRC_DIR):
     _s = str(_p)
@@ -29,36 +27,13 @@ import torch
 
 import game_embedding_fixtures as fixtures
 import kumpel_embedding  # noqa: E402
-
-GOLDEN_SEED = 42
-RTOL = 0.0
-ATOL = 1e-5
-
-
-@contextlib.contextmanager
-def _deterministic_algorithms(enabled: bool):
-    previous_enabled = torch.are_deterministic_algorithms_enabled()
-    previous_warn_only = torch.is_deterministic_algorithms_warn_only_enabled()
-    torch.use_deterministic_algorithms(enabled)
-    try:
-        yield
-    finally:
-        torch.use_deterministic_algorithms(
-            previous_enabled, warn_only=previous_warn_only
-        )
-
-
-def _seed(device: torch.device) -> None:
-    torch.manual_seed(GOLDEN_SEED)
-    if device.type == "cuda":
-        torch.cuda.manual_seed_all(GOLDEN_SEED)
-
-
-def _load_golden(name: str) -> dict[str, torch.Tensor]:
-    path = _FIXTURES_DIR / name
-    if not path.is_file():
-        pytest.skip(f"missing golden file: {path}")
-    return torch.load(path, map_location="cpu", weights_only=False)
+from golden_test_utils import (  # noqa: E402
+    ATOL,
+    STRICT_RTOL,
+    deterministic_algorithms,
+    load_golden,
+    seed_for_device,
+)
 
 
 @pytest.fixture(params=["cpu", "cuda"])
@@ -77,7 +52,10 @@ def golden(device: torch.device) -> dict[str, torch.Tensor]:
         if device.type == "cuda"
         else "game_embedding_embed_game_state_golden_cpu.pt"
     )
-    return _load_golden(fname)
+    try:
+        return load_golden(fname)
+    except FileNotFoundError:
+        pytest.skip(f"missing golden file: {fname}")
 
 
 @pytest.mark.parametrize("case_id", sorted(fixtures.EMBED_GAME_STATE_CASES.keys()))
@@ -89,21 +67,30 @@ def test_game_embedding_embed_game_state_golden_case(
     expected = golden[case_id]
     payload = fixtures.EMBED_GAME_STATE_CASES[case_id]
 
-    with _deterministic_algorithms(True):
-        _seed(device)
+    with deterministic_algorithms(True):
+        seed_for_device(device)
         model = kumpel_embedding.GameEmbedding(
             fixtures.FIXTURE_DIMENSION_OUT, device=device, dtype=torch.float32
         )
         model.eval()
         with torch.inference_mode():
-            actual, _card_indices = model.embedGameState(payload)
+            actual, card_indices = model.embedGameState(payload)
         if device.type == "cuda":
             torch.cuda.synchronize()
 
+    expected_indices = fixtures.build_expected_game_state_card_indices(payload, device)
+    assert card_indices.dtype == torch.long
+    assert card_indices.device.type == device.type
+    assert card_indices.shape == expected_indices.shape
+    torch.testing.assert_close(
+        card_indices.cpu(),
+        expected_indices.cpu(),
+        msg=lambda msg: f"{case_id} card_indices on {device}: {msg}",
+    )
     torch.testing.assert_close(
         actual.cpu(),
         expected,
-        rtol=RTOL,
+        rtol=STRICT_RTOL,
         atol=ATOL,
         msg=lambda msg: f"{case_id} on {device}: {msg}",
     )

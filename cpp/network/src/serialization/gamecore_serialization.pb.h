@@ -13711,7 +13711,7 @@ inline ::gamecore::serialization::ProtoBufConditionalTargetQuery* PROTOBUF_NONNU
   if (target_to_choose_case() != kConditionalTargetQuery) {
     clear_target_to_choose();
     set_has_conditional_target_query();
-    _impl_.target_to_choose_.conditional_target_query_ = 
+    _impl_.target_to_choose_.conditional_target_query_ =
         ::google::protobuf::Message::DefaultConstruct<::gamecore::serialization::ProtoBufConditionalTargetQuery>(GetArena());
   }
   return _impl_.target_to_choose_.conditional_target_query_;

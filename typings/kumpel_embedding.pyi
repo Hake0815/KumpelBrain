@@ -94,9 +94,25 @@ class FilterEmbedding(torch._C.cpp.nn.Module):
 class GameEmbedding(torch._C.cpp.nn.Module):
     def __init__(self, dimension_out: typing.SupportsInt | typing.SupportsIndex, device: torch.device = ..., dtype: torch.dtype = ...) -> None:
         ...
-    def embedGameInteraction(self, arg0: collections.abc.Iterable, arg1: torch.Tensor, arg2: torch.Tensor) -> torch.Tensor:
+    def embedGameInteraction(
+        self,
+        game_interactions: collections.abc.Iterable,
+        card_indices: torch.Tensor,
+        cards: torch.Tensor,
+    ) -> torch.Tensor:
+        """Embed legal interactions against a fixed game state.
+
+        ``card_indices`` has shape ``[max_deck_id + 1]``; entry ``card_indices[deck_id]`` is the row in
+        ``cards`` for that deck id, or ``-1`` if absent. ``cards`` must be ``embedGameState(...)[0][2:]``
+        (card rows only, not player rows). Returns shape ``[num_interactions, dimension_out]``.
+        """
         ...
-    def embedGameState(self, arg0: typing.Any) -> tuple[torch.Tensor, torch.Tensor]:
+    def embedGameState(self, game_state: typing.Any) -> tuple[torch.Tensor, torch.Tensor]:
+        """Return ``(embedding, card_indices)``.
+
+        ``embedding`` shape is ``[2 + num_cards, dimension_out]`` (two player rows, then cards).
+        ``card_indices`` is deck-id indexed with shape ``[max_deck_id + 1]``.
+        """
         ...
     def load_weights(self, arg0: str) -> None:
         ...
@@ -179,7 +195,13 @@ class SharedEmbeddingHolder(torch._C.cpp.nn.Module):
         ...
     def save_weights(self, arg0: str) -> None:
         ...
-def make_card_embedding(shared_embedding_holder: SharedEmbeddingHolder, dimension_out: typing.SupportsInt | typing.SupportsIndex, device: torch.device = ..., dtype: torch.dtype = ...) -> CardEmbedding:
+def make_card_embedding(
+    shared_embedding_holder: SharedEmbeddingHolder | None,
+    dimension_out: typing.SupportsInt | typing.SupportsIndex,
+    device: torch.device = ...,
+    dtype: torch.dtype = ...,
+) -> CardEmbedding:
+    """Test/debug helper. ``shared_embedding_holder`` is caller-owned; use ``GameEmbedding`` for training persistence."""
     ...
 def make_card_state_embedding(dimension_out: typing.SupportsInt | typing.SupportsIndex, device: torch.device = ..., dtype: torch.dtype = ...) -> CardStateEmbedding:
     ...
