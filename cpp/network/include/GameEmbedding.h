@@ -14,7 +14,6 @@
 #include "network/include/InstructionEmbedding.h"
 #include "network/include/SaveLoadMixin.h"
 #include "network/include/SharedEmbeddingHolder.h"
-#include "network/include/SharedInstructionEmbeddings.h"
 #include "network/src/serialization/gamecore_serialization.pb.h"
 
 using ProtoBufGameState = gamecore::serialization::ProtoBufGameState;

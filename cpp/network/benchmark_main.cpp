@@ -8,25 +8,27 @@
 #include <functional>
 #include <iostream>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
-#include "../network/include/CardEmbedding.h"
-#include "../network/include/CardPositionEmbedding.h"
-#include "../network/include/CardStateEmbedding.h"
-#include "../network/include/ConditionEmbedding.h"
-#include "../network/include/GameStateEmbedding.h"
-#include "../network/include/InstructionDataEmbedding.h"
-#include "../network/include/InstructionEmbedding.h"
-#include "../network/include/Nesting.h"
-#include "../network/include/PlayerStateEmbedding.h"
-#include "../network/include/SharedEmbeddingHolder.h"
+#include "../network/include/GameEmbedding.h"
+#include "../network/include/SharedConstants.h"
 
 namespace serialization = gamecore::serialization;
 
 namespace {
 
 volatile int64_t benchmark_sink = 0;
+
+constexpr serialization::ProtoBufGameInteractionDataType kBenchmarkedGameInteractionDataTypes[] = {
+    serialization::GAME_INTERACTION_DATA_TYPE_NUMBER_DATA,
+    serialization::GAME_INTERACTION_DATA_TYPE_TARGET_DATA,
+    serialization::GAME_INTERACTION_DATA_TYPE_INTERACTION_CARD_DATA,
+    serialization::GAME_INTERACTION_DATA_TYPE_ATTACK_DATA,
+    serialization::GAME_INTERACTION_DATA_TYPE_SELECT_FROM_DATA,
+    serialization::GAME_INTERACTION_DATA_TYPE_ABILITY_DATA,
+};
 
 serialization::ProtoBufFilter make_leaf_filter(int field, int operation, int value) {
     serialization::ProtoBufFilter filter;
@@ -139,94 +141,6 @@ serialization::ProtoBufCondition make_condition(int condition_type,
     return condition;
 }
 
-std::vector<std::vector<serialization::ProtoBufInstruction>> build_instruction_batches(int64_t batch_size,
-                                                                                       int64_t instructions_per_batch) {
-    std::vector<std::vector<serialization::ProtoBufInstruction>> batches;
-    batches.reserve(batch_size);
-
-    for (int64_t batch_index = 0; batch_index < batch_size; ++batch_index) {
-        std::vector<serialization::ProtoBufInstruction> batch;
-        batch.reserve(instructions_per_batch);
-
-        for (int64_t instruction_index = 0; instruction_index < instructions_per_batch; ++instruction_index) {
-            switch (instruction_index % 8) {
-                case 0:
-                    batch.push_back(make_instruction(
-                        serialization::INSTRUCTION_TYPE_DEAL_DAMAGE,
-                        {make_attack_data(20 + static_cast<int>((batch_index + instruction_index) % 120))}));
-                    break;
-                case 1:
-                    batch.push_back(
-                        make_instruction(serialization::INSTRUCTION_TYPE_SELECT_CARDS,
-                                         {make_card_amount_data(1, 2, serialization::CARD_POSITION_HAND),
-                                          make_filter_data(make_nested_filter(batch_index, instruction_index))}));
-                    break;
-                case 2:
-                    batch.push_back(
-                        make_instruction(serialization::INSTRUCTION_TYPE_DISCARD,
-                                         {make_discard_data(static_cast<int>((batch_index + instruction_index) % 3))}));
-                    break;
-                case 3:
-                    batch.push_back(make_instruction(serialization::INSTRUCTION_TYPE_TAKE_TO_HAND,
-                                                     {make_card_amount_data(1, 1, serialization::CARD_POSITION_DECK)}));
-                    break;
-                case 4:
-                    batch.push_back(make_instruction(
-                        serialization::INSTRUCTION_TYPE_PUT_IN_DECK,
-                        {make_return_to_deck_type_data(static_cast<int>((batch_index + instruction_index) % 2),
-                                                       serialization::CARD_POSITION_DISCARD_PILE)}));
-                    break;
-                case 5:
-                    batch.push_back(make_instruction(
-                        serialization::INSTRUCTION_TYPE_REVEAL_CARDS,
-                        {make_card_amount_data(1, 3, serialization::CARD_POSITION_SELECTED_CARDS),
-                         make_filter_data(make_leaf_filter(serialization::FILTER_TYPE_EXCLUDE_SOURCE,
-                                                           serialization::FILTER_OPERATION_NONE, 0))}));
-                    break;
-                case 6:
-                    batch.push_back(make_instruction(serialization::INSTRUCTION_TYPE_SHOW_CARDS, {}));
-                    break;
-                default:
-                    batch.push_back(make_instruction(
-                        serialization::INSTRUCTION_TYPE_SHUFFLE_DECK,
-                        {make_player_target_data(static_cast<int>((batch_index + instruction_index) % 2))}));
-                    break;
-            }
-        }
-
-        batches.push_back(std::move(batch));
-    }
-
-    return batches;
-}
-
-std::vector<std::vector<serialization::ProtoBufCondition>> build_condition_batches(int64_t batch_size,
-                                                                                   int64_t conditions_per_batch) {
-    std::vector<std::vector<serialization::ProtoBufCondition>> batches;
-    batches.reserve(batch_size);
-
-    for (int64_t batch_index = 0; batch_index < batch_size; ++batch_index) {
-        std::vector<serialization::ProtoBufCondition> batch;
-        batch.reserve(conditions_per_batch);
-
-        for (int64_t condition_index = 0; condition_index < conditions_per_batch; ++condition_index) {
-            if (condition_index % 2 == 0) {
-                batch.push_back(make_condition(serialization::CONDITION_TYPE_HAS_CARDS,
-                                               {make_card_amount_data(1, 60, serialization::CARD_POSITION_DECK),
-                                                make_filter_data(make_nested_filter(batch_index, condition_index))}));
-            } else {
-                batch.push_back(make_condition(serialization::CONDITION_TYPE_ABILITY_NOT_USED, {}));
-            }
-        }
-
-        batches.push_back(std::move(batch));
-    }
-
-    return batches;
-}
-
-/// Deterministic scalar and repeated fields consumed by `CardEmbedding::collect_card_features`.
-/// Optional proto fields are only set when their bitmask slot is active so mask paths stay covered.
 void apply_card_surface_features(serialization::ProtoBufCard& card, int variant, int64_t seed) {
     const int v = variant % 12;
     const int s = static_cast<int>(seed);
@@ -259,8 +173,7 @@ void apply_card_surface_features(serialization::ProtoBufCard& card, int variant,
 
     const int n_traits = 1 + (v % 2);
     for (int i = 0; i < n_traits; ++i) {
-        card.add_pokemon_turn_traits(
-            static_cast<serialization::ProtoBufPokemonTurnTrait>((s + i) % 2));
+        card.add_pokemon_turn_traits(static_cast<serialization::ProtoBufPokemonTurnTrait>((s + i) % 2));
     }
     const int n_provided = 2 + (v % 3);
     for (int i = 0; i < n_provided; ++i) {
@@ -272,54 +185,6 @@ void apply_card_surface_features(serialization::ProtoBufCard& card, int variant,
     }
 }
 
-/// All optional card-level scalars and repeated energies/traits set; no instructions, conditions, ability, or attacks.
-void apply_all_optional_card_fields(serialization::ProtoBufCard& card, int64_t seed) {
-    const int s = static_cast<int>(seed);
-    card.set_card_type(static_cast<serialization::ProtoBufCardType>(1 + (s % 3)));
-    card.set_card_subtype(static_cast<serialization::ProtoBufCardSubtype>(1 + (s % 9)));
-    card.set_energy_type(static_cast<serialization::ProtoBufEnergyType>(1 + (s % 10)));
-    card.set_max_hp(30 + (s % 300));
-    card.set_weakness(static_cast<serialization::ProtoBufEnergyType>(1 + ((s + 1) % 10)));
-    card.set_resistance(static_cast<serialization::ProtoBufEnergyType>(1 + ((s + 2) % 10)));
-    card.set_retreat_cost(1 + (s % 4));
-    card.set_number_of_prize_cards_on_knockout(1 + (s % 3));
-    card.set_current_damage(s % 200);
-    card.add_pokemon_turn_traits(serialization::POKEMON_TURN_TRAIT_PUT_IN_PLAY_THIS_TURN);
-    card.add_pokemon_turn_traits(serialization::POKEMON_TURN_TRAIT_ABILITY_USED_THIS_TURN);
-    for (int i = 0; i < 4; ++i) {
-        card.add_provided_energy(static_cast<serialization::ProtoBufEnergyType>(1 + (i % 10)));
-        card.add_attached_energy(static_cast<serialization::ProtoBufEnergyType>(1 + ((i + 5) % 10)));
-    }
-}
-
-serialization::ProtoBufCard make_card_high_repeat_lists() {
-    serialization::ProtoBufCard card;
-    card.set_card_type(serialization::CARD_TYPE_POKEMON);
-    card.set_card_subtype(serialization::CARD_SUBTYPE_BASIC_POKEMON);
-    card.set_max_hp(90);
-    card.set_energy_type(serialization::ENERGY_TYPE_WATER);
-    for (int i = 0; i < 8; ++i) {
-        card.add_pokemon_turn_traits(
-            static_cast<serialization::ProtoBufPokemonTurnTrait>(i % 2));
-    }
-    for (int i = 0; i < 12; ++i) {
-        card.add_attached_energy(static_cast<serialization::ProtoBufEnergyType>(1 + (i % 10)));
-    }
-    for (int i = 0; i < 6; ++i) {
-        card.add_provided_energy(static_cast<serialization::ProtoBufEnergyType>(1 + (i % 10)));
-    }
-    return card;
-}
-
-serialization::ProtoBufCard make_card_all_optionals_static_only() {
-    serialization::ProtoBufCard card;
-    apply_all_optional_card_fields(card, 1001);
-    return card;
-}
-
-/// One ability per card max. Twelve distinct shapes for coverage (indexed by `variant % 12`).
-/// Several variants omit card-level instructions and/or conditions while still using ability- or attack-level
-/// content. Empty global instruction or condition lists are supported by `CardEmbedding::forward`.
 serialization::ProtoBufCard make_card_for_variant(int variant, int64_t seed) {
     serialization::ProtoBufCard card;
     switch (variant % 12) {
@@ -403,9 +268,10 @@ serialization::ProtoBufCard make_card_for_variant(int variant, int64_t seed) {
             }
             break;
         case 9:
-            *card.add_instructions() = make_instruction(serialization::INSTRUCTION_TYPE_PUT_IN_DECK,
-                                                          {make_return_to_deck_type_data(
-                                                              static_cast<int>(seed % 2), serialization::CARD_POSITION_DISCARD_PILE)});
+            *card.add_instructions() = make_instruction(
+                serialization::INSTRUCTION_TYPE_PUT_IN_DECK,
+                {make_return_to_deck_type_data(static_cast<int>(seed % 2),
+                                               serialization::CARD_POSITION_DISCARD_PILE)});
             *card.add_conditions() = make_condition(serialization::CONDITION_TYPE_ABILITY_NOT_USED, {});
             {
                 auto* ability = card.mutable_ability();
@@ -445,6 +311,16 @@ serialization::ProtoBufCard make_card_for_variant(int variant, int64_t seed) {
     return card;
 }
 
+serialization::ProtoBufCard make_card_empty_globals_attack_only() {
+    serialization::ProtoBufCard card;
+    auto* attack = card.add_attacks();
+    attack->add_energy_cost(static_cast<serialization::ProtoBufEnergyType>(1));
+    *attack->add_instructions() =
+        make_instruction(serialization::INSTRUCTION_TYPE_DEAL_DAMAGE, {make_attack_data(42)});
+    apply_card_surface_features(card, 4, 2004);
+    return card;
+}
+
 std::vector<serialization::ProtoBufCard> build_card_batch(int64_t batch_size) {
     std::vector<serialization::ProtoBufCard> cards;
     cards.reserve(static_cast<size_t>(batch_size));
@@ -472,8 +348,7 @@ void fill_card_states_from_cards(const std::vector<serialization::ProtoBufCard>&
 void apply_benchmark_position(serialization::ProtoBufCardState& state, int64_t index) {
     auto* pos = state.mutable_position();
     pos->set_owner(static_cast<serialization::ProtoBufOwner>(index % 2));
-    pos->set_opponent_position_knowledge(
-        static_cast<serialization::ProtoBufPositionKnowledge>(index % 3));
+    pos->set_opponent_position_knowledge(static_cast<serialization::ProtoBufPositionKnowledge>(index % 3));
     pos->set_top_deck_position_index(static_cast<int32_t>(index % 60));
     pos->clear_possible_positions();
     const int n_pos = 1 + static_cast<int>(index % 4);
@@ -488,8 +363,14 @@ void enrich_card_states_with_positions(google::protobuf::RepeatedPtrField<serial
     }
 }
 
+void assign_deck_ids_to_game_state(serialization::ProtoBufGameState& game_state) {
+    for (int i = 0; i < game_state.card_states_size(); ++i) {
+        game_state.mutable_card_states(i)->mutable_card()->set_deck_id(i);
+    }
+}
+
 serialization::ProtoBufPlayerState make_player_state(int64_t seed, bool active, bool attacking,
-                                                      int num_turn_traits = 2) {
+                                                     int num_turn_traits = 2) {
     serialization::ProtoBufPlayerState player;
     player.set_is_active(active);
     player.set_is_attacking(attacking);
@@ -520,36 +401,10 @@ serialization::ProtoBufGameState make_game_state(int64_t card_count, int64_t see
     for (const auto& state : states) {
         *game_state.add_card_states() = state;
     }
+    assign_deck_ids_to_game_state(game_state);
     return game_state;
 }
 
-serialization::ProtoBufCard make_card_empty_global_instructions_one_condition() {
-    serialization::ProtoBufCard card;
-    *card.add_conditions() = make_condition(serialization::CONDITION_TYPE_ABILITY_NOT_USED, {});
-    apply_card_surface_features(card, 0, 2002);
-    return card;
-}
-
-serialization::ProtoBufCard make_card_empty_global_conditions_one_instruction() {
-    serialization::ProtoBufCard card;
-    *card.add_instructions() = make_instruction(serialization::INSTRUCTION_TYPE_SHOW_CARDS, {});
-    apply_card_surface_features(card, 1, 2003);
-    return card;
-}
-
-serialization::ProtoBufCard make_card_empty_globals_attack_only() {
-    serialization::ProtoBufCard card;
-    auto* attack = card.add_attacks();
-    attack->add_energy_cost(static_cast<serialization::ProtoBufEnergyType>(1));
-    *attack->add_instructions() =
-        make_instruction(serialization::INSTRUCTION_TYPE_DEAL_DAMAGE, {make_attack_data(42)});
-    apply_card_surface_features(card, 4, 2004);
-    return card;
-}
-
-serialization::ProtoBufCard make_card_completely_empty() { return serialization::ProtoBufCard{}; }
-
-/// `torch::Device(kCUDA)` uses index -1 (unspecified); tensors use an explicit index (e.g. 0). Treat -1 as 0.
 bool tensor_device_matches_module(const torch::Tensor& tensor, const torch::Device& module_device) {
     const torch::Device& tdev = tensor.device();
     if (tdev.type() != module_device.type()) {
@@ -563,177 +418,230 @@ bool tensor_device_matches_module(const torch::Tensor& tensor, const torch::Devi
     return true;
 }
 
-void verify_card_embedding_output_shape(CardEmbeddingImpl& card_embedding, const torch::Device& device,
-                                        int64_t dimension_out, const std::string& label) {
-    google::protobuf::RepeatedPtrField<serialization::ProtoBufCardState> states;
-    fill_card_states_from_cards(build_card_batch(32), states);
-    enrich_card_states_with_positions(states);
-    auto [out, adjacency] = card_embedding.forward(states);
-    const int64_t n = states.size();
-    if (out.dim() != 2 || out.size(0) != n || out.size(1) != dimension_out) {
-        std::cerr << label << " CardEmbedding::forward shape check failed: expected (" << n << ", " << dimension_out
-                  << ")\n";
-        std::abort();
+torch::Tensor build_card_indices_from_game_state(const serialization::ProtoBufGameState& game_state,
+                                                 torch::Device device) {
+    auto indices = torch::full({DECK_SIZE}, -1, torch::TensorOptions().device(device).dtype(torch::kLong));
+    for (int i = 0; i < game_state.card_states_size(); ++i) {
+        const auto deck_id = game_state.card_states(i).card().deck_id();
+        if (deck_id >= 0 && deck_id < DECK_SIZE) {
+            indices.index_put_({deck_id}, i);
+        }
     }
-    if (!tensor_device_matches_module(out, device) ||
-        !tensor_device_matches_module(adjacency.evolves_from_adjacency, device) ||
-        !tensor_device_matches_module(adjacency.attached_energy_adjacency, device) ||
-        !tensor_device_matches_module(adjacency.pre_evolutions_adjacency, device)) {
-        std::cerr << label << " CardEmbedding::forward device mismatch\n";
-        std::abort();
-    }
-    benchmark_sink += out.numel() + adjacency.evolves_from_adjacency._nnz() +
-                      adjacency.attached_energy_adjacency._nnz() + adjacency.pre_evolutions_adjacency._nnz();
+    return indices;
 }
 
-void verify_card_position_embedding_output_shape(CardPositionEmbeddingImpl& position_embedding,
-                                                 const torch::Device& device, int64_t dimension_out,
-                                                 const std::string& label) {
-    google::protobuf::RepeatedPtrField<serialization::ProtoBufCardState> states;
-    fill_card_states_from_cards(build_card_batch(32), states);
-    enrich_card_states_with_positions(states);
-    auto out = position_embedding.forward(states);
-    const int64_t n = states.size();
-    if (out.dim() != 2 || out.size(0) != n || out.size(1) != dimension_out) {
-        std::cerr << label << " CardPositionEmbedding::forward shape check failed: expected (" << n << ", "
-                  << dimension_out << ")\n";
-        std::abort();
-    }
-    if (!tensor_device_matches_module(out, device)) {
-        std::cerr << label << " CardPositionEmbedding::forward device mismatch\n";
-        std::abort();
-    }
-    benchmark_sink += out.numel();
+torch::Tensor extract_card_embeddings(const torch::Tensor& game_state_embedding) {
+    return game_state_embedding.slice(0, 2, game_state_embedding.size(0));
 }
 
-void verify_card_state_embedding_output_shape(CardStateEmbeddingImpl& card_state_embedding, const torch::Device& device,
-                                              int64_t dimension_out, const std::string& label) {
-    auto check = [&](const std::vector<serialization::ProtoBufCard>& cards, const char* case_name) {
-        google::protobuf::RepeatedPtrField<serialization::ProtoBufCardState> states;
-        fill_card_states_from_cards(cards, states);
-        enrich_card_states_with_positions(states);
-        auto out = card_state_embedding.forward(states);
-        const int64_t n = states.size();
-        if (out.dim() != 2 || out.size(0) != n || out.size(1) != dimension_out) {
-            std::cerr << label << " CardStateEmbedding::forward shape check failed [" << case_name << "]: expected ("
-                      << n << ", " << dimension_out << "), got (";
-            for (int64_t d = 0; d < out.dim(); ++d) {
-                std::cerr << out.size(d) << (d + 1 < out.dim() ? ", " : "");
+const char* game_interaction_data_type_name(serialization::ProtoBufGameInteractionDataType type) {
+    switch (type) {
+        case serialization::GAME_INTERACTION_DATA_TYPE_NUMBER_DATA:
+            return "NUMBER_DATA";
+        case serialization::GAME_INTERACTION_DATA_TYPE_TARGET_DATA:
+            return "TARGET_DATA";
+        case serialization::GAME_INTERACTION_DATA_TYPE_INTERACTION_CARD_DATA:
+            return "INTERACTION_CARD_DATA";
+        case serialization::GAME_INTERACTION_DATA_TYPE_ATTACK_DATA:
+            return "ATTACK_DATA";
+        case serialization::GAME_INTERACTION_DATA_TYPE_SELECT_FROM_DATA:
+            return "SELECT_FROM_DATA";
+        case serialization::GAME_INTERACTION_DATA_TYPE_ABILITY_DATA:
+            return "ABILITY_DATA";
+        default:
+            return "UNKNOWN";
+    }
+}
+
+serialization::ProtoBufGameInteractionData make_game_interaction_data_for_type(
+    serialization::ProtoBufGameInteractionDataType type, int64_t seed) {
+    serialization::ProtoBufGameInteractionData data;
+    data.set_data_type(type);
+    switch (type) {
+        case serialization::GAME_INTERACTION_DATA_TYPE_NUMBER_DATA:
+            data.mutable_number_data()->set_number(1 + static_cast<int32_t>(seed % 5));
+            break;
+        case serialization::GAME_INTERACTION_DATA_TYPE_TARGET_DATA: {
+            auto* target = data.mutable_target_data();
+            target->add_possible_targets(0);
+            target->add_possible_targets(1);
+            target->add_possible_targets(2);
+            target->set_target_action(serialization::ACTION_ON_SELECTION_DISCARD);
+            target->set_remainder_action(serialization::ACTION_ON_SELECTION_TAKE_TO_HAND);
+            target->set_number_of_targets(2);
+            break;
+        }
+        case serialization::GAME_INTERACTION_DATA_TYPE_INTERACTION_CARD_DATA:
+            data.mutable_interaction_card_data()->set_card(static_cast<int32_t>(seed % 3));
+            break;
+        case serialization::GAME_INTERACTION_DATA_TYPE_ATTACK_DATA: {
+            const auto attack_card = make_card_empty_globals_attack_only();
+            *data.mutable_attack_data()->mutable_attack() = attack_card.attacks(0);
+            break;
+        }
+        case serialization::GAME_INTERACTION_DATA_TYPE_SELECT_FROM_DATA:
+            data.mutable_select_from_data()->set_select_from(
+                static_cast<serialization::ProtoBufSelectFrom>((seed % 2) == 0
+                                                                 ? serialization::SELECT_FROM_DISCARD_PILE
+                                                                 : serialization::SELECT_FROM_DECK));
+            break;
+        case serialization::GAME_INTERACTION_DATA_TYPE_ABILITY_DATA: {
+            const auto ability_card = make_card_for_variant(3, seed);
+            *data.mutable_ability_data()->mutable_ability() = ability_card.ability();
+            break;
+        }
+        default:
+            break;
+    }
+    return data;
+}
+
+int64_t seed_offset_for_type(serialization::ProtoBufGameInteractionDataType type) {
+    switch (type) {
+        case serialization::GAME_INTERACTION_DATA_TYPE_NUMBER_DATA:
+            return 0;
+        case serialization::GAME_INTERACTION_DATA_TYPE_TARGET_DATA:
+            return 100;
+        case serialization::GAME_INTERACTION_DATA_TYPE_INTERACTION_CARD_DATA:
+            return 200;
+        case serialization::GAME_INTERACTION_DATA_TYPE_ATTACK_DATA:
+            return 300;
+        case serialization::GAME_INTERACTION_DATA_TYPE_SELECT_FROM_DATA:
+            return 400;
+        case serialization::GAME_INTERACTION_DATA_TYPE_ABILITY_DATA:
+            return 500;
+        default:
+            return 0;
+    }
+}
+
+std::vector<serialization::ProtoBufGameInteraction> make_game_interaction_batch(
+    int64_t batch_size, std::optional<serialization::ProtoBufGameInteractionDataType> excluded_type) {
+    std::vector<serialization::ProtoBufGameInteraction> batch;
+    batch.reserve(static_cast<size_t>(batch_size));
+    for (int64_t i = 0; i < batch_size; ++i) {
+        serialization::ProtoBufGameInteraction interaction;
+        interaction.set_type(serialization::GAME_INTERACTION_TYPE_SELECT_CARDS);
+        for (const auto type : kBenchmarkedGameInteractionDataTypes) {
+            if (excluded_type.has_value() && excluded_type.value() == type) {
+                continue;
             }
-            std::cerr << ")\n";
-            std::abort();
+            *interaction.add_data() = make_game_interaction_data_for_type(type, i + seed_offset_for_type(type));
         }
-        if (!tensor_device_matches_module(out, device)) {
-            std::cerr << label << " CardStateEmbedding::forward device mismatch [" << case_name << "]: output ("
-                      << static_cast<int>(out.device().type()) << "," << out.device().index() << ") module ("
-                      << static_cast<int>(device.type()) << "," << device.index() << ")\n";
-            std::abort();
-        }
-        benchmark_sink += out.numel();
-    };
-
-    {
-        auto out = card_state_embedding.forward({});
-        if (out.dim() != 2 || out.size(0) != 0 || out.size(1) != dimension_out) {
-            std::cerr << label << " CardStateEmbedding::forward empty batch shape check failed: expected (0, "
-                      << dimension_out << ")\n";
-            std::abort();
-        }
-        if (!tensor_device_matches_module(out, device)) {
-            std::cerr << label << " CardStateEmbedding::forward empty batch device mismatch\n";
-            std::abort();
-        }
-        benchmark_sink += out.numel();
+        batch.push_back(std::move(interaction));
     }
-
-    for (int v = 0; v < 12; ++v) {
-        const std::string tag = "single_variant_" + std::to_string(v);
-        check({make_card_for_variant(v, static_cast<int64_t>(v))}, tag.c_str());
-    }
-
-    std::vector<serialization::ProtoBufCard> one_of_each;
-    one_of_each.reserve(12);
-    for (int v = 0; v < 12; ++v) {
-        one_of_each.push_back(make_card_for_variant(v, static_cast<int64_t>(v)));
-    }
-    check(one_of_each, "batch_twelve_variants");
-
-    check(build_card_batch(1), "batch_1_mixed");
-    check(build_card_batch(7), "batch_7_mixed");
-    check(build_card_batch(64), "batch_64_mixed");
-    check(build_card_batch(static_cast<int64_t>(256)), "batch_256_mixed");
-
-    check({make_card_empty_global_instructions_one_condition()}, "empty_global_instructions_one_condition");
-    check({make_card_empty_global_conditions_one_instruction()}, "empty_global_conditions_one_instruction");
-    check({make_card_empty_globals_attack_only()}, "empty_globals_attack_only");
-    check({make_card_completely_empty()}, "completely_empty_card");
-    check({make_card_empty_global_instructions_one_condition(), make_card_empty_global_conditions_one_instruction(),
-           make_card_empty_globals_attack_only(), make_card_completely_empty()},
-          "batch_mixed_empty_global_and_empty_card");
-
-    check({make_card_high_repeat_lists()}, "high_repeat_traits_and_energies");
-    check({make_card_all_optionals_static_only()}, "all_optionals_static_only");
-    check({make_card_high_repeat_lists(), make_card_all_optionals_static_only()}, "batch_high_repeat_and_static_only");
-
-    std::cout << label << " CardStateEmbedding::forward shape checks passed (expected [num_cards, " << dimension_out
-              << "])\n";
+    return batch;
 }
 
-void verify_player_state_embedding_output_shape(PlayerStateEmbeddingImpl& player_state_embedding,
-                                                const torch::Device& device, int64_t dimension_out,
-                                                const std::string& label) {
-    auto check_pair = [&](const serialization::ProtoBufPlayerState& self,
-                          const serialization::ProtoBufPlayerState& opponent, const char* case_name) {
-        auto out = player_state_embedding.forward(self, opponent);
-        if (out.dim() != 2 || out.size(0) != 2 || out.size(1) != dimension_out) {
-            std::cerr << label << " PlayerStateEmbedding::forward shape check failed [" << case_name
-                      << "]: expected (2, " << dimension_out << ")\n";
-            std::abort();
-        }
-        if (!tensor_device_matches_module(out, device)) {
-            std::cerr << label << " PlayerStateEmbedding::forward device mismatch [" << case_name << "]\n";
-            std::abort();
-        }
-        benchmark_sink += out.numel();
-    };
+struct GameInteractionBenchCase {
+    std::string name;
+    serialization::ProtoBufGameState game_state;
+    torch::Tensor card_indices;
+    torch::Tensor cards;
+    std::vector<serialization::ProtoBufGameInteraction> interactions;
+};
 
-    check_pair(make_player_state(0, true, true, 2), make_player_state(1, false, false, 2), "balanced_traits");
-    check_pair(make_player_state(10, true, true, 0), make_player_state(11, false, false, 4), "uneven_0_vs_4");
-    check_pair(make_player_state(20, true, true, 1), make_player_state(21, false, false, 3), "uneven_1_vs_3");
-    check_pair(make_player_state(30, true, true, 4), make_player_state(31, false, false, 0), "uneven_4_vs_0");
+GameInteractionBenchCase build_game_interaction_bench_case(GameEmbeddingImpl& game_embedding, const torch::Device& device,
+                                                           const std::string& name, int64_t card_count, int64_t seed,
+                                                           int64_t interaction_batch_size,
+                                                           std::optional<serialization::ProtoBufGameInteractionDataType>
+                                                               excluded_type) {
+    GameInteractionBenchCase bench_case;
+    bench_case.name = name;
+    bench_case.game_state = make_game_state(card_count, seed);
+    bench_case.card_indices = build_card_indices_from_game_state(bench_case.game_state, device);
+    const auto game_state_embedding = game_embedding.embedGameState(bench_case.game_state);
+    bench_case.cards = extract_card_embeddings(game_state_embedding);
+    bench_case.interactions = make_game_interaction_batch(interaction_batch_size, excluded_type);
+    return bench_case;
 }
 
-void verify_game_state_embedding_output_shape(GameStateEmbeddingImpl& game_state_embedding, const torch::Device& device,
-                                              int64_t dimension_out, const std::string& label) {
+std::vector<GameInteractionBenchCase> build_game_interaction_bench_cases(GameEmbeddingImpl& game_embedding,
+                                                                         const torch::Device& device,
+                                                                         int64_t card_count, int64_t seed,
+                                                                         int64_t interaction_batch_size) {
+    std::vector<GameInteractionBenchCase> cases;
+    cases.push_back(build_game_interaction_bench_case(game_embedding, device, "all_types", card_count, seed,
+                                                      interaction_batch_size, std::nullopt));
+    for (const auto excluded_type : kBenchmarkedGameInteractionDataTypes) {
+        const std::string name = std::string("without_") + game_interaction_data_type_name(excluded_type);
+        cases.push_back(build_game_interaction_bench_case(game_embedding, device, name, card_count, seed + 1000,
+                                                          interaction_batch_size, excluded_type));
+    }
+    return cases;
+}
+
+void verify_game_embedding_output_shape(GameEmbeddingImpl& game_embedding, const torch::Device& device,
+                                        int64_t dimension_out, const std::string& label) {
     for (int64_t card_count : {0, 32, 128}) {
         auto game_state = make_game_state(card_count, card_count + 10);
-        auto out = game_state_embedding.forward(game_state);
+        auto out = game_embedding.embedGameState(game_state);
         const int64_t expected_rows = card_count + 2;
         if (out.dim() != 2 || out.size(0) != expected_rows || out.size(1) != dimension_out) {
-            std::cerr << label << " GameStateEmbedding::forward shape check failed for " << card_count
+            std::cerr << label << " GameEmbedding::embedGameState shape check failed for " << card_count
                       << " cards: expected (" << expected_rows << ", " << dimension_out << ")\n";
             std::abort();
         }
         if (!tensor_device_matches_module(out, device)) {
-            std::cerr << label << " GameStateEmbedding::forward device mismatch\n";
+            std::cerr << label << " GameEmbedding::embedGameState device mismatch\n";
             std::abort();
         }
         benchmark_sink += out.numel();
     }
     {
         auto uneven = make_game_state(0, 500, 0, 4);
-        auto out = game_state_embedding.forward(uneven);
+        auto out = game_embedding.embedGameState(uneven);
         if (out.dim() != 2 || out.size(0) != 2 || out.size(1) != dimension_out) {
-            std::cerr << label << " GameStateEmbedding::forward uneven traits (0 cards): expected (2, "
+            std::cerr << label << " GameEmbedding::embedGameState uneven traits (0 cards): expected (2, "
                       << dimension_out << ")\n";
             std::abort();
         }
         if (!tensor_device_matches_module(out, device)) {
-            std::cerr << label << " GameStateEmbedding::forward uneven traits device mismatch\n";
+            std::cerr << label << " GameEmbedding::embedGameState uneven traits device mismatch\n";
             std::abort();
         }
         benchmark_sink += out.numel();
     }
+
+    {
+        auto empty_indices = build_card_indices_from_game_state(make_game_state(0, 600), device);
+        auto empty_cards = torch::empty({0, dimension_out}, torch::TensorOptions().device(device).dtype(torch::kFloat));
+        auto out = game_embedding.embedGameInteraction({}, empty_indices, empty_cards);
+        if (out.dim() != 2 || out.size(0) != 0 || out.size(1) != dimension_out) {
+            std::cerr << label << " GameEmbedding::embedGameInteraction empty batch shape check failed: expected (0, "
+                      << dimension_out << ")\n";
+            std::abort();
+        }
+        if (!tensor_device_matches_module(out, device)) {
+            std::cerr << label << " GameEmbedding::embedGameInteraction empty batch device mismatch\n";
+            std::abort();
+        }
+        benchmark_sink += out.numel();
+    }
+
+    for (const int64_t interaction_batch_size : {32, 128}) {
+        const auto cases = build_game_interaction_bench_cases(game_embedding, device, interaction_batch_size,
+                                                              700 + interaction_batch_size, interaction_batch_size);
+        for (const auto& bench_case : cases) {
+            auto out = game_embedding.embedGameInteraction(bench_case.interactions, bench_case.card_indices,
+                                                           bench_case.cards);
+            const int64_t expected_rows = static_cast<int64_t>(bench_case.interactions.size());
+            if (out.dim() != 2 || out.size(0) != expected_rows || out.size(1) != dimension_out) {
+                std::cerr << label << " GameEmbedding::embedGameInteraction shape check failed [" << bench_case.name
+                          << ", batch=" << interaction_batch_size << "]: expected (" << expected_rows << ", "
+                          << dimension_out << ")\n";
+                std::abort();
+            }
+            if (!tensor_device_matches_module(out, device)) {
+                std::cerr << label << " GameEmbedding::embedGameInteraction device mismatch [" << bench_case.name
+                          << "]\n";
+                std::abort();
+            }
+            benchmark_sink += out.numel();
+        }
+    }
+
+    std::cout << label << " GameEmbedding shape checks passed\n";
 }
 
 void synchronize_device(const torch::Device& device) {
@@ -789,182 +697,52 @@ void run_embedding_benchmarks(const torch::Device& device, const std::string& la
         torch::cuda::manual_seed_all(42);
     }
 
-    auto instructions = build_instruction_batches(256, 8);
-    auto conditions = build_condition_batches(256, 4);
+    auto game_embedding = std::make_shared<GameEmbeddingImpl>(dimension, device, dtype);
+    game_embedding->eval();
 
-    auto shared = std::make_shared<SharedEmbeddingHolderImpl>(dimension, device, dtype);
-    auto instruction_data_embedding = std::make_shared<InstructionDataEmbeddingImpl>(shared, dimension, device, dtype);
-    auto instruction_embedding =
-        std::make_shared<InstructionEmbeddingImpl>(instruction_data_embedding, shared, dimension, device, dtype);
-    auto condition_embedding =
-        std::make_shared<ConditionEmbeddingImpl>(instruction_data_embedding, shared, dimension, device, dtype);
-    auto card_embedding = std::make_shared<CardEmbeddingImpl>(shared, dimension, device, dtype);
-    auto card_position_embedding = std::make_shared<CardPositionEmbeddingImpl>(shared, dimension, device, dtype);
-    auto card_state_embedding = std::make_shared<CardStateEmbeddingImpl>(dimension, device, dtype);
-    auto player_state_embedding = std::make_shared<PlayerStateEmbeddingImpl>(dimension, device, dtype);
-    auto game_state_embedding = std::make_shared<GameStateEmbeddingImpl>(dimension, device, dtype);
-
-    shared->eval();
-    instruction_data_embedding->eval();
-    instruction_embedding->eval();
-    condition_embedding->eval();
-    card_embedding->eval();
-    card_position_embedding->eval();
-    card_state_embedding->eval();
-    player_state_embedding->eval();
-    game_state_embedding->eval();
-
-    verify_card_embedding_output_shape(*card_embedding, device, dimension, label);
-    verify_card_position_embedding_output_shape(*card_position_embedding, device, dimension, label);
-    verify_card_state_embedding_output_shape(*card_state_embedding, device, dimension, label);
-    verify_player_state_embedding_output_shape(*player_state_embedding, device, dimension, label);
-    verify_game_state_embedding_output_shape(*game_state_embedding, device, dimension, label);
-
-    const auto instruction_batch_size = static_cast<int64_t>(instructions.size());
-    const auto condition_batch_size = static_cast<int64_t>(conditions.size());
-
-    auto flat_instructions = nesting::flatten_instructions(instructions, torch::Device(torch::kCPU), torch::kInt64);
-    flat_instructions = nesting::move_flattened_result_to_device(flat_instructions, device);
-    auto flat_conditions = nesting::flatten_conditions(conditions, torch::Device(torch::kCPU), torch::kInt64);
-    flat_conditions = nesting::move_flattened_result_to_device(flat_conditions, device);
+    verify_game_embedding_output_shape(*game_embedding, device, dimension, label);
 
     std::cout << "\n== " << label << " ==\n";
-    std::cout << "Instruction batches: " << instruction_batch_size
-              << ", flattened instructions: " << flat_instructions.instruction_indices.size(0)
-              << ", flattened data rows: " << flat_instructions.instruction_data_type_indices.size(0) << "\n";
-    std::cout << "Condition batches: " << condition_batch_size
-              << ", flattened conditions: " << flat_conditions.instruction_indices.size(0)
-              << ", flattened data rows: " << flat_conditions.instruction_data_type_indices.size(0) << "\n";
-
-    if (device.is_cpu()) {
-        benchmark_ms(label + " flatten_instructions", device, warmup_runs, measured_runs, [&]() {
-            auto flat = nesting::flatten_instructions(instructions, device, torch::kInt64);
-            benchmark_sink += flat.instruction_indices.size(0);
-        });
-    }
-
-    benchmark_ms(label + " instruction_forward", device, warmup_runs, measured_runs, [&]() {
-        auto [embedded, mask] = instruction_embedding->forward(instructions);
-        benchmark_sink += embedded.numel() + mask.numel();
-    });
-
-    if (device.is_cpu()) {
-        benchmark_ms(label + " flatten_conditions", device, warmup_runs, measured_runs, [&]() {
-            auto flat = nesting::flatten_conditions(conditions, device, torch::kInt64);
-            benchmark_sink += flat.instruction_indices.size(0);
-        });
-    }
-
-    benchmark_ms(label + " condition_forward", device, warmup_runs, measured_runs, [&]() {
-        auto [embedded, mask] = condition_embedding->forward(conditions);
-        benchmark_sink += embedded.numel() + mask.numel();
-    });
-
-    auto cards_large = build_card_batch(instruction_batch_size);
-    google::protobuf::RepeatedPtrField<serialization::ProtoBufCardState> states_large;
-    fill_card_states_from_cards(cards_large, states_large);
-    enrich_card_states_with_positions(states_large);
-    benchmark_ms(label + " card_embedding_forward_256", device, warmup_runs, measured_runs, [&]() {
-        auto [out, adjacency] = card_embedding->forward(states_large);
-        benchmark_sink += out.numel() + adjacency.evolves_from_adjacency._nnz() +
-                          adjacency.attached_energy_adjacency._nnz() + adjacency.pre_evolutions_adjacency._nnz();
-    });
-    benchmark_ms(label + " card_position_embedding_forward_256", device, warmup_runs, measured_runs, [&]() {
-        auto out = card_position_embedding->forward(states_large);
-        benchmark_sink += out.numel();
-    });
-    benchmark_ms(label + " card_state_embedding_forward_256", device, warmup_runs, measured_runs, [&]() {
-        auto out = card_state_embedding->forward(states_large);
-        benchmark_sink += out.numel();
-    });
-
-    auto cards_32 = build_card_batch(32);
-    google::protobuf::RepeatedPtrField<serialization::ProtoBufCardState> states_32;
-    fill_card_states_from_cards(cards_32, states_32);
-    enrich_card_states_with_positions(states_32);
-    benchmark_ms(label + " card_state_embedding_forward_32", device, warmup_runs, measured_runs, [&]() {
-        auto out = card_state_embedding->forward(states_32);
-        benchmark_sink += out.numel();
-    });
-
-    auto cards_128 = build_card_batch(128);
-    google::protobuf::RepeatedPtrField<serialization::ProtoBufCardState> states_128;
-    fill_card_states_from_cards(cards_128, states_128);
-    enrich_card_states_with_positions(states_128);
-    benchmark_ms(label + " card_state_embedding_forward_128", device, warmup_runs, measured_runs, [&]() {
-        auto out = card_state_embedding->forward(states_128);
-        benchmark_sink += out.numel();
-    });
-
-    std::vector<serialization::ProtoBufCard> cards_homogeneous;
-    cards_homogeneous.reserve(static_cast<size_t>(instruction_batch_size));
-    for (int64_t i = 0; i < instruction_batch_size; ++i) {
-        cards_homogeneous.push_back(make_card_for_variant(4, i));
-    }
-    google::protobuf::RepeatedPtrField<serialization::ProtoBufCardState> states_homogeneous;
-    fill_card_states_from_cards(cards_homogeneous, states_homogeneous);
-    enrich_card_states_with_positions(states_homogeneous);
-    benchmark_ms(label + " card_state_embedding_forward_256_all_variant4", device, warmup_runs, measured_runs, [&]() {
-        auto out = card_state_embedding->forward(states_homogeneous);
-        benchmark_sink += out.numel();
-    });
-
-    const auto self_player_state = make_player_state(100, true, true);
-    const auto opponent_player_state = make_player_state(101, false, false);
-    benchmark_ms(label + " player_state_embedding_forward", device, warmup_runs, measured_runs, [&]() {
-        auto out = player_state_embedding->forward(self_player_state, opponent_player_state);
-        benchmark_sink += out.numel();
-    });
-
-    const auto self_0 = make_player_state(200, true, true, 0);
-    const auto opp_4 = make_player_state(201, false, false, 4);
-    benchmark_ms(label + " player_state_embedding_forward_uneven_0_vs_4", device, warmup_runs, measured_runs,
-                 [&]() {
-                     auto out = player_state_embedding->forward(self_0, opp_4);
-                     benchmark_sink += out.numel();
-                 });
-
-    const auto self_1 = make_player_state(210, true, true, 1);
-    const auto opp_3 = make_player_state(211, false, false, 3);
-    benchmark_ms(label + " player_state_embedding_forward_uneven_1_vs_3", device, warmup_runs, measured_runs,
-                 [&]() {
-                     auto out = player_state_embedding->forward(self_1, opp_3);
-                     benchmark_sink += out.numel();
-                 });
-
-    const auto self_4 = make_player_state(220, true, true, 4);
-    const auto opp_0 = make_player_state(221, false, false, 0);
-    benchmark_ms(label + " player_state_embedding_forward_uneven_4_vs_0", device, warmup_runs, measured_runs,
-                 [&]() {
-                     auto out = player_state_embedding->forward(self_4, opp_0);
-                     benchmark_sink += out.numel();
-                 });
 
     auto game_state_32 = make_game_state(32, 200);
-    benchmark_ms(label + " game_state_embedding_forward_32", device, warmup_runs, measured_runs, [&]() {
-        auto out = game_state_embedding->forward(game_state_32);
+    benchmark_ms(label + " game_embedding_embed_game_state_32", device, warmup_runs, measured_runs, [&]() {
+        auto out = game_embedding->embedGameState(game_state_32);
         benchmark_sink += out.numel();
     });
 
     auto game_state_128 = make_game_state(128, 300);
-    benchmark_ms(label + " game_state_embedding_forward_128", device, warmup_runs, measured_runs, [&]() {
-        auto out = game_state_embedding->forward(game_state_128);
+    benchmark_ms(label + " game_embedding_embed_game_state_128", device, warmup_runs, measured_runs, [&]() {
+        auto out = game_embedding->embedGameState(game_state_128);
         benchmark_sink += out.numel();
     });
 
     auto game_state_32_uneven = make_game_state(32, 400, 0, 4);
-    benchmark_ms(label + " game_state_embedding_forward_32_uneven_traits", device, warmup_runs, measured_runs,
+    benchmark_ms(label + " game_embedding_embed_game_state_32_uneven_traits", device, warmup_runs, measured_runs,
                  [&]() {
-                     auto out = game_state_embedding->forward(game_state_32_uneven);
+                     auto out = game_embedding->embedGameState(game_state_32_uneven);
                      benchmark_sink += out.numel();
                  });
 
     auto game_state_128_uneven = make_game_state(128, 500, 4, 0);
-    benchmark_ms(label + " game_state_embedding_forward_128_uneven_traits", device, warmup_runs, measured_runs,
+    benchmark_ms(label + " game_embedding_embed_game_state_128_uneven_traits", device, warmup_runs, measured_runs,
                  [&]() {
-                     auto out = game_state_embedding->forward(game_state_128_uneven);
+                     auto out = game_embedding->embedGameState(game_state_128_uneven);
                      benchmark_sink += out.numel();
                  });
+
+    for (const int64_t interaction_batch_size : {32, 128}) {
+        const auto interaction_cases = build_game_interaction_bench_cases(
+            *game_embedding, device, interaction_batch_size, 800 + interaction_batch_size, interaction_batch_size);
+        for (const auto& bench_case : interaction_cases) {
+            const std::string bench_name = label + " game_embedding_embed_game_interaction_" +
+                                           std::to_string(interaction_batch_size) + "_" + bench_case.name;
+            benchmark_ms(bench_name, device, warmup_runs, measured_runs, [&]() {
+                auto out = game_embedding->embedGameInteraction(bench_case.interactions, bench_case.card_indices,
+                                                                bench_case.cards);
+                benchmark_sink += out.numel();
+            });
+        }
+    }
 }
 
 }  // namespace
