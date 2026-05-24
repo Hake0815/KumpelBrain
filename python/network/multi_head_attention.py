@@ -3,6 +3,27 @@ import torch.nn as nn
 import torch.nn.functional as F
 from save_load_mixin import SaveLoadMixin
 
+class MultiHeadAttentionArgs:
+    d_q: int
+    d_k: int
+    d_v: int
+    d_head: int
+    nheads: int
+    dropout: float
+    bias: bool
+    device: torch.device
+    dtype: torch.dtype
+
+    def __init__(self, d_q: int, d_k: int, d_v: int, d_head: int, nheads: int, dropout: float = 0.0, bias: bool = True, device: torch.device = torch.device("cpu"), dtype: torch.dtype = torch.float32):
+        self.d_q = d_q
+        self.d_k = d_k
+        self.d_v = d_v
+        self.d_head = d_head
+        self.nheads = nheads
+        self.dropout = dropout
+        self.bias = bias
+        self.device = device
+        self.dtype = dtype
 
 class MultiHeadAttention(nn.Module, SaveLoadMixin):
     """
@@ -47,6 +68,10 @@ class MultiHeadAttention(nn.Module, SaveLoadMixin):
         d_out = d_q
         self.out_proj = nn.Linear(d_total, d_out, bias=bias, **factory_kwargs)
         self.bias = bias
+    
+    @classmethod
+    def from_args(cls, args: MultiHeadAttentionArgs):
+        return cls(args.d_q, args.d_k, args.d_v, args.d_head, args.nheads, args.dropout, args.bias, args.device, args.dtype)
 
     def forward(
         self,
