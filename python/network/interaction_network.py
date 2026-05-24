@@ -1,11 +1,11 @@
 import torch
 import torch.nn as nn
 from save_load_mixin import SaveLoadMixin
-from multi_head_attention import MultiHeadAttention
 from feed_forward import FeedForward
+from multi_head_attention import MultiHeadAttention
 
 
-class TransformerLayer(nn.Module, SaveLoadMixin):
+class InteractionNetwork(nn.Module, SaveLoadMixin):
     def __init__(
         self,
         dimension_out: int,
@@ -19,6 +19,9 @@ class TransformerLayer(nn.Module, SaveLoadMixin):
     ):
         factory_kwargs = {"device": device, "dtype": dtype}
         super().__init__()
+        self.first_feed_forward = FeedForward(
+            dimension_out, dimension_inner, **factory_kwargs
+        )
         self.multi_head_attention = MultiHeadAttention(
             dimension_out,
             dimension_out,
@@ -29,9 +32,11 @@ class TransformerLayer(nn.Module, SaveLoadMixin):
             bias,
             **factory_kwargs
         )
-        self.feed_forward = FeedForward(
-            dimension_out, dimension_inner, **factory_kwargs
-        )
+        self.post_pooling_feed_forward = FeedForward(dimension_out, dimension_inner, **factory_kwargs)
+        self.linear_reduce = nn.Linear(dimension_out, 1, **factory_kwargs)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return x + self.feed_forward(x + self.multi_head_attention(x, x, x))
+    def forward(self, embedded_interactions: torch.Tensor, state: torch.Tensor) -> torch.Tensor:
+        x = embedded_interactions + self.first_feed_forward(embedded_interactions)
+        x = x + self.multi_head_attention(x, state, state)
+        x = x + self.post_pooling_feed_forward(x)
+        return self.linear_reduce(x).squeeze(-1)

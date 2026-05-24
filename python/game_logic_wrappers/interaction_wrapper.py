@@ -1,6 +1,9 @@
 import csharp_runtime
 import clr
 
+clr.AddReference("Google.Protobuf")
+from Google.Protobuf import JsonFormatter
+
 from card_wrapper import CardWrapper
 from gamecore.game.interaction import (
     GameInteraction,
@@ -79,3 +82,6 @@ class InteractionWrapper:
 
     def try_cast(self, T, obj):
         return T(obj) if clr.GetClrType(T).IsInstanceOfType(obj) else None
+    
+    def to_json(self) -> str:
+        return JsonFormatter.Default.Format(self.interaction.ToSerializable())

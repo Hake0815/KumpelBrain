@@ -64,8 +64,8 @@ def run_game_batch(batch_size, first_game_num: int):
 
 
 start_time = time.time()
-num_game_batches = 10
-num_games_per_batch = 10
+num_game_batches = 1
+num_games_per_batch = 1
 num_games = num_game_batches * num_games_per_batch
 max_workers = min(8, num_game_batches)  # More workers are slower
 

@@ -4,7 +4,7 @@ from typing import Callable
 import uuid
 from game_logic_wrappers.game_controller_wrapper import GameControllerWrapper
 from game_logic_wrappers.interaction_wrapper import InteractionWrapper
-
+import json
 
 class GamePlayer:
     game_controller: GameControllerWrapper
@@ -95,6 +95,19 @@ class GamePlayer:
         if len(interactions) == 1:
             self._perform_interaction(interactions[0])
         else:
+            if self.enable_file_logging:
+                with open(f"game_interaction_logs/game_interaction_{self.game_uuid}.txt", "a") as f:
+                    f.writelines(
+                        [
+                            json.dumps(
+                                [
+                                    json.loads(interaction.to_json())
+                                    for interaction in interactions
+                                ]
+                            ),
+                            "\n",
+                        ]
+                    )
             self._perform_interaction(interactions[randrange(len(interactions))])
 
     def _perform_interaction(self, interaction: InteractionWrapper) -> None:
