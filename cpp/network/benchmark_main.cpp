@@ -457,6 +457,7 @@ serialization::ProtoBufGameInteractionData make_game_interaction_data_for_type(
             target->add_possible_targets(2);
             target->set_target_action(serialization::ACTION_ON_SELECTION_DISCARD);
             target->set_remainder_action(serialization::ACTION_ON_SELECTION_TAKE_TO_HAND);
+            target->set_allow_multiple_times(seed % 2 == 0);
             target->set_number_of_targets(2);
             break;
         }

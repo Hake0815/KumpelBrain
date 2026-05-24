@@ -50,7 +50,7 @@ def run_single_game(game_num: int):
         callback_on_game_end=functools.partial(
             callback_on_game_end, event=event, uuid=game_uuid
         ),
-        enable_file_logging=True,  # Disable file logging for performance
+        enable_file_logging=True,
     )
 
     game_player.play_game()

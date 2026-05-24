@@ -82,6 +82,7 @@ struct GameInteractionEmbeddingImpl : torch::nn::Module, SaveLoadMixin<GameInter
     torch::nn::Embedding action_on_selection_embedding_{nullptr};
     torch::nn::Embedding target_data_addition_embedding_{nullptr};
     torch::nn::Embedding remainder_data_addition_embedding_{nullptr};
+    torch::nn::Embedding allow_multiple_times_embedding_{nullptr};
     NormalizedLinear number_of_targets_embedding_{nullptr};
     NormalizedLinear number_data_embedding_{nullptr};
     torch::nn::Embedding select_from_embedding_{nullptr};

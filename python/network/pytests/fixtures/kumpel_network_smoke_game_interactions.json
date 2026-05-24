@@ -1,0 +1,364 @@
+[
+    {
+        "type": "GAME_INTERACTION_TYPE_PLAY_CARD",
+        "data": [
+            {
+                "dataType": "GAME_INTERACTION_DATA_TYPE_INTERACTION_CARD_DATA",
+                "interactionCardData": {
+                    "card": 2
+                }
+            }
+        ]
+    },
+    {
+        "type": "GAME_INTERACTION_TYPE_PLAY_CARD_WITH_TARGETS",
+        "data": [
+            {
+                "dataType": "GAME_INTERACTION_DATA_TYPE_INTERACTION_CARD_DATA",
+                "interactionCardData": {
+                    "card": 47
+                }
+            },
+            {
+                "dataType": "GAME_INTERACTION_DATA_TYPE_TARGET_DATA",
+                "targetData": {
+                    "possibleTargets": [
+                        16,
+                        10,
+                        15,
+                        23,
+                        8,
+                        18
+                    ],
+                    "targetAction": "ACTION_ON_SELECTION_ATTACH_TO",
+                    "remainderAction": "ACTION_ON_SELECTION_NOTHING",
+                    "numberOfTargets": 1
+                }
+            }
+        ]
+    },
+    {
+        "type": "GAME_INTERACTION_TYPE_PERFORM_ABILITY",
+        "data": [
+            {
+                "dataType": "GAME_INTERACTION_DATA_TYPE_INTERACTION_CARD_DATA",
+                "interactionCardData": {
+                    "card": 18
+                }
+            },
+            {
+                "dataType": "GAME_INTERACTION_DATA_TYPE_ABILITY_DATA",
+                "abilityData": {
+                    "ability": {
+                        "name": "Recon Directive",
+                        "instructions": [
+                            {
+                                "instructionType": "INSTRUCTION_TYPE_REVEAL_CARDS",
+                                "data": [
+                                    {
+                                        "instructionDataType": "INSTRUCTION_DATA_TYPE_CARD_AMOUNT_DATA",
+                                        "cardAmountData": {
+                                            "amount": {
+                                                "min": 2,
+                                                "max": 2
+                                            },
+                                            "fromPosition": "CARD_POSITION_DECK"
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                "instructionType": "INSTRUCTION_TYPE_SELECT_CARDS",
+                                "data": [
+                                    {
+                                        "instructionDataType": "INSTRUCTION_DATA_TYPE_CARD_AMOUNT_DATA",
+                                        "cardAmountData": {
+                                            "amount": {
+                                                "min": 1,
+                                                "max": 1
+                                            },
+                                            "fromPosition": "CARD_POSITION_FLOATING"
+                                        }
+                                    },
+                                    {
+                                        "instructionDataType": "INSTRUCTION_DATA_TYPE_FILTER_DATA",
+                                        "filterData": {
+                                            "filter": {
+                                                "isLeaf": true,
+                                                "condition": {
+                                                    "field": "FILTER_TYPE_TRUE",
+                                                    "value": -1
+                                                }
+                                            }
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                "instructionType": "INSTRUCTION_TYPE_TAKE_TO_HAND",
+                                "data": [
+                                    {
+                                        "instructionDataType": "INSTRUCTION_DATA_TYPE_CARD_AMOUNT_DATA",
+                                        "cardAmountData": {
+                                            "amount": {
+                                                "min": -1,
+                                                "max": -1
+                                            },
+                                            "fromPosition": "CARD_POSITION_SELECTED_CARDS"
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                "instructionType": "INSTRUCTION_TYPE_PUT_IN_DECK",
+                                "data": [
+                                    {
+                                        "instructionDataType": "INSTRUCTION_DATA_TYPE_RETURN_TO_DECK_TYPE_DATA",
+                                        "returnToDeckTypeData": {
+                                            "fromPosition": "CARD_POSITION_SELECTED_CARDS_REMAINDER"
+                                        }
+                                    }
+                                ]
+                            }
+                        ],
+                        "conditions": [
+                            {
+                                "conditionType": "CONDITION_TYPE_HAS_CARDS",
+                                "data": [
+                                    {
+                                        "instructionDataType": "INSTRUCTION_DATA_TYPE_CARD_AMOUNT_DATA",
+                                        "cardAmountData": {
+                                            "amount": {
+                                                "min": 1,
+                                                "max": 60
+                                            },
+                                            "fromPosition": "CARD_POSITION_DECK"
+                                        }
+                                    }
+                                ]
+                            },
+                            {}
+                        ]
+                    }
+                }
+            }
+        ]
+    },
+    {
+        "type": "GAME_INTERACTION_TYPE_PERFORM_ABILITY",
+        "data": [
+            {
+                "dataType": "GAME_INTERACTION_DATA_TYPE_INTERACTION_CARD_DATA",
+                "interactionCardData": {
+                    "card": 16
+                }
+            },
+            {
+                "dataType": "GAME_INTERACTION_DATA_TYPE_ABILITY_DATA",
+                "abilityData": {
+                    "ability": {
+                        "name": "Recon Directive",
+                        "instructions": [
+                            {
+                                "instructionType": "INSTRUCTION_TYPE_REVEAL_CARDS",
+                                "data": [
+                                    {
+                                        "instructionDataType": "INSTRUCTION_DATA_TYPE_CARD_AMOUNT_DATA",
+                                        "cardAmountData": {
+                                            "amount": {
+                                                "min": 2,
+                                                "max": 2
+                                            },
+                                            "fromPosition": "CARD_POSITION_DECK"
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                "instructionType": "INSTRUCTION_TYPE_SELECT_CARDS",
+                                "data": [
+                                    {
+                                        "instructionDataType": "INSTRUCTION_DATA_TYPE_CARD_AMOUNT_DATA",
+                                        "cardAmountData": {
+                                            "amount": {
+                                                "min": 1,
+                                                "max": 1
+                                            },
+                                            "fromPosition": "CARD_POSITION_FLOATING"
+                                        }
+                                    },
+                                    {
+                                        "instructionDataType": "INSTRUCTION_DATA_TYPE_FILTER_DATA",
+                                        "filterData": {
+                                            "filter": {
+                                                "isLeaf": true,
+                                                "condition": {
+                                                    "field": "FILTER_TYPE_TRUE",
+                                                    "value": -1
+                                                }
+                                            }
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                "instructionType": "INSTRUCTION_TYPE_TAKE_TO_HAND",
+                                "data": [
+                                    {
+                                        "instructionDataType": "INSTRUCTION_DATA_TYPE_CARD_AMOUNT_DATA",
+                                        "cardAmountData": {
+                                            "amount": {
+                                                "min": -1,
+                                                "max": -1
+                                            },
+                                            "fromPosition": "CARD_POSITION_SELECTED_CARDS"
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                "instructionType": "INSTRUCTION_TYPE_PUT_IN_DECK",
+                                "data": [
+                                    {
+                                        "instructionDataType": "INSTRUCTION_DATA_TYPE_RETURN_TO_DECK_TYPE_DATA",
+                                        "returnToDeckTypeData": {
+                                            "fromPosition": "CARD_POSITION_SELECTED_CARDS_REMAINDER"
+                                        }
+                                    }
+                                ]
+                            }
+                        ],
+                        "conditions": [
+                            {
+                                "conditionType": "CONDITION_TYPE_HAS_CARDS",
+                                "data": [
+                                    {
+                                        "instructionDataType": "INSTRUCTION_DATA_TYPE_CARD_AMOUNT_DATA",
+                                        "cardAmountData": {
+                                            "amount": {
+                                                "min": 1,
+                                                "max": 60
+                                            },
+                                            "fromPosition": "CARD_POSITION_DECK"
+                                        }
+                                    }
+                                ]
+                            },
+                            {}
+                        ]
+                    }
+                }
+            }
+        ]
+    },
+    {
+        "type": "GAME_INTERACTION_TYPE_PERFORM_ABILITY",
+        "data": [
+            {
+                "dataType": "GAME_INTERACTION_DATA_TYPE_INTERACTION_CARD_DATA",
+                "interactionCardData": {
+                    "card": 23
+                }
+            },
+            {
+                "dataType": "GAME_INTERACTION_DATA_TYPE_ABILITY_DATA",
+                "abilityData": {
+                    "ability": {
+                        "name": "Recon Directive",
+                        "instructions": [
+                            {
+                                "instructionType": "INSTRUCTION_TYPE_REVEAL_CARDS",
+                                "data": [
+                                    {
+                                        "instructionDataType": "INSTRUCTION_DATA_TYPE_CARD_AMOUNT_DATA",
+                                        "cardAmountData": {
+                                            "amount": {
+                                                "min": 2,
+                                                "max": 2
+                                            },
+                                            "fromPosition": "CARD_POSITION_DECK"
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                "instructionType": "INSTRUCTION_TYPE_SELECT_CARDS",
+                                "data": [
+                                    {
+                                        "instructionDataType": "INSTRUCTION_DATA_TYPE_CARD_AMOUNT_DATA",
+                                        "cardAmountData": {
+                                            "amount": {
+                                                "min": 1,
+                                                "max": 1
+                                            },
+                                            "fromPosition": "CARD_POSITION_FLOATING"
+                                        }
+                                    },
+                                    {
+                                        "instructionDataType": "INSTRUCTION_DATA_TYPE_FILTER_DATA",
+                                        "filterData": {
+                                            "filter": {
+                                                "isLeaf": true,
+                                                "condition": {
+                                                    "field": "FILTER_TYPE_TRUE",
+                                                    "value": -1
+                                                }
+                                            }
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                "instructionType": "INSTRUCTION_TYPE_TAKE_TO_HAND",
+                                "data": [
+                                    {
+                                        "instructionDataType": "INSTRUCTION_DATA_TYPE_CARD_AMOUNT_DATA",
+                                        "cardAmountData": {
+                                            "amount": {
+                                                "min": -1,
+                                                "max": -1
+                                            },
+                                            "fromPosition": "CARD_POSITION_SELECTED_CARDS"
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                "instructionType": "INSTRUCTION_TYPE_PUT_IN_DECK",
+                                "data": [
+                                    {
+                                        "instructionDataType": "INSTRUCTION_DATA_TYPE_RETURN_TO_DECK_TYPE_DATA",
+                                        "returnToDeckTypeData": {
+                                            "fromPosition": "CARD_POSITION_SELECTED_CARDS_REMAINDER"
+                                        }
+                                    }
+                                ]
+                            }
+                        ],
+                        "conditions": [
+                            {
+                                "conditionType": "CONDITION_TYPE_HAS_CARDS",
+                                "data": [
+                                    {
+                                        "instructionDataType": "INSTRUCTION_DATA_TYPE_CARD_AMOUNT_DATA",
+                                        "cardAmountData": {
+                                            "amount": {
+                                                "min": 1,
+                                                "max": 60
+                                            },
+                                            "fromPosition": "CARD_POSITION_DECK"
+                                        }
+                                    }
+                                ]
+                            },
+                            {}
+                        ]
+                    }
+                }
+            }
+        ]
+    },
+    {
+        "type": "GAME_INTERACTION_TYPE_END_TURN"
+    }
+]

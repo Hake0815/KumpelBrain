@@ -34,6 +34,7 @@ struct FlatGameInteractionBatch {
     std::vector<int64_t> target_data_target_action;
     std::vector<int64_t> target_data_remainder_action;
     std::vector<int64_t> target_data_number_of_targets;
+    std::vector<int64_t> target_data_allow_multiple_times;
     FlatConditionalTargetQuery flat_conditional_target_query;
     std::vector<int64_t> interaction_card_batch_index;
     std::vector<int64_t> interaction_card_deck_id;
@@ -67,6 +68,7 @@ struct FlatGameInteractionBatchTensors {
     torch::Tensor target_data_target_action;
     torch::Tensor target_data_remainder_action;
     torch::Tensor target_data_number_of_targets;
+    torch::Tensor target_data_allow_multiple_times;
     FlatConditionalTargetQueryTensors flat_conditional_target_query;
     torch::Tensor interaction_card_batch_index;
     torch::Tensor interaction_card_deck_id;
