@@ -3,6 +3,7 @@ import torch.nn as nn
 from save_load_mixin import SaveLoadMixin
 from state_transformer import StateTransformer
 from kumpel_embedding import GameEmbedding
+from game_embedding import extract_card_embeddings
 from interaction_network import InteractionNetwork
 from selector import Selector
 from multi_head_attention import MultiHeadAttentionArgs
@@ -55,7 +56,7 @@ class KumpelNetwork(nn.Module, SaveLoadMixin):
         card_indices = card_indices.to(self.factory_kwargs["device"])
 
         transformed_state = self.state_transformer(embedded_game_state.unsqueeze(0))
-        transformed_cards = transformed_state.squeeze(0)[2:]
+        transformed_cards = extract_card_embeddings(transformed_state.squeeze(0))
 
         embedded_interactions = self.game_embedding.embedGameInteraction(
             game_interactions, card_indices, transformed_cards
@@ -65,7 +66,7 @@ class KumpelNetwork(nn.Module, SaveLoadMixin):
         )
         return (
             interaction_scores.squeeze(0),
-            transformed_state,
+            transformed_state.squeeze(0),
             embedded_interactions,
             card_indices,
         )
@@ -77,6 +78,7 @@ class KumpelNetwork(nn.Module, SaveLoadMixin):
         transformed_state: torch.Tensor,
         embedded_interaction: torch.Tensor,
         card_indices: torch.Tensor,
+        include_stop_token: bool,
     ) -> torch.Tensor:
         return self.selector(
             candidates,
@@ -84,4 +86,5 @@ class KumpelNetwork(nn.Module, SaveLoadMixin):
             transformed_state,
             embedded_interaction,
             card_indices,
+            include_stop_token,
         )

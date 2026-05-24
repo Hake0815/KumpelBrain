@@ -16,10 +16,15 @@ class TransformerLayer(nn.Module, SaveLoadMixin):
     ):
         factory_kwargs = {"device": device, "dtype": dtype}
         super().__init__()
+        self.norm_attention = nn.LayerNorm(dimension_out, **factory_kwargs)
         self.multi_head_attention = MultiHeadAttention.from_args(attention_args)
+        self.norm_feed_forward = nn.LayerNorm(dimension_out, **factory_kwargs)
         self.feed_forward = FeedForward(
             dimension_out, dimension_inner, **factory_kwargs
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return x + self.feed_forward(x + self.multi_head_attention(x, x, x))
+        normed = self.norm_attention(x)
+        x = x + self.multi_head_attention(normed, normed, normed)
+        x = x + self.feed_forward(self.norm_feed_forward(x))
+        return x

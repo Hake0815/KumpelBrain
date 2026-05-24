@@ -1,29 +1,46 @@
+"""Multi-head attention and validated configuration."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from save_load_mixin import SaveLoadMixin
 
+
+@dataclass
 class MultiHeadAttentionArgs:
+    """Attention hyperparameters.
+
+    Projections use ``d_head * nheads`` total width per Q/K/V. When that product
+    differs from ``d_q``, ``MultiHeadAttention.out_proj`` maps back to ``d_q``.
+    """
+
     d_q: int
     d_k: int
     d_v: int
     d_head: int
     nheads: int
-    dropout: float
-    bias: bool
-    device: torch.device
-    dtype: torch.dtype
+    dropout: float = 0.0
+    bias: bool = True
+    device: torch.device = field(default_factory=lambda: torch.device("cpu"))
+    dtype: torch.dtype = torch.float32
 
-    def __init__(self, d_q: int, d_k: int, d_v: int, d_head: int, nheads: int, dropout: float = 0.0, bias: bool = True, device: torch.device = torch.device("cpu"), dtype: torch.dtype = torch.float32):
-        self.d_q = d_q
-        self.d_k = d_k
-        self.d_v = d_v
-        self.d_head = d_head
-        self.nheads = nheads
-        self.dropout = dropout
-        self.bias = bias
-        self.device = device
-        self.dtype = dtype
+    def __post_init__(self) -> None:
+        for name, value in (
+            ("d_q", self.d_q),
+            ("d_k", self.d_k),
+            ("d_v", self.d_v),
+            ("d_head", self.d_head),
+            ("nheads", self.nheads),
+        ):
+            if value <= 0:
+                raise ValueError(f"{name} must be positive, got {value}")
+        if self.dropout < 0.0 or self.dropout >= 1.0:
+            raise ValueError(f"dropout must be in [0, 1), got {self.dropout}")
+
 
 class MultiHeadAttention(nn.Module, SaveLoadMixin):
     """
@@ -68,10 +85,20 @@ class MultiHeadAttention(nn.Module, SaveLoadMixin):
         d_out = d_q
         self.out_proj = nn.Linear(d_total, d_out, bias=bias, **factory_kwargs)
         self.bias = bias
-    
+
     @classmethod
-    def from_args(cls, args: MultiHeadAttentionArgs):
-        return cls(args.d_q, args.d_k, args.d_v, args.d_head, args.nheads, args.dropout, args.bias, args.device, args.dtype)
+    def from_args(cls, args: MultiHeadAttentionArgs) -> MultiHeadAttention:
+        return cls(
+            args.d_q,
+            args.d_k,
+            args.d_v,
+            args.d_head,
+            args.nheads,
+            args.dropout,
+            args.bias,
+            args.device,
+            args.dtype,
+        )
 
     def forward(
         self,
