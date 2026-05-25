@@ -38,7 +38,7 @@ def main() -> None:
     game_state_bytes = smoke_fixtures.load_smoke_game_state_bytes()
     interaction_bytes = smoke_fixtures.load_smoke_game_interaction_bytes()
 
-    device = torch.device("cpu")
+    device = torch.device("cuda")
     dtype = torch.float32
     attention_args = MultiHeadAttentionArgs(
         DIM, DIM, DIM, HEAD_DIM, NUM_HEADS, bias=False, device=device, dtype=dtype
@@ -62,6 +62,7 @@ def main() -> None:
         scores, _, _, _ = model(game_state_bytes, interaction_bytes)
 
     print(scores)
+    print(torch.argmax(scores, dim=0).item())
 
 
 if __name__ == "__main__":

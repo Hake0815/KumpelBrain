@@ -49,18 +49,23 @@ class KumpelNetwork(nn.Module, SaveLoadMixin):
     def forward(
         self, game_state: bytes, game_interactions: list[bytes]
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        compute_device = self.factory_kwargs["device"]
         embedded_game_state, card_indices = self.game_embedding.embedGameState(
             game_state
         )
-        embedded_game_state = embedded_game_state.to(self.factory_kwargs["device"])
-        card_indices = card_indices.to(self.factory_kwargs["device"])
+        embedded_game_state = embedded_game_state.to(compute_device)
 
         transformed_state = self.state_transformer(embedded_game_state.unsqueeze(0))
-        transformed_cards = extract_card_embeddings(transformed_state.squeeze(0))
+        transformed_cards_cpu = extract_card_embeddings(
+            transformed_state.squeeze(0)
+        ).cpu()
 
+        # embedGameInteraction requires deck_ids, card_indices, and cards on GameEmbedding device (CPU).
         embedded_interactions = self.game_embedding.embedGameInteraction(
-            game_interactions, card_indices, transformed_cards
-        ).to(self.factory_kwargs["device"])
+            game_interactions, card_indices, transformed_cards_cpu
+        ).to(compute_device)
+        card_indices = card_indices.to(compute_device)
+
         interaction_scores = self.interaction_network(
             embedded_interactions.unsqueeze(0), transformed_state
         )
@@ -87,4 +92,4 @@ class KumpelNetwork(nn.Module, SaveLoadMixin):
             embedded_interaction,
             card_indices,
             include_stop_token,
-        )
+        ).squeeze(0)

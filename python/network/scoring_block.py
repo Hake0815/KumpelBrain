@@ -8,7 +8,11 @@ from multi_head_attention import MultiHeadAttention, MultiHeadAttentionArgs
 
 
 class CrossAttentionScoringBlock(nn.Module, SaveLoadMixin):
-    """Pre-norm block: optional FFN, cross-attention, FFN, scalar head."""
+    """Pre-norm block: optional FFN, cross-attention, FFN, scalar head.
+
+    Callers pass batched sequences (``InteractionNetwork``, ``Selector`` use ``N=1``).
+    Feature width is ``dimension_out`` (``d_q`` in ``attention_args``).
+    """
 
     def __init__(
         self,
@@ -42,11 +46,14 @@ class CrossAttentionScoringBlock(nn.Module, SaveLoadMixin):
         key: torch.Tensor,
         value: torch.Tensor,
     ) -> torch.Tensor:
-        x = query
+        # query: (N, L_q, D) — one row per item to score (e.g. interactions or target candidates)
+        # key, value: (N, L_kv, D) — context attended over (e.g. full state, or state + selection context)
+        # Returns: (N, L_q) — one scalar score per query row
+        x = query  # (N, L_q, D)
         if self.include_pre_ffn:
-            x = x + self.first_feed_forward(self.norm_pre_ffn(x))
+            x = x + self.first_feed_forward(self.norm_pre_ffn(x))  # (N, L_q, D)
         x = x + self.multi_head_attention(
             self.norm_attention(x), key, value
-        )
-        x = x + self.post_feed_forward(self.norm_post_ffn(x))
-        return self.linear_reduce(x).squeeze(-1)
+        )  # (N, L_q, D)
+        x = x + self.post_feed_forward(self.norm_post_ffn(x))  # (N, L_q, D)
+        return self.linear_reduce(x).squeeze(-1)  # (N, L_q, 1) -> (N, L_q)

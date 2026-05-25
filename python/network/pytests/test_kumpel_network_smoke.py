@@ -39,8 +39,12 @@ def _make_attention_args(
     )
 
 
-@pytest.fixture
-def device() -> torch.device:
+@pytest.fixture(params=["cpu", "cuda"])
+def device(request) -> torch.device:
+    if request.param == "cuda":
+        if not torch.cuda.is_available():
+            pytest.skip("CUDA not available")
+        return torch.device("cuda", 0)
     return torch.device("cpu")
 
 

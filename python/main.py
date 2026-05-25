@@ -1,21 +1,21 @@
 import functools
-import os, sys
+import sys
 from threading import Event
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
+from pathlib import Path
 
-file_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)))
-if file_folder not in sys.path:
-    sys.path.insert(0, file_folder)
-
-wrapper_folder = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)),
-    "game_logic_wrappers",
-)
-if wrapper_folder not in sys.path:
-    sys.path.insert(0, wrapper_folder)
+repo_root = Path(__file__).resolve().parents[1]
+file_dir = repo_root / "python"
+wrapper_dir = repo_root / "python" / "game_logic_wrappers"
+network_dir = repo_root / "python" / "network"
+cpp_build_dir = repo_root / "cpp" / "build"
+for p in (file_dir, wrapper_dir, network_dir, cpp_build_dir):
+    s = str(p)
+    if s not in sys.path:
+        sys.path.insert(0, s)
 
 from game_player import GamePlayer
 
@@ -50,7 +50,7 @@ def run_single_game(game_num: int):
         callback_on_game_end=functools.partial(
             callback_on_game_end, event=event, uuid=game_uuid
         ),
-        enable_file_logging=True,
+        enable_file_logging=False,
     )
 
     game_player.play_game()
@@ -64,7 +64,7 @@ def run_game_batch(batch_size, first_game_num: int):
 
 
 start_time = time.time()
-num_game_batches = 10
+num_game_batches = 1
 num_games_per_batch = 10
 num_games = num_game_batches * num_games_per_batch
 max_workers = min(8, num_game_batches)  # More workers are slower
