@@ -52,7 +52,7 @@ class Selector(nn.Module, SaveLoadMixin):
         # transformed_state: (L_state, D) — player rows + card rows from state transformer
         # embedded_interaction: (D,) — one interaction embedding
         # card_indices: (num_cards,) int64 — maps deck_id -> row index in card_rows
-        # Returns: (1, L_c) — one score per candidate (batch N=1 for scoring_block)
+        # Returns: (L_c,) — one score per candidate (scoring_block runs with N=1)
         card_rows = extract_card_embeddings(transformed_state)  # (num_cards, D)
         partial_selected_cards = card_rows.index_select(
             0, card_indices.index_select(0, partial_selection)
@@ -74,4 +74,4 @@ class Selector(nn.Module, SaveLoadMixin):
             candidate_cards.unsqueeze(0),  # (1, L_c, D) query
             key_values_batch,
             key_values_batch,
-        )  # (1, L_c)
+        ).squeeze(0)  # (L_c,)

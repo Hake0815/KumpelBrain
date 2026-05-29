@@ -28,7 +28,6 @@ from multi_head_attention import MultiHeadAttentionArgs  # noqa: E402
 DIM = 12
 DIM_INNER = DIM * 4
 DIM_INTERACTION_INNER = DIM * 4
-DIM_TARGET_INNER = DIM * 4
 NUM_HEADS = 4
 NUM_LAYERS = 2
 HEAD_DIM = 6
@@ -50,8 +49,6 @@ def main() -> None:
         DIM_INTERACTION_INNER,
         attention_args,
         attention_args,
-        attention_args,
-        DIM_TARGET_INNER,
         NUM_LAYERS,
         device=device,
         dtype=dtype,

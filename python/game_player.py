@@ -10,6 +10,7 @@ import json
 from network.kumpel_network import KumpelNetwork
 from network.multi_head_attention import MultiHeadAttentionArgs
 from game_logic_wrappers.card_wrapper import CardWrapper
+from network.selector import Selector
 
 
 class GamePlayer:
@@ -71,12 +72,28 @@ class GamePlayer:
             dimension_interaction_inner,
             attention_args,
             attention_args,
-            attention_args,
-            dimension_target_inner,
             num_layers,
             device=compute_device,
         )
         self.compute_device = compute_device
+
+        selector_device = torch.device("cpu")
+        attention_args_selector = MultiHeadAttentionArgs(
+            dimension_out,
+            dimension_out,
+            dimension_out,
+            32,
+            4,
+            bias=False,
+            device=selector_device,
+        )
+        self.selector = Selector(
+            dimension_out,
+            dimension_target_inner,
+            attention_args_selector,
+            device=selector_device,
+        )
+        self.selector_device = selector_device
 
     def play_game(self) -> None:
         self.game_controller.subscribe_to_general_updates(self._on_general_update)
@@ -169,6 +186,9 @@ class GamePlayer:
                 self._evaluate_game_state(player_name, [interaction])
             )
             embedded_interaction = embedded_interactions[0]
+        transformed_state = transformed_state.to(self.selector_device)
+        embedded_interaction = embedded_interaction.to(self.selector_device)
+        card_indices = card_indices.to(self.selector_device)
         if interaction.is_with_condition_target():
             targets = self._select_targets_with_condition(
                 interaction, transformed_state, embedded_interaction, card_indices
@@ -196,18 +216,18 @@ class GamePlayer:
                 break
             candidates = torch.tensor(
                 self._cards_to_deck_ids(cadidate_cards),
-                device=self.compute_device,
+                device=self.selector_device,
                 dtype=torch.long,
             )
             current_selection_tensor = torch.tensor(
                 self._cards_to_deck_ids(current_selection),
-                device=self.compute_device,
+                device=self.selector_device,
                 dtype=torch.long,
             )
             condition_fulfilled = interaction.is_target_condition_fulfilled(
                 current_selection
             )
-            target_scores = self.network.select_target(
+            target_scores = self.selector(
                 candidates,
                 current_selection_tensor,
                 transformed_state,
@@ -233,15 +253,15 @@ class GamePlayer:
         for _ in range(interaction.get_number_of_targets()):
             candidates = torch.tensor(
                 self._cards_to_deck_ids(possible_targets),
-                device=self.compute_device,
+                device=self.selector_device,
                 dtype=torch.long,
             )
             current_selection_tensor = torch.tensor(
                 self._cards_to_deck_ids(current_selection),
-                device=self.compute_device,
+                device=self.selector_device,
                 dtype=torch.long,
             )
-            target_scores = self.network.select_target(
+            target_scores = self.selector(
                 candidates,
                 current_selection_tensor,
                 transformed_state,

@@ -5,7 +5,6 @@ from state_transformer import StateTransformer
 from kumpel_embedding import GameEmbedding
 from game_embedding import extract_card_embeddings
 from interaction_network import InteractionNetwork
-from selector import Selector
 from multi_head_attention import MultiHeadAttentionArgs
 
 
@@ -17,8 +16,6 @@ class KumpelNetwork(nn.Module, SaveLoadMixin):
         dimension_interaction_inner: int,
         state_attention_args: MultiHeadAttentionArgs,
         interaction_attention_args: MultiHeadAttentionArgs,
-        target_attention_args: MultiHeadAttentionArgs,
-        dimension_target_inner: int,
         num_layers: int,
         device: torch.device | None = None,
         dtype: torch.dtype = torch.float32,
@@ -38,12 +35,6 @@ class KumpelNetwork(nn.Module, SaveLoadMixin):
             dimension_interaction_inner,
             interaction_attention_args,
             **self.factory_kwargs
-        )
-        self.selector = Selector(
-            dimension_out,
-            dimension_target_inner,
-            target_attention_args,
-            **self.factory_kwargs,
         )
 
     def forward(
@@ -75,21 +66,3 @@ class KumpelNetwork(nn.Module, SaveLoadMixin):
             embedded_interactions,
             card_indices,
         )
-
-    def select_target(
-        self,
-        candidates: torch.Tensor,
-        partial_selection: torch.Tensor,
-        transformed_state: torch.Tensor,
-        embedded_interaction: torch.Tensor,
-        card_indices: torch.Tensor,
-        include_stop_token: bool,
-    ) -> torch.Tensor:
-        return self.selector(
-            candidates,
-            partial_selection,
-            transformed_state,
-            embedded_interaction,
-            card_indices,
-            include_stop_token,
-        ).squeeze(0)

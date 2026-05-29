@@ -25,7 +25,6 @@ from multi_head_attention import MultiHeadAttentionArgs  # noqa: E402
 DIM = 32
 DIM_INNER = 16
 DIM_INTERACTION_INNER = 16
-DIM_TARGET_INNER = 16
 NUM_HEADS = 4
 NUM_LAYERS = 2
 HEAD_DIM = 16
@@ -60,8 +59,6 @@ def test_kumpel_network_smoke_forward(device: torch.device) -> None:
         DIM_INTERACTION_INNER,
         attention_args,
         attention_args,
-        attention_args,
-        DIM_TARGET_INNER,
         NUM_LAYERS,
         device=device,
         dtype=dtype,
