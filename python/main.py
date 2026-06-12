@@ -4,6 +4,7 @@ import os
 import sys
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from multiprocessing import get_context
+from queue import Empty, Queue
 from threading import Event, Thread
 import time
 import uuid
@@ -38,6 +39,13 @@ from inference_service import (
 from network.kumpel_network import KumpelNetwork
 from network.selector import Selector
 from profiling import profiling_enabled
+
+_GAME_PROGRESS_KWARGS = {
+    "unit": "game",
+    "desc": "Games",
+    # Average rate since start (not EMA of the last update burst).
+    "smoothing": 0,
+}
 
 
 def create_deck_list():
@@ -141,9 +149,34 @@ def _resolve_num_games() -> int:
     return max(1, num_game_batches * num_games_per_batch)
 
 
+def _physical_core_count() -> int:
+    """Return physical CPU cores when sysfs topology is available."""
+    topology_root = Path("/sys/devices/system/cpu")
+    if not topology_root.is_dir():
+        return os.cpu_count() or 1
+
+    core_ids: set[tuple[int, int]] = set()
+    for cpu_dir in topology_root.glob("cpu[0-9]*"):
+        topology_dir = cpu_dir / "topology"
+        core_id_path = topology_dir / "core_id"
+        package_id_path = topology_dir / "physical_package_id"
+        if not core_id_path.is_file() or not package_id_path.is_file():
+            continue
+        try:
+            core_id = int(core_id_path.read_text().strip())
+            package_id = int(package_id_path.read_text().strip())
+        except ValueError:
+            continue
+        core_ids.add((package_id, core_id))
+
+    if core_ids:
+        return len(core_ids)
+    return os.cpu_count() or 1
+
+
 def _resolve_workers(num_games: int) -> int:
-    cpu_count = os.cpu_count() or 1
-    default_workers = min(cpu_count, num_games)
+    physical_cores = _physical_core_count()
+    default_workers = min(physical_cores, num_games)
     workers_env = os.environ.get("KUMPEL_WORKERS", "").strip()
     workers = int(workers_env) if workers_env else default_workers
     return max(1, min(workers, num_games))
@@ -163,7 +196,7 @@ def _resolve_coordinator_settings(num_games: int) -> tuple[int, int, float]:
 
 def _run_games_in_process_pool(num_games: int, workers: int) -> None:
     ctx = get_context("spawn")
-    with tqdm(total=num_games, unit="game", desc="Games") as bar:
+    with tqdm(total=num_games, **_GAME_PROGRESS_KWARGS) as bar:
         with ProcessPoolExecutor(
             max_workers=workers,
             mp_context=ctx,
@@ -179,7 +212,7 @@ def _run_games_in_process_pool(num_games: int, workers: int) -> None:
 
 def _run_games_serial(num_games: int) -> None:
     _ensure_main_models()
-    with tqdm(total=num_games, unit="game", desc="Games") as bar:
+    with tqdm(total=num_games, **_GAME_PROGRESS_KWARGS) as bar:
         for i in range(num_games):
             run_single_game(i)
             bar.update(1)
@@ -187,7 +220,7 @@ def _run_games_serial(num_games: int) -> None:
 
 def _run_games_coordinator(num_games: int) -> None:
     max_batch, concurrent_games, linger_ms = _resolve_coordinator_settings(num_games)
-    network, selector, device = create_self_play_models()
+    network, selector, device = create_self_play_models(embed_on_compute_device=True)
     service = BatchedInferenceService(
         network,
         selector,
@@ -196,51 +229,60 @@ def _run_games_coordinator(num_games: int) -> None:
         linger_ms=linger_ms,
     )
     inference = BatchedInferenceClient(service)
+    completion_queue: Queue[None] = Queue()
 
-    def _run_one_game(done_event: Event) -> None:
+    def _run_one_game() -> None:
         game_uuid = uuid.uuid4()
         service.register_game()
-        game_player = GamePlayer(
-            deck_list1=create_deck_list(),
-            deck_list2=create_deck_list(),
-            player1_name="player1",
-            player2_name="player2",
-            game_uuid=game_uuid,
-            callback_on_game_end=lambda _msg: done_event.set(),
-            inference=inference,
-            compute_device=device,
-            enable_file_logging=False,
-        )
-        game_player.play_game()
-        done_event.wait()
+        try:
+            game_player = GamePlayer(
+                deck_list1=create_deck_list(),
+                deck_list2=create_deck_list(),
+                player1_name="player1",
+                player2_name="player2",
+                game_uuid=game_uuid,
+                callback_on_game_end=lambda _msg: None,
+                inference=inference,
+                compute_device=device,
+                enable_file_logging=False,
+            )
+            game_player.play_game()
+        finally:
+            completion_queue.put(None)
 
-    with tqdm(total=num_games, unit="game", desc="Games") as bar:
-        active_threads: list[tuple[Thread, Event]] = []
+    with tqdm(total=num_games, **_GAME_PROGRESS_KWARGS) as bar:
+        active_threads: list[Thread] = []
         next_game = 0
         finished = 0
 
+        def _launch_game() -> None:
+            nonlocal next_game
+            thread = Thread(
+                target=_run_one_game,
+                name=f"game-{next_game}",
+                daemon=True,
+            )
+            thread.start()
+            active_threads.append(thread)
+            next_game += 1
+
+        while next_game < num_games and len(active_threads) < concurrent_games:
+            _launch_game()
+
         while finished < num_games:
-            while next_game < num_games and len(active_threads) < concurrent_games:
-                done_event = Event()
-                thread = Thread(
-                    target=_run_one_game,
-                    args=(done_event,),
-                    name=f"game-{next_game}",
-                    daemon=True,
-                )
-                thread.start()
-                active_threads.append((thread, done_event))
-                next_game += 1
-
-            for thread, done_event in list(active_threads):
-                if done_event.is_set():
-                    thread.join(timeout=1.0)
-                    active_threads.remove((thread, done_event))
+            completion_queue.get()
+            finished += 1
+            while True:
+                try:
+                    completion_queue.get_nowait()
                     finished += 1
-                    bar.update(1)
+                except Empty:
+                    break
 
-            if active_threads:
-                time.sleep(0.01)
+            bar.update(finished - bar.n)
+            active_threads = [thread for thread in active_threads if thread.is_alive()]
+            while next_game < num_games and len(active_threads) < concurrent_games:
+                _launch_game()
 
     service.shutdown()
 

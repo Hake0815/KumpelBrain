@@ -57,8 +57,9 @@ python python/main.py
 
 - Many games run on **threads** in one process.
 - All neural-network calls go through `BatchedInferenceService`, which groups move-evaluation and target-scoring requests into batches.
-- C++ embedding runs on **CPU**; transformer, interaction network, and selector run on `KUMPEL_DEVICE`.
+- C++ embedding runs on **`KUMPEL_DEVICE`** (same as transformer/selector) so batched GPU inference avoids CPU embedding serialization and host/device copies.
 - **Known limitation:** pythonnet holds the GIL during C# callbacks, so game logic is largely serialized across threads. Throughput gains come from batched inference, not parallel game logic.
+- **Batching matters:** GPU embedding pays off when `KUMPEL_BATCH_MAX` and `KUMPEL_CONCURRENT_GAMES` keep batches full. Single-game (B=1) inference on GPU is usually slower than CPU process pool.
 
 For coordinator mode, set `KUMPEL_CONCURRENT_GAMES` ≥ `KUMPEL_BATCH_MAX` so batches stay full.
 
@@ -97,7 +98,15 @@ Effective game count:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `KUMPEL_PARALLEL` | `process` | Parallel mode (see table above). Accepted values: `process`, `processes`, `1`, `true` (process pool); `coordinator`, `coord` (batched coordinator); `serial`, `thread`, `threads` (serial). |
-| `KUMPEL_WORKERS` | `min(cpu_count, num_games)` | Process-pool worker count. Capped at `num_games`. Ignored in coordinator mode. |
+| `KUMPEL_WORKERS` | physical core count (capped at `num_games`) | Process-pool worker count. On Linux, defaults to **physical** cores detected via sysfs, not logical/hyperthread count. Ignored in coordinator mode. |
+
+**Tuning `KUMPEL_WORKERS`:** the default matches physical cores (e.g. 8 on a Ryzen 7 5700X). Because workers alternate C# game logic with CPU inference, the optimum can be slightly above core count. Try a sweep when benchmarking:
+
+```bash
+for W in 8 10 12 16; do
+  KUMPEL_PARALLEL=process KUMPEL_NUM_GAMES=200 KUMPEL_WORKERS=$W KUMPEL_DEVICE=cpu python python/main.py
+done
+```
 
 ### Coordinator batching
 
@@ -113,9 +122,14 @@ Only used when `KUMPEL_PARALLEL=coordinator`.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `KUMPEL_DEVICE` | `cpu` | Compute device for transformer, interaction network, and selector. Common values: `cpu`, `cuda`, `gpu` (alias for CUDA). Any string accepted by `torch.device` works (e.g. `cuda:0`). |
+| `KUMPEL_DEVICE` | `cpu` | Compute device for embedding (coordinator mode only), transformer, interaction network, and selector. Common values: `cpu`, `cuda`, `gpu` (alias for CUDA). Any string accepted by `torch.device` works (e.g. `cuda:0`). |
 
-Embedding (`embedGameState` / `embedGameInteraction`) always runs on CPU in the current implementation.
+**Embedding device by mode:**
+
+| Mode | Embedding device |
+|------|------------------|
+| `coordinator` | `KUMPEL_DEVICE` (batched on GPU when `cuda`) |
+| `process` / `serial` | CPU (each worker embeds on CPU, then runs transformer on `KUMPEL_DEVICE`) |
 
 ### Profiling
 
@@ -135,13 +149,13 @@ In process-pool **child** processes, `main.py` sets `OMP_NUM_THREADS=1` and `MKL
 python python/main.py
 ```
 
-**100 games on 8 CPU workers:**
+**100 games on default physical-core workers (no `KUMPEL_WORKERS` override):**
 
 ```bash
-KUMPEL_NUM_GAMES=100 KUMPEL_WORKERS=8 KUMPEL_DEVICE=cpu python python/main.py
+KUMPEL_NUM_GAMES=100 KUMPEL_DEVICE=cpu python python/main.py
 ```
 
-**GPU batched self-play (recommended for throughput):**
+**GPU batched self-play (coordinator; embedding + transformer on GPU):**
 
 ```bash
 KUMPEL_PARALLEL=coordinator \
@@ -169,6 +183,29 @@ python python/main.py
 KUMPEL_NUM_BATCHES=5 KUMPEL_GAMES_PER_BATCH=20 python python/main.py
 # Plays 100 games
 ```
+
+## Benchmarking throughput
+
+Compare coordinator (batched GPU embedding) vs process pool (parallel CPU embedding):
+
+```bash
+# Coordinator + GPU embedding (keep batches full)
+KUMPEL_PARALLEL=coordinator \
+KUMPEL_NUM_GAMES=1000 \
+KUMPEL_CONCURRENT_GAMES=64 \
+KUMPEL_BATCH_MAX=16 \
+KUMPEL_BATCH_LINGER_MS=2 \
+KUMPEL_DEVICE=cuda \
+python python/main.py
+
+# Process pool on CPU (default physical-core workers)
+KUMPEL_PARALLEL=process \
+KUMPEL_NUM_GAMES=1000 \
+KUMPEL_DEVICE=cpu \
+python python/main.py
+```
+
+Use `KUMPEL_PROFILE=1` on a single serial game to see whether embedding or transformer dominates before choosing a mode.
 
 ## Output
 
