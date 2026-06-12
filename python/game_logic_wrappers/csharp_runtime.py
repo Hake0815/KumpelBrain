@@ -7,7 +7,7 @@ bin_folder = os.path.join(
     "..",
     "gamecore",
     "bin",
-    "Debug",
+    "Release",
     "net10.0",
 )
 if bin_folder not in sys.path:

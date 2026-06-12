@@ -1,4 +1,4 @@
-"""Unit tests for KumpelNetwork target selection and tensor contracts."""
+"""Unit tests for KumpelNetwork and Selector tensor contracts."""
 
 from __future__ import annotations
 
@@ -20,6 +20,7 @@ for _p in (_CPP_BUILD, _PYTESTS_DIR, _NETWORK_SRC_DIR):
 
 import kumpel_network  # noqa: E402
 import kumpel_network_json_fixtures as smoke_fixtures  # noqa: E402
+from selector import Selector  # noqa: E402
 from game_embedding import NUM_PLAYER_STATE_ROWS  # noqa: E402
 from multi_head_attention import MultiHeadAttentionArgs  # noqa: E402
 
@@ -49,14 +50,25 @@ def _make_model(device: torch.device, dtype: torch.dtype = torch.float32):
         DIM_INTERACTION_INNER,
         attention_args,
         attention_args,
-        attention_args,
-        DIM_TARGET_INNER,
         NUM_LAYERS,
         device=device,
         dtype=dtype,
     )
     model.eval()
     return model
+
+
+def _make_selector(device: torch.device, dtype: torch.dtype = torch.float32):
+    attention_args = _make_attention_args(device, dtype)
+    selector = Selector(
+        DIM,
+        DIM_TARGET_INNER,
+        attention_args,
+        device=device,
+        dtype=dtype,
+    )
+    selector.eval()
+    return selector
 
 
 def _synthetic_tensors(device: torch.device, dtype: torch.dtype):
@@ -95,10 +107,11 @@ def test_forward_returns_2d_transformed_state(device: torch.device) -> None:
     assert card_indices.dim() == 1
 
 
-def test_select_target_accepts_forward_output(device: torch.device) -> None:
+def test_selector_accepts_forward_output(device: torch.device) -> None:
     game_state_bytes = smoke_fixtures.load_smoke_game_state_bytes()
     interaction_bytes = smoke_fixtures.load_smoke_game_interaction_bytes()
     model = _make_model(device)
+    selector = _make_selector(device)
 
     with torch.inference_mode():
         _, transformed_state, embedded_interactions, card_indices = model(
@@ -107,7 +120,7 @@ def test_select_target_accepts_forward_output(device: torch.device) -> None:
         first_interaction = embedded_interactions[0]
         candidates = card_indices[:3]
         partial_selection = torch.tensor([], device=device, dtype=torch.long)
-        target_scores = model.select_target(
+        target_scores = selector(
             candidates,
             partial_selection,
             transformed_state,
@@ -124,7 +137,7 @@ def test_select_target_accepts_forward_output(device: torch.device) -> None:
 def test_selector_synthetic_shapes(
     device: torch.device, include_stop_token: bool
 ) -> None:
-    model = _make_model(device)
+    selector = _make_selector(device)
     transformed_state, card_indices, embedded_interaction = _synthetic_tensors(
         device, torch.float32
     )
@@ -132,7 +145,7 @@ def test_selector_synthetic_shapes(
     partial_selection = torch.tensor([1], device=device, dtype=torch.long)
 
     with torch.inference_mode():
-        scores = model.select_target(
+        scores = selector(
             candidates,
             partial_selection,
             transformed_state,
@@ -146,7 +159,7 @@ def test_selector_synthetic_shapes(
 
 
 def test_selector_empty_partial_selection(device: torch.device) -> None:
-    model = _make_model(device)
+    selector = _make_selector(device)
     transformed_state, card_indices, embedded_interaction = _synthetic_tensors(
         device, torch.float32
     )
@@ -154,7 +167,7 @@ def test_selector_empty_partial_selection(device: torch.device) -> None:
     partial_selection = torch.tensor([], device=device, dtype=torch.long)
 
     with torch.inference_mode():
-        scores = model.select_target(
+        scores = selector(
             candidates,
             partial_selection,
             transformed_state,

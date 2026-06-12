@@ -1,0 +1,3 @@
+[submodule "KumpelTCG"]
+	path = KumpelTCG
+	url = git@github.com:Hake0815/KumpelTCG.git

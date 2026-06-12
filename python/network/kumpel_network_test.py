@@ -28,7 +28,6 @@ from multi_head_attention import MultiHeadAttentionArgs  # noqa: E402
 DIM = 12
 DIM_INNER = DIM * 4
 DIM_INTERACTION_INNER = DIM * 4
-DIM_TARGET_INNER = DIM * 4
 NUM_HEADS = 4
 NUM_LAYERS = 2
 HEAD_DIM = 6
@@ -38,7 +37,7 @@ def main() -> None:
     game_state_bytes = smoke_fixtures.load_smoke_game_state_bytes()
     interaction_bytes = smoke_fixtures.load_smoke_game_interaction_bytes()
 
-    device = torch.device("cpu")
+    device = torch.device("cuda")
     dtype = torch.float32
     attention_args = MultiHeadAttentionArgs(
         DIM, DIM, DIM, HEAD_DIM, NUM_HEADS, bias=False, device=device, dtype=dtype
@@ -50,8 +49,6 @@ def main() -> None:
         DIM_INTERACTION_INNER,
         attention_args,
         attention_args,
-        attention_args,
-        DIM_TARGET_INNER,
         NUM_LAYERS,
         device=device,
         dtype=dtype,
@@ -62,6 +59,7 @@ def main() -> None:
         scores, _, _, _ = model(game_state_bytes, interaction_bytes)
 
     print(scores)
+    print(torch.argmax(scores, dim=0).item())
 
 
 if __name__ == "__main__":

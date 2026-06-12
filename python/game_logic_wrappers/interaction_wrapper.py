@@ -4,7 +4,7 @@ import clr
 clr.AddReference("Google.Protobuf")
 from Google.Protobuf import JsonFormatter
 
-from card_wrapper import CardWrapper
+from card_wrapper import CardWrapper, convert_card_wrapper_list
 from gamecore.game.interaction import (
     GameInteraction,
     ConditionalTargetData,
@@ -44,13 +44,30 @@ class InteractionWrapper:
                     self.interaction.Data[GameInteractionDataType.ConditionalTargetData]
                 ).PossibleTargets
             ]
+        else:
+            return [
+                CardWrapper(card)
+                for card in TargetData(
+                    self.interaction.Data[GameInteractionDataType.TargetData]
+                ).PossibleTargets
+            ]
+    
+    def get_candidates_for_partial_selection(self, partial_selection: list[CardWrapper]) -> list[CardWrapper]:
+        conditional_target_data = ConditionalTargetData(self.interaction.Data[GameInteractionDataType.ConditionalTargetData])
+        candidates = conditional_target_data.GetCandidatesGivenPartialSelection(convert_card_wrapper_list(partial_selection))
+        return [CardWrapper(card) for card in candidates]
 
-        return [
-            CardWrapper(card)
-            for card in TargetData(
-                self.interaction.Data[GameInteractionDataType.TargetData]
-            ).PossibleTargets
-        ]
+
+    def is_multi_select(self) -> bool:
+        if self.is_with_condition_target():
+            return ConditionalTargetData(
+                    self.interaction.Data[GameInteractionDataType.ConditionalTargetData]
+                ).AllowMultipleTimes
+        else:
+            return TargetData(
+                    self.interaction.Data[GameInteractionDataType.TargetData]
+                ).AllowMultipleTimes
+            
 
     def is_target_condition_fulfilled(self, targets: list[CardWrapper]) -> bool:
         condition = ConditionalTargetData(
@@ -85,3 +102,7 @@ class InteractionWrapper:
     
     def to_json(self) -> str:
         return JsonFormatter.Default.Format(self.interaction.ToSerializable())
+
+    def to_bytes(self) -> bytes:
+        return bytes(self.interaction.ToByteArray())
+    
