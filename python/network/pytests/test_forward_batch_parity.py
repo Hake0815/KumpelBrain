@@ -167,8 +167,9 @@ def test_selector_forward_batch_parity(device: torch.device) -> None:
         ]
 
     for i in range(2):
+        n_scores = candidates[i].size(0) + (1 if include_stop[i] else 0)
         torch.testing.assert_close(
-            batched[i, : candidates[i].size(0)],
+            batched[i, :n_scores],
             individual[i],
             rtol=1e-5,
             atol=1e-5,

@@ -401,5 +401,6 @@ class BatchedInferenceService:
         results: list[torch.Tensor] = []
         for i, request in enumerate(batch):
             n_candidates = request.candidates.size(0)
-            results.append(batched_scores[i, :n_candidates])
+            n_scores = n_candidates + (1 if request.include_stop_token else 0)
+            results.append(batched_scores[i, :n_scores])
         return results

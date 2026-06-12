@@ -154,7 +154,8 @@ def test_selector_synthetic_shapes(
             include_stop_token=include_stop_token,
         )
 
-    assert scores.shape == torch.Size([candidates.numel()])
+    expected_len = candidates.numel() + (1 if include_stop_token else 0)
+    assert scores.shape == torch.Size([expected_len])
     assert torch.isfinite(scores).all()
 
 
@@ -176,4 +177,4 @@ def test_selector_empty_partial_selection(device: torch.device) -> None:
             include_stop_token=True,
         )
 
-    assert scores.shape == torch.Size([2])
+    assert scores.shape == torch.Size([3])

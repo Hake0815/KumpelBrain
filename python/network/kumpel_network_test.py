@@ -37,7 +37,9 @@ def main() -> None:
     game_state_bytes = smoke_fixtures.load_smoke_game_state_bytes()
     interaction_bytes = smoke_fixtures.load_smoke_game_interaction_bytes()
 
-    device = torch.device("cuda")
+    device = (
+        torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+    )
     dtype = torch.float32
     attention_args = MultiHeadAttentionArgs(
         DIM, DIM, DIM, HEAD_DIM, NUM_HEADS, bias=False, device=device, dtype=dtype

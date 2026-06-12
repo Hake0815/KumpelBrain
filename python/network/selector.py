@@ -70,7 +70,9 @@ class Selector(nn.Module, SaveLoadMixin):
             ]
         )
         if include_stop_token:
-            key_values = torch.cat([key_values, self.stop_token(self._embed_index)])
+            candidate_cards = torch.cat(
+                [candidate_cards, self.stop_token(self._embed_index)]
+            )
         return candidate_cards, key_values
 
     def forward(
@@ -87,7 +89,7 @@ class Selector(nn.Module, SaveLoadMixin):
         # transformed_state: (L_state, D) — player rows + card rows from state transformer
         # embedded_interaction: (D,) — one interaction embedding
         # card_indices: (L,) or (1, L) int64 — maps deck_id -> row index in card_rows
-        # Returns: (L_c,) — one score per candidate (scoring_block runs with N=1)
+        # Returns: (L_c,) or (L_c + 1,) — one score per candidate, plus stop when requested
         candidate_cards, key_values = self._build_candidate_and_context(
             candidates,
             partial_selection,
