@@ -64,8 +64,10 @@ struct CardFeatures {
 
     AdjacencyMatrices adjacency_matrices;
     InstructionsAndConditions instructions_and_conditions;
-    /// Shape [max_deck_id + 1]; `card_indices[deck_id]` is the batch row for that deck id, or -1 if absent.
-    torch::Tensor card_indices;
+    /// Per-game deck-id lookup rows; row g has length max_deck_id_g+1, entry is local card row or -1.
+    std::vector<std::vector<int64_t>> per_game_card_indices;
+    /// Cumulative card counts per game; size B+1.
+    std::vector<int64_t> card_segment_offsets;
 };
 
 /// Staged H2D buffers. All int64 scalar/index vectors packed into `int64_buf`;
@@ -100,8 +102,9 @@ struct CardEmbeddingImpl : torch::nn::Module, SaveLoadMixin<CardEmbeddingImpl> {
                       const SharedInstructionEmbeddings& shared_instruction_embeddings,
                       torch::Device device = torch::kCPU, torch::Dtype dtype = torch::kFloat);
 
-    std::tuple<torch::Tensor, AdjacencyMatrices, torch::Tensor> forward(
-        const google::protobuf::RepeatedPtrField<ProtoBufCardState>& card_batch);
+    std::tuple<torch::Tensor, AdjacencyMatrices, torch::Tensor, torch::Tensor> forward(
+        const google::protobuf::RepeatedPtrField<ProtoBufCardState>& card_batch,
+        const std::vector<int64_t>& card_segment_offsets);
 
    private:
     int64_t dimension_out_;
@@ -134,7 +137,8 @@ struct CardEmbeddingImpl : torch::nn::Module, SaveLoadMixin<CardEmbeddingImpl> {
 
     void register_card_specific_modules(torch::Device device, torch::Dtype dtype);
 
-    CardFeatures collect_card_features(const google::protobuf::RepeatedPtrField<ProtoBufCardState>& card_batch);
+    CardFeatures collect_card_features(const google::protobuf::RepeatedPtrField<ProtoBufCardState>& card_batch,
+                                       const std::vector<int64_t>& card_segment_offsets);
 
     void append_card_instructions_and_conditions(const ProtoBufCard& card,
                                                  InstructionsAndConditions& instructions_and_conditions,

@@ -8,6 +8,7 @@
 #include "network/include/AttackEmbedding.h"
 #include "network/include/ConditionEmbedding.h"
 #include "network/include/GameInteractionFlatten.h"
+#include "network/include/GameStateBatch.h"
 #include "network/include/InstructionDataEmbedding.h"
 #include "network/include/InstructionEmbedding.h"
 #include "network/include/MultiHeadAttention.h"
@@ -27,8 +28,9 @@ struct GameInteractionEmbeddingImpl : torch::nn::Module, SaveLoadMixin<GameInter
     /// \param game_interactions The game interactions to embed.
     /// \param card_indices A tensor holding the indices of cards, where the index is the deck id.
     /// \param cards The cards of the state.
-    torch::Tensor forward(const std::vector<ProtoBufGameInteraction>& game_interactions, torch::Tensor card_indices,
-                          torch::Tensor cards);
+    std::pair<torch::Tensor, torch::Tensor> forward(
+        const std::vector<std::vector<ProtoBufGameInteraction>>& game_interactions_per_game,
+        torch::Tensor card_indices, torch::Tensor cards);
 
    private:
     void register_game_interaction_specific_modules(torch::Device device, torch::Dtype dtype);
@@ -36,8 +38,8 @@ struct GameInteractionEmbeddingImpl : torch::nn::Module, SaveLoadMixin<GameInter
     torch::Tensor embed_conditional_target_queries(const FlatConditionalTargetQueryTensors& flat);
     torch::Tensor embed_target_action(const torch::Tensor& target_action);
     torch::Tensor embed_remainder_action(const torch::Tensor& remainder_action);
-    torch::Tensor embed_target_data(const FlatGameInteractionBatchTensors& tensors, torch::Tensor card_indices,
-                                    torch::Tensor cards);
+    torch::Tensor embed_target_data(const FlatGameInteractionBatchTensors& tensors,
+                                    const BatchedCardResolution& resolution);
     torch::Tensor embed_attack_energy_costs(const InstructionsAndConditions& instructions_and_conditions);
     torch::Tensor embed_attacks(const std::pair<torch::Tensor, torch::Tensor>& embedded_instructions_pair,
                                 const std::vector<int64_t>& instruction_attack_indices,

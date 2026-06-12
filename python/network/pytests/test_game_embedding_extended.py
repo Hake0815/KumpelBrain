@@ -35,9 +35,10 @@ def test_game_embedding_extended_interaction_smoke(case_id: str, device: torch.d
     model = kumpel_embedding.GameEmbedding(DIM, device=device, dtype=torch.float32)
     model.eval()
     with torch.inference_mode():
-        state_emb, indices = model.embedGameState(game_state_bytes)
+        state_emb, _mask, indices = model.embedGameState([game_state_bytes])
         cards = fixtures.extract_card_embeddings(state_emb)
-        out = model.embedGameInteraction(interaction_bytes, indices, cards)
+        out, _interaction_mask = model.embedGameInteraction([interaction_bytes], indices, cards)
+    out = out[0]
     assert out.ndim == 2
     assert out.shape[1] == DIM
     assert out.shape[0] == len(interaction_bytes)
@@ -49,7 +50,7 @@ def test_game_embedding_sparse_deck_state_smoke(device: torch.device) -> None:
     model = kumpel_embedding.GameEmbedding(DIM, device=device, dtype=torch.float32)
     model.eval()
     with torch.inference_mode():
-        embedding, card_indices = model.embedGameState(payload)
-    assert embedding.shape[0] == 2 + 3
-    assert card_indices.shape[0] >= 13
+        embedding, _mask, card_indices = model.embedGameState([payload])
+    assert embedding.shape == (1, 2 + 3, DIM)
+    assert card_indices.shape[1] >= 13
     assert torch.isfinite(embedding).all()

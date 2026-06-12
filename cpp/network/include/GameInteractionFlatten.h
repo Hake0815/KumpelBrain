@@ -23,6 +23,10 @@ struct FlatConditionalTargetQuery {
 };
 
 struct FlatGameInteractionBatch {
+    /// Game index in the outer batch for each flattened interaction.
+    std::vector<int64_t> interaction_game_indices;
+    /// Cumulative interaction counts per game; size B+1.
+    std::vector<int64_t> interaction_segment_offsets;
     std::vector<int64_t> game_interaction_types;
     std::vector<int64_t> game_interaction_data_types;
     std::vector<int64_t> game_interaction_data_type_offsets;
@@ -57,6 +61,8 @@ struct FlatConditionalTargetQueryTensors {
 };
 
 struct FlatGameInteractionBatchTensors {
+    torch::Tensor interaction_game_indices;
+    torch::Tensor interaction_segment_offsets;
     torch::Tensor game_interaction_types;
     torch::Tensor game_interaction_data_types;
     torch::Tensor game_interaction_data_type_offsets;
@@ -77,7 +83,8 @@ struct FlatGameInteractionBatchTensors {
     torch::Tensor select_from;
 };
 
-FlatGameInteractionBatch flatten_game_interaction_batch(const std::vector<ProtoBufGameInteraction>& game_interactions);
+FlatGameInteractionBatch flatten_game_interaction_batch(
+    const std::vector<std::vector<ProtoBufGameInteraction>>& game_interactions_per_game);
 
 FlatGameInteractionBatchTensors flat_game_interaction_batch_to_tensors(const FlatGameInteractionBatch& flat,
                                                                        torch::Device device = torch::kCPU);

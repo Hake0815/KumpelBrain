@@ -1,5 +1,10 @@
 #include "../include/CardStateEmbedding.h"
 
+#include <algorithm>
+
+#include "../include/GameStateBatch.h"
+#include "../include/TensorUtils.h"
+
 namespace {
 
 torch::Tensor coo_row_degree_clamped(const torch::Tensor& sparse_coo) {
@@ -93,12 +98,21 @@ void CardStateEmbeddingImpl::register_card_state_specific_modules(torch::Device 
     }
 }
 
-std::pair<torch::Tensor, torch::Tensor> CardStateEmbeddingImpl::forward(
-    const google::protobuf::RepeatedPtrField<ProtoBufCardState>& card_state_batch) {
-    auto [embedded_cards, adj, card_indices] = card_embedding_->forward(card_state_batch);
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> CardStateEmbeddingImpl::forward(
+    const google::protobuf::RepeatedPtrField<ProtoBufCardState>& card_state_batch,
+    const std::vector<int64_t>& card_segment_offsets) {
+    const int64_t num_games =
+        card_segment_offsets.empty() ? 0 : static_cast<int64_t>(card_segment_offsets.size()) - 1;
     if (card_state_batch.empty()) {
-        return {embedded_cards, card_indices};
+        auto options = torch::TensorOptions().device(device_).dtype(dtype_);
+        auto mask_options = torch::TensorOptions().device(device_).dtype(torch::kBool);
+        std::vector<std::vector<int64_t>> empty_indices(static_cast<size_t>(num_games));
+        return {torch::empty({num_games, 0, dimension_out_}, options), torch::empty({num_games, 0}, mask_options),
+                build_batched_card_indices(empty_indices, device_)};
     }
+
+    auto [embedded_cards, adj, card_indices, segment_offsets_tensor] =
+        card_embedding_->forward(card_state_batch, card_segment_offsets);
     auto position_vec = position_embedding_->forward(card_state_batch);
 
     auto gate = torch::sigmoid(card_position_gate_(torch::cat({embedded_cards, position_vec}, 1)));
@@ -112,7 +126,15 @@ std::pair<torch::Tensor, torch::Tensor> CardStateEmbeddingImpl::forward(
         h = torch::relu(aggregate_one_layer(h, adj, layer_weights)) + h;
     }
 
-    return {h, card_indices};
+    int64_t max_cards_per_game = 0;
+    for (int64_t g = 0; g < num_games; ++g) {
+        max_cards_per_game =
+            std::max(max_cards_per_game,
+                     card_segment_offsets[static_cast<size_t>(g + 1)] - card_segment_offsets[static_cast<size_t>(g)]);
+    }
+    auto [padded_cards, card_mask] =
+        tensor_utils::pad_by_offsets(h, segment_offsets_tensor, dimension_out_, max_cards_per_game);
+    return {padded_cards, card_mask, card_indices};
 }
 
 torch::Tensor CardStateEmbeddingImpl::aggregate_one_layer(const torch::Tensor& node_emb, const AdjacencyMatrices& adj,

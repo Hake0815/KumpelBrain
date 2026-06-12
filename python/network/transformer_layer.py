@@ -23,8 +23,8 @@ class TransformerLayer(nn.Module, SaveLoadMixin):
             dimension_out, dimension_inner, **factory_kwargs
         )
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, attn_mask=None) -> torch.Tensor:
         normed = self.norm_attention(x)
-        x = x + self.multi_head_attention(normed, normed, normed)
+        x = x + self.multi_head_attention(normed, normed, normed, attn_mask=attn_mask)
         x = x + self.feed_forward(self.norm_feed_forward(x))
         return x

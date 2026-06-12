@@ -31,7 +31,7 @@ def _three_card_state_and_cards():
     model.eval()
     game_state = fixtures.EMBED_GAME_STATE_CASES["three_cards"]
     with torch.inference_mode():
-        state_emb, indices = model.embedGameState(game_state)
+        state_emb, _mask, indices = model.embedGameState([game_state])
         cards = fixtures.extract_card_embeddings(state_emb)
     return model, indices, cards
 
@@ -62,7 +62,7 @@ def test_embed_game_interaction_rejects_empty_attack() -> None:
     model, indices, cards = _three_card_state_and_cards()
     with pytest.raises((RuntimeError, ValueError), match="ATTACK_DATA|ProtoBufAttack|instructions|energy"):
         with torch.inference_mode():
-            model.embedGameInteraction(_interaction_with_attack(attack), indices, cards)
+            model.embedGameInteraction([_interaction_with_attack(attack)], indices, cards)
 
 
 def test_embed_game_interaction_rejects_empty_ability() -> None:
@@ -71,7 +71,7 @@ def test_embed_game_interaction_rejects_empty_ability() -> None:
     model, indices, cards = _three_card_state_and_cards()
     with pytest.raises((RuntimeError, ValueError), match="ABILITY_DATA|ProtoBufAbility|instructions"):
         with torch.inference_mode():
-            model.embedGameInteraction(_interaction_with_ability(ability), indices, cards)
+            model.embedGameInteraction([_interaction_with_ability(ability)], indices, cards)
 
 
 def test_embed_game_interaction_rejects_ability_conditions_without_instructions() -> None:
@@ -81,4 +81,4 @@ def test_embed_game_interaction_rejects_ability_conditions_without_instructions(
     model, indices, cards = _three_card_state_and_cards()
     with pytest.raises((RuntimeError, ValueError), match="ABILITY_DATA|conditions without instructions"):
         with torch.inference_mode():
-            model.embedGameInteraction(_interaction_with_ability(ability), indices, cards)
+            model.embedGameInteraction([_interaction_with_ability(ability)], indices, cards)

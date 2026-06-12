@@ -45,72 +45,111 @@ class KumpelNetwork(nn.Module, SaveLoadMixin):
         )
         self.profiler: InferenceProfiler | None = None
 
-    def forward(
-        self, game_state: bytes, game_interactions: list[bytes]
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    def forward_batch(
+        self,
+        game_states: list[bytes],
+        interactions_per_game: list[list[bytes]],
+    ) -> tuple[
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+    ]:
         compute_device = self.factory_kwargs["device"]
         profiler = self.profiler
 
         if profiler is not None:
             with profiler.timed(compute_device) as span:
-                embedded_game_state, card_indices = self.game_embedding.embedGameState(
-                    game_state
+                embedded_game_state, state_mask, card_indices = (
+                    self.game_embedding.embedGameState(game_states)
                 )
             profiler.embed_state_s += span.elapsed
             profiler.forward_calls += 1
 
             with profiler.timed(compute_device) as span:
                 embedded_game_state = embedded_game_state.to(compute_device)
+                state_mask = state_mask.to(compute_device)
             profiler.to_compute_s += span.elapsed
 
             with profiler.timed(compute_device) as span:
                 transformed_state = self.state_transformer(
-                    embedded_game_state.unsqueeze(0)
+                    embedded_game_state, key_padding_mask=state_mask
                 )
             profiler.state_transformer_s += span.elapsed
 
             with profiler.timed(compute_device) as span:
-                transformed_cards_cpu = extract_card_embeddings(
-                    transformed_state.squeeze(0)
-                ).cpu()
+                transformed_cards_cpu = extract_card_embeddings(transformed_state).cpu()
             profiler.cards_to_cpu_s += span.elapsed
 
             with profiler.timed(torch.device("cpu")) as span:
-                embedded_interactions = self.game_embedding.embedGameInteraction(
-                    game_interactions, card_indices, transformed_cards_cpu
-                ).to(compute_device)
+                embedded_interactions, int_mask = (
+                    self.game_embedding.embedGameInteraction(
+                        interactions_per_game, card_indices, transformed_cards_cpu
+                    )
+                )
+                embedded_interactions = embedded_interactions.to(compute_device)
+                int_mask = int_mask.to(compute_device)
             profiler.embed_interactions_s += span.elapsed
-
-            card_indices = card_indices.to(compute_device)
 
             with profiler.timed(compute_device) as span:
                 interaction_scores = self.interaction_network(
-                    embedded_interactions.unsqueeze(0), transformed_state
+                    embedded_interactions, transformed_state, key_mask=state_mask
                 )
+                interaction_scores = interaction_scores.masked_fill(~int_mask, float("-inf"))
             profiler.interaction_network_s += span.elapsed
         else:
-            embedded_game_state, card_indices = self.game_embedding.embedGameState(
-                game_state
+            embedded_game_state, state_mask, card_indices = (
+                self.game_embedding.embedGameState(game_states)
             )
             embedded_game_state = embedded_game_state.to(compute_device)
+            state_mask = state_mask.to(compute_device)
 
-            transformed_state = self.state_transformer(embedded_game_state.unsqueeze(0))
-            transformed_cards_cpu = extract_card_embeddings(
-                transformed_state.squeeze(0)
-            ).cpu()
+            transformed_state = self.state_transformer(
+                embedded_game_state, key_padding_mask=state_mask
+            )
+            transformed_cards_cpu = extract_card_embeddings(transformed_state).cpu()
 
-            embedded_interactions = self.game_embedding.embedGameInteraction(
-                game_interactions, card_indices, transformed_cards_cpu
-            ).to(compute_device)
-            card_indices = card_indices.to(compute_device)
+            embedded_interactions, int_mask = self.game_embedding.embedGameInteraction(
+                interactions_per_game, card_indices, transformed_cards_cpu
+            )
+            embedded_interactions = embedded_interactions.to(compute_device)
+            int_mask = int_mask.to(compute_device)
 
             interaction_scores = self.interaction_network(
-                embedded_interactions.unsqueeze(0), transformed_state
+                embedded_interactions, transformed_state, key_mask=state_mask
             )
+            interaction_scores = interaction_scores.masked_fill(~int_mask, float("-inf"))
 
         return (
-            interaction_scores.squeeze(0),
-            transformed_state.squeeze(0),
+            interaction_scores,
+            transformed_state,
             embedded_interactions,
             card_indices,
+            int_mask,
+            state_mask,
+        )
+
+    def forward(
+        self, game_state: bytes, game_interactions: list[bytes]
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        (
+            interaction_scores,
+            transformed_state,
+            embedded_interactions,
+            card_indices,
+            int_mask,
+            state_mask,
+        ) = self.forward_batch([game_state], [game_interactions])
+
+        compute_device = self.factory_kwargs["device"]
+        valid_state = state_mask[0]
+        valid_int = int_mask[0]
+
+        return (
+            interaction_scores[0, valid_int],
+            transformed_state[0, valid_state],
+            embedded_interactions[0, valid_int],
+            card_indices[0].to(compute_device),
         )

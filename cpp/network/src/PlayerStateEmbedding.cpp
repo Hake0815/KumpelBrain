@@ -1,6 +1,7 @@
 #include "network/include/PlayerStateEmbedding.h"
 
 #include <algorithm>
+#include <stdexcept>
 
 #include "network/include/AttentionUtils.h"
 #include "network/include/SharedConstants.h"
@@ -41,30 +42,43 @@ PlayerStateEmbeddingImpl::PlayerStateEmbeddingImpl(int64_t dimension_out, torch:
                                            std::max<int64_t>(dimension_out_ / 16, 4), 4, 0.0, true, device_, dtype_));
     index_options_ = torch::TensorOptions().device(device_).dtype(torch::kLong);
     float_options_ = torch::TensorOptions().device(device_).dtype(dtype_);
-    query_indices_ = torch::tensor({static_cast<int64_t>(0), static_cast<int64_t>(1)}, index_options_);
-    base_token_mask_ =
-        torch::ones({kNumPlayers, kNumBaseTokens}, torch::TensorOptions().device(device_).dtype(torch::kBool));
     to(device, dtype);
 }
 
-torch::Tensor PlayerStateEmbeddingImpl::forward(const ProtoBufPlayerState& self_player_state,
-                                                const ProtoBufPlayerState& opponent_player_state) {
-    auto features = collect_features(self_player_state, opponent_player_state);
-    auto staged = stage_features(features);
+torch::Tensor PlayerStateEmbeddingImpl::forward(const std::vector<ProtoBufPlayerState>& self_player_states,
+                                                const std::vector<ProtoBufPlayerState>& opponent_player_states) {
+    const int64_t batch_size = static_cast<int64_t>(self_player_states.size());
+    if (batch_size == 0) {
+        return torch::empty({0, kNumPlayers, dimension_out_}, float_options_);
+    }
+    if (static_cast<int64_t>(opponent_player_states.size()) != batch_size) {
+        throw std::invalid_argument("PlayerStateEmbedding: self and opponent batch sizes must match");
+    }
+
+    auto features = collect_features(self_player_states, opponent_player_states);
+    auto staged = stage_features(features, batch_size);
     auto base_tokens = embed_base_tokens(staged);
     auto trait_tokens = embed_trait_tokens(staged, features.max_player_turn_traits);
     auto padded = torch::cat({base_tokens, trait_tokens.tokens}, 1);
-    auto valid_token_mask = torch::cat({base_token_mask_, trait_tokens.mask}, 1);
-    auto queries = queries_embedding_(query_indices_).unsqueeze(1);
-    return attention_utils::masked_attention_pooling(multi_head_attention_, queries, padded, valid_token_mask);
+    const int64_t num_player_rows = batch_size * kNumPlayers;
+    auto base_mask = torch::ones({num_player_rows, kNumBaseTokens},
+                                 torch::TensorOptions().device(device_).dtype(torch::kBool));
+    auto valid_token_mask = torch::cat({base_mask, trait_tokens.mask}, 1);
+    auto expanded_query_indices =
+        torch::arange(num_player_rows, index_options_) % kNumPlayers;
+    auto queries = queries_embedding_(expanded_query_indices).unsqueeze(1);
+    auto pooled = attention_utils::masked_attention_pooling(multi_head_attention_, queries, padded, valid_token_mask);
+    return pooled.view({batch_size, kNumPlayers, dimension_out_});
 }
 
 PlayerStateEmbeddingImpl::PlayerStateFeatures PlayerStateEmbeddingImpl::collect_features(
-    const ProtoBufPlayerState& self_player_state, const ProtoBufPlayerState& opponent_player_state) const {
+    const std::vector<ProtoBufPlayerState>& self_player_states,
+    const std::vector<ProtoBufPlayerState>& opponent_player_states) const {
+    const int64_t batch_size = static_cast<int64_t>(self_player_states.size());
     PlayerStateFeatures features;
-    features.boolean_indices.reserve(kNumPlayers * kNumBooleanFeatures);
-    features.counts.reserve(kNumPlayers * kNumCountFeatures);
-    features.player_turn_trait_offsets.reserve(kNumPlayers + 1);
+    features.boolean_indices.reserve(static_cast<size_t>(batch_size * kNumPlayers * kNumBooleanFeatures));
+    features.counts.reserve(static_cast<size_t>(batch_size * kNumPlayers * kNumCountFeatures));
+    features.player_turn_trait_offsets.reserve(static_cast<size_t>(batch_size * kNumPlayers + 1));
     features.player_turn_trait_offsets.push_back(0);
 
     const auto append_player = [&](const ProtoBufPlayerState& player_state) {
@@ -87,17 +101,20 @@ PlayerStateEmbeddingImpl::PlayerStateFeatures PlayerStateEmbeddingImpl::collect_
         features.player_turn_trait_offsets.push_back(static_cast<int64_t>(features.player_turn_traits.size()));
     };
 
-    append_player(self_player_state);
-    append_player(opponent_player_state);
+    for (int64_t game_index = 0; game_index < batch_size; ++game_index) {
+        append_player(self_player_states[static_cast<size_t>(game_index)]);
+        append_player(opponent_player_states[static_cast<size_t>(game_index)]);
+    }
     return features;
 }
 
 PlayerStateEmbeddingImpl::PlayerStateStagedTensors PlayerStateEmbeddingImpl::stage_features(
-    const PlayerStateFeatures& features) const {
+    const PlayerStateFeatures& features, int64_t batch_size) const {
     PlayerStateStagedTensors staged;
     staged.boolean_indices =
-        torch::tensor(features.boolean_indices, index_options_).view({kNumPlayers, kNumBooleanFeatures});
-    staged.counts = torch::tensor(features.counts, float_options_).view({kNumPlayers, kNumCountFeatures});
+        torch::tensor(features.boolean_indices, index_options_).view({batch_size * kNumPlayers, kNumBooleanFeatures});
+    staged.counts =
+        torch::tensor(features.counts, float_options_).view({batch_size * kNumPlayers, kNumCountFeatures});
     staged.player_turn_traits = torch::tensor(features.player_turn_traits, index_options_);
     staged.player_turn_trait_offsets = torch::tensor(features.player_turn_trait_offsets, index_options_);
     return staged;

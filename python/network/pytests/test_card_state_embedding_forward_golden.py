@@ -96,18 +96,19 @@ def test_card_state_embedding_forward_golden_case(
         )
         model.eval()
         with torch.inference_mode():
-            actual, _card_indices = model.forward(states)
+            actual, _mask, card_indices = model.forward(states)
+            actual = actual[0]
         if device.type == "cuda":
             torch.cuda.synchronize()
 
     import card_embedding_forward_fixtures as card_fixtures
 
-    expected_indices = card_fixtures.build_expected_card_indices(states, device)
-    assert _card_indices.dtype == torch.long
-    assert _card_indices.device.type == device.type
-    assert _card_indices.shape == expected_indices.shape
+    expected_indices = card_fixtures.build_expected_card_indices(states, device).unsqueeze(0)
+    assert card_indices.dtype == torch.long
+    assert card_indices.device.type == device.type
+    assert card_indices.shape == expected_indices.shape
     torch.testing.assert_close(
-        _card_indices.cpu(),
+        card_indices.cpu(),
         expected_indices.cpu(),
         rtol=0.0,
         atol=0.0,
@@ -140,10 +141,10 @@ def test_pre_evolutions_adjacency_differs_from_attached_energy_adjacency():
         emb.eval()
         card_bytes = fixtures.build_adjacency_divergent_card_bytes()
         with torch.inference_mode():
-            _h, adj, _card_indices = emb.forward(card_bytes)
+            _h, adjacency, _card_indices, _segment_offsets = emb.forward(card_bytes)
 
-    pre = adj.pre_evolutions_adjacency.coalesce().cpu().to_dense()
-    att = adj.attached_energy_adjacency.coalesce().cpu().to_dense()
+    pre = adjacency.pre_evolutions_adjacency.coalesce().cpu().to_dense()
+    att = adjacency.attached_energy_adjacency.coalesce().cpu().to_dense()
     assert not torch.allclose(pre, att, rtol=0.0, atol=0.0), (
         "pre_evolutions_adjacency must differ from attached_energy_adjacency on divergent batch"
     )

@@ -83,11 +83,10 @@ def test_cpp_card_embedding_empty_batch_cpu():
     model = kumpel_embedding.make_card_embedding(shared, dim, device=device)
     model.eval()
     with torch.inference_mode():
-        embedding, _adjacency, card_indices = model.forward([])
+        embedding, _adjacency, card_indices, _segment_offsets = model.forward([])
     assert embedding.shape == (0, dim)
-    assert card_indices.shape == (0,)
+    assert card_indices.shape == (1, 0)
     assert card_indices.dtype == torch.long
-    assert torch.all(card_indices == -1)
 
 
 def test_cpp_card_state_embedding_empty_batch_cpu():
@@ -96,9 +95,9 @@ def test_cpp_card_state_embedding_empty_batch_cpu():
     model = kumpel_embedding.make_card_state_embedding(dim, device=device)
     model.eval()
     with torch.inference_mode():
-        embedding, card_indices = model.forward([])
-    assert embedding.shape == (0, dim)
-    assert card_indices.shape == (0,)
+        embedding, mask, card_indices = model.forward([])
+    assert embedding.shape == (1, 0, dim)
+    assert mask.shape == (1, 0)
+    assert card_indices.shape == (1, 0)
     assert card_indices.dtype == torch.long
-    assert torch.all(card_indices == -1)
     assert embedding.device.type == device.type

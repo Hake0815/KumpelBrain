@@ -33,7 +33,9 @@ class CardAmountDataEmbedding(torch._C.cpp.nn.Module):
     def save_weights(self, arg0: str) -> None:
         ...
 class CardEmbedding(torch._C.cpp.nn.Module):
-    def forward(self, arg0: collections.abc.Iterable) -> tuple[torch.Tensor, AdjacencyMatrices, torch.Tensor]:
+    def forward(self, arg0: collections.abc.Iterable) -> tuple[torch.Tensor, AdjacencyMatrices, torch.Tensor, torch.Tensor]:
+        ...
+    def forward_batched(self, arg0: collections.abc.Iterable) -> tuple[torch.Tensor, AdjacencyMatrices, torch.Tensor, torch.Tensor]:
         ...
     def load_weights(self, arg0: str) -> None:
         ...
@@ -49,7 +51,7 @@ class CardPositionEmbedding(torch._C.cpp.nn.Module):
     def save_weights(self, arg0: str) -> None:
         ...
 class CardStateEmbedding(torch._C.cpp.nn.Module):
-    def forward(self, arg0: collections.abc.Iterable) -> tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, arg0: collections.abc.Iterable) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         ...
     def load_weights(self, arg0: str) -> None:
         ...
@@ -96,22 +98,23 @@ class GameEmbedding(torch._C.cpp.nn.Module):
         ...
     def embedGameInteraction(
         self,
-        game_interactions: collections.abc.Iterable,
+        game_interactions_per_game: collections.abc.Iterable,
         card_indices: torch.Tensor,
         cards: torch.Tensor,
-    ) -> torch.Tensor:
-        """Embed legal interactions against a fixed game state.
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Embed legal interactions for a batch of game states.
 
-        ``card_indices`` has shape ``[max_deck_id + 1]``; entry ``card_indices[deck_id]`` is the row in
-        ``cards`` for that deck id, or ``-1`` if absent. ``cards`` must be ``embedGameState(...)[0][2:]``
-        (card rows only, not player rows). Returns shape ``[num_interactions, dimension_out]``.
+        ``game_interactions_per_game`` is a list of per-game interaction lists (serialized protobuf).
+        ``card_indices`` has shape ``[B, max_deck_id + 1]``; ``cards`` has shape ``[B, max_cards, dim]``
+        (card rows only, from ``embedGameState``). Returns ``(embedding, mask)`` with shapes
+        ``[B, max_interactions, dim]`` and ``[B, max_interactions]``.
         """
         ...
-    def embedGameState(self, game_state: typing.Any) -> tuple[torch.Tensor, torch.Tensor]:
-        """Return ``(embedding, card_indices)``.
+    def embedGameState(self, game_states: collections.abc.Iterable) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Return ``(embedding, mask, card_indices)``.
 
-        ``embedding`` shape is ``[2 + num_cards, dimension_out]`` (two player rows, then cards).
-        ``card_indices`` is deck-id indexed with shape ``[max_deck_id + 1]``.
+        ``embedding`` shape is ``[B, 2 + max_cards, dimension_out]`` (player rows, then cards, padded).
+        ``mask`` marks valid rows per game. ``card_indices`` has shape ``[B, max_deck_id + 1]``.
         """
         ...
     def load_weights(self, arg0: str) -> None:
@@ -157,7 +160,7 @@ class NormalizedLinear(torch._C.cpp.nn.Module):
 class PlayerStateEmbedding(torch._C.cpp.nn.Module):
     def __init__(self, dimension_out: typing.SupportsInt | typing.SupportsIndex, device: torch.device = ..., dtype: torch.dtype = ...) -> None:
         ...
-    def forward(self, arg0: typing.Any, arg1: typing.Any) -> torch.Tensor:
+    def forward(self, arg0: collections.abc.Iterable, arg1: collections.abc.Iterable) -> torch.Tensor:
         ...
     def load_weights(self, arg0: str) -> None:
         ...

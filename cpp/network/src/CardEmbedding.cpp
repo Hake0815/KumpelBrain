@@ -1,5 +1,6 @@
 #include "../include/CardEmbedding.h"
 
+#include "../include/GameStateBatch.h"
 #include <ATen/ops/cat.h>
 #include <torch/csrc/autograd/generated/variable_factories.h>
 
@@ -165,15 +166,22 @@ void CardEmbeddingImpl::register_card_specific_modules(torch::Device device, tor
         register_module("token_type_embedding", torch::nn::Embedding(NUM_CARD_TOKEN_TYPES, dimension_out_));
 }
 
-std::tuple<torch::Tensor, AdjacencyMatrices, torch::Tensor> CardEmbeddingImpl::forward(
-    const google::protobuf::RepeatedPtrField<ProtoBufCardState>& card_batch) {
+std::tuple<torch::Tensor, AdjacencyMatrices, torch::Tensor, torch::Tensor> CardEmbeddingImpl::forward(
+    const google::protobuf::RepeatedPtrField<ProtoBufCardState>& card_batch,
+    const std::vector<int64_t>& card_segment_offsets) {
     if (card_batch.empty()) {
-        auto card_features = collect_card_features(card_batch);
+        auto card_features = collect_card_features(card_batch, card_segment_offsets);
+        if (card_features.per_game_card_indices.empty() &&
+            !card_segment_offsets.empty() &&
+            static_cast<int64_t>(card_segment_offsets.size()) > 1) {
+            card_features.per_game_card_indices.resize(static_cast<size_t>(card_segment_offsets.size() - 1));
+        }
         return {torch::empty({0, dimension_out_}, float_tensor_options_), card_features.adjacency_matrices,
-                card_features.card_indices};
+                build_batched_card_indices(card_features.per_game_card_indices, device_),
+                torch::tensor(card_segment_offsets, index_tensor_options_)};
     }
     const int64_t batch_size = static_cast<int64_t>(card_batch.size());
-    auto card_features = collect_card_features(card_batch);
+    auto card_features = collect_card_features(card_batch, card_segment_offsets);
     auto staged = stage_features(card_features);
     auto [tokens, mask] = embed_card_features(card_features, staged, batch_size);
 
@@ -182,7 +190,9 @@ std::tuple<torch::Tensor, AdjacencyMatrices, torch::Tensor> CardEmbeddingImpl::f
     auto query =
         card_pooling_query_embedding_->weight.view({1, 1, dimension_out_}).expand({batch_size, 1, dimension_out_});
     return {attention_utils::masked_attention_pooling(card_pooling_multi_head_attention_, query, self_attended, mask),
-            card_features.adjacency_matrices, card_features.card_indices};
+            card_features.adjacency_matrices,
+            build_batched_card_indices(card_features.per_game_card_indices, device_),
+            torch::tensor(card_segment_offsets, index_tensor_options_)};
 }
 
 void CardEmbeddingImpl::append_card_instructions_and_conditions(const ProtoBufCard& card,
@@ -244,151 +254,193 @@ void CardEmbeddingImpl::append_card_instructions_and_conditions(const ProtoBufCa
 }
 
 CardFeatures CardEmbeddingImpl::collect_card_features(
-    const google::protobuf::RepeatedPtrField<ProtoBufCardState>& card_batch) {
+    const google::protobuf::RepeatedPtrField<ProtoBufCardState>& card_batch,
+    const std::vector<int64_t>& card_segment_offsets) {
     CardFeatures card_features;
+    card_features.card_segment_offsets = card_segment_offsets;
     reserve_card_features(card_features, static_cast<int64_t>(card_batch.size()));
-    std::unordered_map<int64_t, std::shared_ptr<std::vector<int64_t>>> evolves_from_matrix;
-    std::unordered_map<std::string, std::shared_ptr<std::vector<int64_t>>> name_to_batch_index;
-    std::string player_prefix;
 
-    std::unordered_map<int64_t, std::vector<std::shared_ptr<int64_t>>> attached_energy_cards_matrix;
-    std::unordered_map<int64_t, std::vector<std::shared_ptr<int64_t>>> pre_evolutions_matrix;
-    /// Last batch index seen for each deck_id; assumes at most one card per deck_id in the batch.
-    std::unordered_map<int64_t, std::shared_ptr<int64_t>> deck_id_to_card_index;
+    const int64_t num_games =
+        card_segment_offsets.empty() ? 0 : static_cast<int64_t>(card_segment_offsets.size()) - 1;
+    card_features.per_game_card_indices.resize(static_cast<size_t>(num_games));
 
-    for (int64_t card_index = 0; card_index < static_cast<int64_t>(card_batch.size()); ++card_index) {
-        const auto& card = card_batch[static_cast<size_t>(card_index)].card();
+    std::vector<int64_t> evolves_from_row_indices;
+    std::vector<int64_t> evolves_from_col_indices;
+    std::vector<int64_t> attached_energy_row_indices;
+    std::vector<int64_t> attached_energy_col_indices;
+    std::vector<int64_t> pre_evolutions_row_indices;
+    std::vector<int64_t> pre_evolutions_col_indices;
 
-        if (card.deck_id() < DECK_SIZE) {
-            player_prefix = "player1_";
-        } else {
-            player_prefix = "player2_";
-        }
-        auto batch_indices_of_cards_with_same_name =
-            get_batch_indices_from_map(name_to_batch_index, player_prefix + card.name());
-        batch_indices_of_cards_with_same_name->push_back(card_index);
+    for (int64_t game_index = 0; game_index < num_games; ++game_index) {
+        const int64_t segment_start = card_segment_offsets[static_cast<size_t>(game_index)];
+        const int64_t segment_end = card_segment_offsets[static_cast<size_t>(game_index + 1)];
+        const int64_t num_cards_in_game = segment_end - segment_start;
 
-        auto& ptr = deck_id_to_card_index[card.deck_id()];
-        if (!ptr) {
-            ptr = std::make_shared<int64_t>(card_index);
-        } else {
-            *ptr = card_index;
-        }
+        std::unordered_map<int64_t, std::shared_ptr<std::vector<int64_t>>> evolves_from_matrix;
+        std::unordered_map<std::string, std::shared_ptr<std::vector<int64_t>>> name_to_batch_index;
+        std::unordered_map<int64_t, std::vector<std::shared_ptr<int64_t>>> attached_energy_cards_matrix;
+        std::unordered_map<int64_t, std::vector<std::shared_ptr<int64_t>>> pre_evolutions_matrix;
+        std::unordered_map<int64_t, std::shared_ptr<int64_t>> deck_id_to_card_index;
+        std::string player_prefix;
 
-        if (card.has_evolves_from()) {
-            const auto& pre_evolution = player_prefix + card.evolves_from();
-            auto batch_indices_of_pre_evolution = get_batch_indices_from_map(name_to_batch_index, pre_evolution);
-            evolves_from_matrix[card_index] = batch_indices_of_pre_evolution;
-        }
+        for (int64_t local_index = 0; local_index < num_cards_in_game; ++local_index) {
+            const int64_t card_index = segment_start + local_index;
+            const auto& card = card_batch[static_cast<size_t>(card_index)].card();
 
-        if (card.attached_energy_cards_size() > 0) {
-            for (const auto energy_deck_id : card.attached_energy_cards()) {
-                auto& batch_index_of_attached_energy_card = deck_id_to_card_index[energy_deck_id];
-                if (!batch_index_of_attached_energy_card) {
-                    batch_index_of_attached_energy_card = std::make_shared<int64_t>(-1);
+            if (card.deck_id() < DECK_SIZE) {
+                player_prefix = "player1_";
+            } else {
+                player_prefix = "player2_";
+            }
+            auto batch_indices_of_cards_with_same_name =
+                get_batch_indices_from_map(name_to_batch_index, player_prefix + card.name());
+            batch_indices_of_cards_with_same_name->push_back(card_index);
+
+            auto& ptr = deck_id_to_card_index[card.deck_id()];
+            if (!ptr) {
+                ptr = std::make_shared<int64_t>(card_index);
+            } else {
+                *ptr = card_index;
+            }
+
+            if (card.has_evolves_from()) {
+                const auto& pre_evolution = player_prefix + card.evolves_from();
+                auto batch_indices_of_pre_evolution = get_batch_indices_from_map(name_to_batch_index, pre_evolution);
+                evolves_from_matrix[card_index] = batch_indices_of_pre_evolution;
+            }
+
+            if (card.attached_energy_cards_size() > 0) {
+                for (const auto energy_deck_id : card.attached_energy_cards()) {
+                    auto& batch_index_of_attached_energy_card = deck_id_to_card_index[energy_deck_id];
+                    if (!batch_index_of_attached_energy_card) {
+                        batch_index_of_attached_energy_card = std::make_shared<int64_t>(-1);
+                    }
+                    attached_energy_cards_matrix[card_index].push_back(batch_index_of_attached_energy_card);
                 }
-                attached_energy_cards_matrix[card_index].push_back(batch_index_of_attached_energy_card);
             }
-        }
 
-        if (card.pre_evolution_ids_size() > 0) {
-            for (const auto pre_evolution_deck_id : card.pre_evolution_ids()) {
-                auto& batch_index_of_pre_evolution = deck_id_to_card_index[pre_evolution_deck_id];
-                if (!batch_index_of_pre_evolution) {
-                    batch_index_of_pre_evolution = std::make_shared<int64_t>(-1);
+            if (card.pre_evolution_ids_size() > 0) {
+                for (const auto pre_evolution_deck_id : card.pre_evolution_ids()) {
+                    auto& batch_index_of_pre_evolution = deck_id_to_card_index[pre_evolution_deck_id];
+                    if (!batch_index_of_pre_evolution) {
+                        batch_index_of_pre_evolution = std::make_shared<int64_t>(-1);
+                    }
+                    pre_evolutions_matrix[card_index].push_back(batch_index_of_pre_evolution);
                 }
-                pre_evolutions_matrix[card_index].push_back(batch_index_of_pre_evolution);
+            }
+
+            append_card_instructions_and_conditions(card, card_features.instructions_and_conditions, card_index);
+            card_features.card_type.push_back(static_cast<int64_t>(card.card_type()));
+            card_features.card_subtype.push_back(static_cast<int64_t>(card.card_subtype()));
+            card_features.energy_type.push_back(static_cast<int64_t>(card.energy_type()));
+            const int64_t energy_type_context =
+                card.card_type() == gamecore::serialization::ProtoBufCardType::CARD_TYPE_POKEMON
+                    ? EnergyTypeContext::POKEMON_TYPE
+                    : EnergyTypeContext::ENERGY_TYPE;
+            card_features.energy_type_context.push_back(energy_type_context);
+            card_features.energy_type_mask.push_back(static_cast<uint8_t>(card.has_energy_type()));
+            card_features.max_hp.push_back(static_cast<int64_t>(card.max_hp()));
+            card_features.max_hp_mask.push_back(static_cast<uint8_t>(card.has_max_hp()));
+            card_features.weakness.push_back(static_cast<int64_t>(card.weakness()));
+            card_features.weakness_mask.push_back(static_cast<uint8_t>(card.has_weakness()));
+            card_features.resistance.push_back(static_cast<int64_t>(card.resistance()));
+            card_features.resistance_mask.push_back(static_cast<uint8_t>(card.has_resistance()));
+            card_features.retreat_cost.push_back(static_cast<int64_t>(card.retreat_cost()));
+            card_features.retreat_cost_mask.push_back(static_cast<uint8_t>(card.has_retreat_cost()));
+            card_features.number_of_prize_cards_on_knockout.push_back(
+                static_cast<int64_t>(card.number_of_prize_cards_on_knockout()));
+            card_features.number_of_prize_cards_on_knockout_mask.push_back(
+                static_cast<uint8_t>(card.has_number_of_prize_cards_on_knockout()));
+            card_features.current_damage.push_back(static_cast<int64_t>(card.current_damage()));
+            card_features.current_damage_mask.push_back(static_cast<uint8_t>(card.has_current_damage()));
+
+            if (card.pokemon_turn_traits_size() > 0) {
+                for (const auto& pokemon_turn_trait : card.pokemon_turn_traits()) {
+                    card_features.flattened_pokemon_turn_traits.push_back(static_cast<int64_t>(pokemon_turn_trait));
+                    card_features.pokemon_turn_trait_card_indices.push_back(card_index);
+                }
+            }
+            if (card.provided_energy_size() > 0) {
+                for (const auto& provided_energy : card.provided_energy()) {
+                    card_features.flattened_provided_energies.push_back(static_cast<int64_t>(provided_energy));
+                    card_features.provided_energy_card_indices.push_back(card_index);
+                }
+            }
+            if (card.attached_energy_size() > 0) {
+                for (const auto& attached_energy : card.attached_energy()) {
+                    card_features.flattened_attached_energies.push_back(static_cast<int64_t>(attached_energy));
+                    card_features.attached_energy_card_indices.push_back(card_index);
+                }
             }
         }
 
-        append_card_instructions_and_conditions(card, card_features.instructions_and_conditions, card_index);
-        card_features.card_type.push_back(static_cast<int64_t>(card.card_type()));
-
-        card_features.card_subtype.push_back(static_cast<int64_t>(card.card_subtype()));
-
-        card_features.energy_type.push_back(static_cast<int64_t>(card.energy_type()));
-        const int64_t energy_type_context =
-            card.card_type() == gamecore::serialization::ProtoBufCardType::CARD_TYPE_POKEMON
-                ? EnergyTypeContext::POKEMON_TYPE
-                : EnergyTypeContext::ENERGY_TYPE;
-        card_features.energy_type_context.push_back(energy_type_context);
-        card_features.energy_type_mask.push_back(static_cast<uint8_t>(card.has_energy_type()));
-
-        card_features.max_hp.push_back(static_cast<int64_t>(card.max_hp()));
-        card_features.max_hp_mask.push_back(static_cast<uint8_t>(card.has_max_hp()));
-
-        card_features.weakness.push_back(static_cast<int64_t>(card.weakness()));
-        card_features.weakness_mask.push_back(static_cast<uint8_t>(card.has_weakness()));
-
-        card_features.resistance.push_back(static_cast<int64_t>(card.resistance()));
-        card_features.resistance_mask.push_back(static_cast<uint8_t>(card.has_resistance()));
-
-        card_features.retreat_cost.push_back(static_cast<int64_t>(card.retreat_cost()));
-        card_features.retreat_cost_mask.push_back(static_cast<uint8_t>(card.has_retreat_cost()));
-
-        card_features.number_of_prize_cards_on_knockout.push_back(
-            static_cast<int64_t>(card.number_of_prize_cards_on_knockout()));
-        card_features.number_of_prize_cards_on_knockout_mask.push_back(
-            static_cast<uint8_t>(card.has_number_of_prize_cards_on_knockout()));
-
-        card_features.current_damage.push_back(static_cast<int64_t>(card.current_damage()));
-        card_features.current_damage_mask.push_back(static_cast<uint8_t>(card.has_current_damage()));
-
-        if (card.pokemon_turn_traits_size() > 0) {
-            for (const auto& pokemon_turn_trait : card.pokemon_turn_traits()) {
-                card_features.flattened_pokemon_turn_traits.push_back(static_cast<int64_t>(pokemon_turn_trait));
-                card_features.pokemon_turn_trait_card_indices.push_back(card_index);
+        for (const auto& [card_index, pre_evolution_indices] : evolves_from_matrix) {
+            for (const int64_t pre_index : *pre_evolution_indices) {
+                evolves_from_row_indices.push_back(card_index);
+                evolves_from_col_indices.push_back(pre_index);
             }
         }
 
-        if (card.provided_energy_size() > 0) {
-            for (const auto& provided_energy : card.provided_energy()) {
-                card_features.flattened_provided_energies.push_back(static_cast<int64_t>(provided_energy));
-                card_features.provided_energy_card_indices.push_back(card_index);
+        size_t reserve_attached = 0;
+        for (const auto& entry : attached_energy_cards_matrix) {
+            reserve_attached += entry.second.size();
+        }
+        attached_energy_row_indices.reserve(attached_energy_row_indices.size() + reserve_attached);
+        attached_energy_col_indices.reserve(attached_energy_col_indices.size() + reserve_attached);
+        for (const auto& [host_index, index_ptrs] : attached_energy_cards_matrix) {
+            for (const auto& batch_index_ptr : index_ptrs) {
+                if (!batch_index_ptr) {
+                    continue;
+                }
+                const int64_t col = *batch_index_ptr;
+                if (col >= 0) {
+                    attached_energy_row_indices.push_back(host_index);
+                    attached_energy_col_indices.push_back(col);
+                }
             }
         }
 
-        if (card.attached_energy_size() > 0) {
-            for (const auto& attached_energy : card.attached_energy()) {
-                card_features.flattened_attached_energies.push_back(static_cast<int64_t>(attached_energy));
-                card_features.attached_energy_card_indices.push_back(card_index);
+        size_t reserve_pre = 0;
+        for (const auto& entry : pre_evolutions_matrix) {
+            reserve_pre += entry.second.size();
+        }
+        pre_evolutions_row_indices.reserve(pre_evolutions_row_indices.size() + reserve_pre);
+        pre_evolutions_col_indices.reserve(pre_evolutions_col_indices.size() + reserve_pre);
+        for (const auto& [host_index, index_ptrs] : pre_evolutions_matrix) {
+            for (const auto& batch_index_ptr : index_ptrs) {
+                if (!batch_index_ptr) {
+                    continue;
+                }
+                const int64_t col = *batch_index_ptr;
+                if (col >= 0) {
+                    pre_evolutions_row_indices.push_back(host_index);
+                    pre_evolutions_col_indices.push_back(col);
+                }
             }
         }
+
+        int64_t max_deck_id = -1;
+        for (const auto& [deck_id, batch_index_ptr] : deck_id_to_card_index) {
+            if (deck_id >= 0 && batch_index_ptr) {
+                max_deck_id = std::max(max_deck_id, deck_id);
+            }
+        }
+        std::vector<int64_t> card_indices_host(static_cast<size_t>(max_deck_id + 1), -1);
+        for (const auto& [deck_id, batch_index_ptr] : deck_id_to_card_index) {
+            if (deck_id >= 0 && batch_index_ptr && *batch_index_ptr >= 0) {
+                card_indices_host[static_cast<size_t>(deck_id)] = *batch_index_ptr - segment_start;
+            }
+        }
+        card_features.per_game_card_indices[static_cast<size_t>(game_index)] = std::move(card_indices_host);
     }
 
     const int64_t num_cards = static_cast<int64_t>(card_batch.size());
-    std::vector<int64_t> evolves_from_row_indices;
-    std::vector<int64_t> evolves_from_col_indices;
-    evolves_from_row_indices.reserve(evolves_from_matrix.size());
-    evolves_from_col_indices.reserve(evolves_from_matrix.size());
-    for (const auto& [card_index, pre_evolution_indices] : evolves_from_matrix) {
-        for (const int64_t pre_index : *pre_evolution_indices) {
-            evolves_from_row_indices.push_back(card_index);
-            evolves_from_col_indices.push_back(pre_index);
-        }
-    }
-
     card_features.adjacency_matrices.evolves_from_adjacency =
         sparse_adjacency_from_row_col(evolves_from_row_indices, evolves_from_col_indices, num_cards, dtype_, device_);
-
-    card_features.adjacency_matrices.attached_energy_adjacency =
-        adjacency_from_ptr_map(attached_energy_cards_matrix, num_cards, dtype_, device_);
+    card_features.adjacency_matrices.attached_energy_adjacency = sparse_adjacency_from_row_col(
+        attached_energy_row_indices, attached_energy_col_indices, num_cards, dtype_, device_);
     card_features.adjacency_matrices.pre_evolutions_adjacency =
-        adjacency_from_ptr_map(pre_evolutions_matrix, num_cards, dtype_, device_);
-
-    int64_t max_deck_id = -1;
-    for (const auto& [deck_id, batch_index_ptr] : deck_id_to_card_index) {
-        if (deck_id >= 0 && batch_index_ptr) {
-            max_deck_id = std::max(max_deck_id, deck_id);
-        }
-    }
-    std::vector<int64_t> card_indices_host(static_cast<size_t>(max_deck_id + 1), -1);
-    for (const auto& [deck_id, batch_index_ptr] : deck_id_to_card_index) {
-        if (deck_id >= 0 && batch_index_ptr) {
-            card_indices_host[static_cast<size_t>(deck_id)] = *batch_index_ptr;
-        }
-    }
-    card_features.card_indices = torch::tensor(card_indices_host, index_tensor_options_);
+        sparse_adjacency_from_row_col(pre_evolutions_row_indices, pre_evolutions_col_indices, num_cards, dtype_, device_);
     return card_features;
 }
 

@@ -18,7 +18,14 @@ class StateTransformer(nn.Module, SaveLoadMixin):
         super().__init__()
         self.layers = nn.ModuleList([TransformerLayer(dimension_out, dimension_inner, attention_args, **factory_kwargs) for _ in range(num_layers)])
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self, x: torch.Tensor, key_padding_mask: torch.Tensor | None = None
+    ) -> torch.Tensor:
+        attn_mask = None
+        if key_padding_mask is not None:
+            attn_mask = key_padding_mask.unsqueeze(1).expand(
+                x.size(0), x.size(1), x.size(1)
+            )
         for layer in self.layers:
-            x = layer(x)
+            x = layer(x, attn_mask=attn_mask)
         return x

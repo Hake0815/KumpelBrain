@@ -25,6 +25,18 @@ class InteractionNetwork(nn.Module, SaveLoadMixin):
         )
 
     def forward(
-        self, embedded_interactions: torch.Tensor, state: torch.Tensor
+        self,
+        embedded_interactions: torch.Tensor,
+        state: torch.Tensor,
+        key_mask: torch.Tensor | None = None,
     ) -> torch.Tensor:
-        return self.scoring_block(embedded_interactions, state, state)
+        attn_mask = None
+        if key_mask is not None:
+            attn_mask = key_mask.unsqueeze(1).expand(
+                embedded_interactions.size(0),
+                embedded_interactions.size(1),
+                state.size(1),
+            )
+        return self.scoring_block(
+            embedded_interactions, state, state, attn_mask=attn_mask
+        )
