@@ -34,8 +34,13 @@ class CardAmountDataEmbedding(torch._C.cpp.nn.Module):
         ...
 class CardEmbedding(torch._C.cpp.nn.Module):
     def forward(self, arg0: collections.abc.Iterable) -> tuple[torch.Tensor, AdjacencyMatrices, torch.Tensor, torch.Tensor]:
+        """Return ``(embedding, adjacency, card_indices, segment_offsets)``.
+
+        Single-game call: ``embedding`` is ``[num_cards, dim]``, ``card_indices`` is ``[1, max_deck_id+1]``.
+        """
         ...
     def forward_batched(self, arg0: collections.abc.Iterable) -> tuple[torch.Tensor, AdjacencyMatrices, torch.Tensor, torch.Tensor]:
+        """Batched cards flattened across games; ``segment_offsets`` has size ``B+1``."""
         ...
     def load_weights(self, arg0: str) -> None:
         ...
@@ -52,6 +57,8 @@ class CardPositionEmbedding(torch._C.cpp.nn.Module):
         ...
 class CardStateEmbedding(torch._C.cpp.nn.Module):
     def forward(self, arg0: collections.abc.Iterable) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Return ``(embedding, mask, card_indices)`` with shapes ``[B, max_cards, dim]``,
+        ``[B, max_cards]``, and ``[B, max_deck_id+1]``. A single-game call uses ``B=1``."""
         ...
     def load_weights(self, arg0: str) -> None:
         ...
@@ -110,11 +117,12 @@ class GameEmbedding(torch._C.cpp.nn.Module):
         ``[B, max_interactions, dim]`` and ``[B, max_interactions]``.
         """
         ...
-    def embedGameState(self, game_states: collections.abc.Iterable) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def embedGameState(self, game_states: collections.abc.Iterable | bytes) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Return ``(embedding, mask, card_indices)``.
 
         ``embedding`` shape is ``[B, 2 + max_cards, dimension_out]`` (player rows, then cards, padded).
         ``mask`` marks valid rows per game. ``card_indices`` has shape ``[B, max_deck_id + 1]``.
+        A single serialized game state may be passed as raw ``bytes`` (wrapped as ``B=1``).
         """
         ...
     def load_weights(self, arg0: str) -> None:
@@ -160,7 +168,9 @@ class NormalizedLinear(torch._C.cpp.nn.Module):
 class PlayerStateEmbedding(torch._C.cpp.nn.Module):
     def __init__(self, dimension_out: typing.SupportsInt | typing.SupportsIndex, device: torch.device = ..., dtype: torch.dtype = ...) -> None:
         ...
-    def forward(self, arg0: collections.abc.Iterable, arg1: collections.abc.Iterable) -> torch.Tensor:
+    def forward(self, arg0: collections.abc.Iterable | bytes, arg1: collections.abc.Iterable | bytes) -> torch.Tensor:
+        """Return player embeddings with shape ``[B, 2, dimension_out]``. Raw ``bytes`` are
+        accepted as a single-player batch of size one."""
         ...
     def load_weights(self, arg0: str) -> None:
         ...

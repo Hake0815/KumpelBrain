@@ -233,6 +233,7 @@ def _run_games_coordinator(num_games: int) -> None:
 
     def _run_one_game() -> None:
         game_uuid = uuid.uuid4()
+        game_over_event = Event()
         service.register_game()
         try:
             game_player = GamePlayer(
@@ -241,12 +242,15 @@ def _run_games_coordinator(num_games: int) -> None:
                 player1_name="player1",
                 player2_name="player2",
                 game_uuid=game_uuid,
-                callback_on_game_end=lambda _msg: None,
+                callback_on_game_end=functools.partial(
+                    callback_on_game_end, event=game_over_event, uuid=game_uuid
+                ),
                 inference=inference,
                 compute_device=device,
                 enable_file_logging=False,
             )
             game_player.play_game()
+            game_over_event.wait()
         finally:
             completion_queue.put(None)
 
@@ -260,7 +264,7 @@ def _run_games_coordinator(num_games: int) -> None:
             thread = Thread(
                 target=_run_one_game,
                 name=f"game-{next_game}",
-                daemon=True,
+                daemon=False,
             )
             thread.start()
             active_threads.append(thread)
@@ -283,6 +287,9 @@ def _run_games_coordinator(num_games: int) -> None:
             active_threads = [thread for thread in active_threads if thread.is_alive()]
             while next_game < num_games and len(active_threads) < concurrent_games:
                 _launch_game()
+
+        for thread in active_threads:
+            thread.join()
 
     service.shutdown()
 

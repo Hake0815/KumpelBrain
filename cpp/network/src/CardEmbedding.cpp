@@ -15,6 +15,23 @@
 
 namespace {
 
+void validate_card_segment_offsets(const google::protobuf::RepeatedPtrField<ProtoBufCardState>& card_batch,
+                                   const std::vector<int64_t>& card_segment_offsets) {
+    const int64_t num_cards = static_cast<int64_t>(card_batch.size());
+    if (num_cards == 0) {
+        return;
+    }
+    TORCH_CHECK(card_segment_offsets.size() >= 2,
+                "CardEmbedding: card_segment_offsets must have at least two entries when card_batch is non-empty");
+    TORCH_CHECK(card_segment_offsets.front() == 0, "CardEmbedding: card_segment_offsets must start at 0");
+    TORCH_CHECK(card_segment_offsets.back() == num_cards,
+                "CardEmbedding: card_segment_offsets must end at card_batch.size()");
+    for (size_t i = 1; i < card_segment_offsets.size(); ++i) {
+        TORCH_CHECK(card_segment_offsets[i] >= card_segment_offsets[static_cast<size_t>(i - 1)],
+                    "CardEmbedding: card_segment_offsets must be monotonically non-decreasing");
+    }
+}
+
 std::shared_ptr<std::vector<int64_t>> get_batch_indices_from_map(
     std::unordered_map<std::string, std::shared_ptr<std::vector<int64_t>>>& map, const std::string& key) {
     auto& batch_indices = map[key];
@@ -169,6 +186,9 @@ void CardEmbeddingImpl::register_card_specific_modules(torch::Device device, tor
 std::tuple<torch::Tensor, AdjacencyMatrices, torch::Tensor, torch::Tensor> CardEmbeddingImpl::forward(
     const google::protobuf::RepeatedPtrField<ProtoBufCardState>& card_batch,
     const std::vector<int64_t>& card_segment_offsets) {
+    if (!card_batch.empty()) {
+        validate_card_segment_offsets(card_batch, card_segment_offsets);
+    }
     if (card_batch.empty()) {
         auto card_features = collect_card_features(card_batch, card_segment_offsets);
         if (card_features.per_game_card_indices.empty() &&

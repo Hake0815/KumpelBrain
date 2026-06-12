@@ -420,6 +420,16 @@ std::pair<torch::Tensor, torch::Tensor> GameInteractionEmbeddingImpl::forward(
                 torch::empty({0, 0}, mask_tensor_options_)};
     }
 
+    if (card_indices.defined() && card_indices.numel() > 0) {
+        TORCH_CHECK(card_indices.dim() == 2,
+                    "embedGameInteraction: card_indices must be 2D [B, max_deck_id+1]");
+        TORCH_CHECK(cards.dim() == 3, "embedGameInteraction: cards must be 3D [B, max_cards, dim]");
+        TORCH_CHECK(card_indices.size(0) == batch_size,
+                    "embedGameInteraction: card_indices batch size must match game_interactions_per_game");
+        TORCH_CHECK(cards.size(0) == batch_size,
+                    "embedGameInteraction: cards batch size must match game_interactions_per_game");
+    }
+
     int64_t max_interactions = 0;
     for (const auto& interactions : game_interactions_per_game) {
         max_interactions = std::max(max_interactions, static_cast<int64_t>(interactions.size()));

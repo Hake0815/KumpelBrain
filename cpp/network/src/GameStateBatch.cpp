@@ -48,16 +48,17 @@ torch::Tensor build_batched_card_indices(const std::vector<std::vector<int64_t>>
         max_lookup = std::max(max_lookup, static_cast<int64_t>(row.size()));
     }
     auto options = torch::TensorOptions().device(device).dtype(torch::kInt64);
-    auto out = torch::full({batch_size, max_lookup}, -1, options);
+    if (max_lookup == 0) {
+        return torch::empty({batch_size, 0}, options);
+    }
+    std::vector<int64_t> host(static_cast<size_t>(batch_size * max_lookup), -1);
     for (int64_t g = 0; g < batch_size; ++g) {
         const auto& row = per_game_card_indices[static_cast<size_t>(g)];
-        if (row.empty()) {
-            continue;
+        for (int64_t i = 0; i < static_cast<int64_t>(row.size()); ++i) {
+            host[static_cast<size_t>(g * max_lookup + i)] = row[static_cast<size_t>(i)];
         }
-        out.slice(0, g, g + 1).slice(1, 0, static_cast<int64_t>(row.size())) =
-            torch::tensor(row, options).unsqueeze(0);
     }
-    return out;
+    return torch::tensor(host, options).view({batch_size, max_lookup});
 }
 
 torch::Tensor globalize_card_indices_for_resolution(const torch::Tensor& card_indices_batched,
@@ -104,7 +105,12 @@ BatchedCardResolution prepare_batched_card_resolution(const torch::Tensor& card_
     }
     TORCH_CHECK(cards_batched.numel() != 0,
                 "prepare_batched_card_resolution: non-empty card_indices requires non-empty cards");
+    TORCH_CHECK(card_indices_batched.dim() == 2,
+                "prepare_batched_card_resolution: card_indices must be 2D [B, max_deck_id+1]");
+    TORCH_CHECK(cards_batched.dim() == 3, "prepare_batched_card_resolution: cards must be 3D [B, max_cards, dim]");
     const int64_t batch_size = card_indices_batched.size(0);
+    TORCH_CHECK(cards_batched.size(0) == batch_size,
+                "prepare_batched_card_resolution: card_indices and cards batch size must match");
     const int64_t max_cards = cards_batched.size(1);
     resolution.deck_id_stride = card_indices_batched.size(1);
     resolution.flat_cards = cards_batched.reshape({batch_size * max_cards, cards_batched.size(2)});

@@ -96,10 +96,17 @@ def test_card_state_embedding_forward_golden_case(
         )
         model.eval()
         with torch.inference_mode():
-            actual, _mask, card_indices = model.forward(states)
+            actual, mask, card_indices = model.forward(states)
             actual = actual[0]
+            num_cards = len(states)
         if device.type == "cuda":
             torch.cuda.synchronize()
+
+        assert mask.shape[0] == 1
+        assert mask.dtype == torch.bool
+        assert mask[0, :num_cards].all()
+        if mask.size(1) > num_cards:
+            assert not mask[0, num_cards:].any()
 
     import card_embedding_forward_fixtures as card_fixtures
 

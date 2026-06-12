@@ -14,6 +14,10 @@ from network.kumpel_network import KumpelNetwork
 from network.selector import Selector
 
 
+def _to_cpu_if_needed(tensor: torch.Tensor) -> torch.Tensor:
+    return tensor if tensor.device.type == "cpu" else tensor.cpu()
+
+
 @dataclass
 class _PendingRequest:
     event: threading.Event = field(default_factory=threading.Event)
@@ -128,11 +132,11 @@ class BatchedInferenceClient(InferenceClient):
         include_stop_token: bool,
     ) -> torch.Tensor:
         return self._service.submit_target_score(
-            candidates.cpu(),
-            partial_selection.cpu(),
-            transformed_state.cpu(),
-            embedded_interaction.cpu(),
-            card_indices.cpu(),
+            _to_cpu_if_needed(candidates),
+            _to_cpu_if_needed(partial_selection),
+            _to_cpu_if_needed(transformed_state),
+            _to_cpu_if_needed(embedded_interaction),
+            _to_cpu_if_needed(card_indices),
             include_stop_token,
         )
 
@@ -141,6 +145,8 @@ class BatchedInferenceClient(InferenceClient):
 
 
 class BatchedInferenceService:
+    _SHUTDOWN_ERROR = RuntimeError("BatchedInferenceService is shut down")
+
     def __init__(
         self,
         network: KumpelNetwork,
@@ -185,10 +191,23 @@ class BatchedInferenceService:
     def shutdown(self) -> None:
         with self._lock:
             self._shutdown = True
+            move_pending = self._move_pending
+            target_pending = self._target_pending
+            self._move_pending = []
+            self._target_pending = []
             self._move_cond.notify_all()
             self._target_cond.notify_all()
+
+        for request in move_pending + target_pending:
+            request.error = self._SHUTDOWN_ERROR
+            request.event.set()
+
         self._move_worker.join(timeout=5.0)
         self._target_worker.join(timeout=5.0)
+        if self._move_worker.is_alive() or self._target_worker.is_alive():
+            raise RuntimeError(
+                "BatchedInferenceService workers did not stop within 5 seconds"
+            )
 
     def _should_flush(self, pending_count: int, first_submit_time: float | None) -> bool:
         if pending_count == 0:
@@ -202,23 +221,6 @@ class BatchedInferenceService:
                 return True
         return False
 
-    def _wait_for_flush(
-        self,
-        pending: list,
-        cond: threading.Condition,
-    ) -> tuple[list, float | None]:
-        first_submit_time: float | None = None
-        while True:
-            if self._shutdown:
-                return pending, first_submit_time
-            if pending and first_submit_time is None:
-                first_submit_time = time.monotonic()
-            if self._should_flush(len(pending), first_submit_time):
-                batch = pending
-                pending = []
-                return batch, None
-            cond.wait(timeout=self.linger_s if first_submit_time is None else 0.05)
-
     def submit_move_eval(
         self,
         state_bytes: bytes,
@@ -229,6 +231,8 @@ class BatchedInferenceService:
             interactions_bytes=interactions_bytes,
         )
         with self._lock:
+            if self._shutdown:
+                raise self._SHUTDOWN_ERROR
             self._move_pending.append(request)
             self._move_cond.notify()
         request.event.wait()
@@ -254,6 +258,8 @@ class BatchedInferenceService:
             include_stop_token=include_stop_token,
         )
         with self._lock:
+            if self._shutdown:
+                raise self._SHUTDOWN_ERROR
             self._target_pending.append(request)
             self._target_cond.notify()
         request.event.wait()

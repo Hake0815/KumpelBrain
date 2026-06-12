@@ -186,15 +186,23 @@ std::vector<std::vector<MessageType>> parse_nested_serialized_batch(const pybind
                                                                     const char* message_label) {
     std::vector<std::vector<MessageType>> parsed;
     for (auto batch_item : batch) {
-        auto batch_list = pybind11::cast<pybind11::list>(batch_item.cast<pybind11::object>());
+        auto inner_iterable = pybind11::cast<pybind11::iterable>(batch_item.cast<pybind11::object>());
         std::vector<MessageType> inner;
-        inner.reserve(batch_list.size());
-        for (auto item : batch_list) {
+        for (auto item : inner_iterable) {
             inner.push_back(parse_serialized_message<MessageType>(item.cast<pybind11::object>(), message_label));
         }
         parsed.push_back(std::move(inner));
     }
     return parsed;
+}
+
+pybind11::iterable as_message_batch_iterable(const pybind11::handle& batch) {
+    if (pybind11::isinstance<pybind11::bytes>(batch) || pybind11::isinstance<pybind11::str>(batch)) {
+        pybind11::list wrapped;
+        wrapped.append(batch);
+        return wrapped;
+    }
+    return pybind11::cast<pybind11::iterable>(batch);
 }
 
 void parse_card_state_batch_serialized(const pybind11::iterable& batch,
@@ -454,15 +462,15 @@ PYBIND11_MODULE(kumpel_embedding, m) {
         .def(pybind11::init<int64_t, torch::Device, torch::Dtype>(), pybind11::arg("dimension_out"),
              pybind11::arg("device") = torch::Device(torch::kCPU), pybind11::arg("dtype") = torch::Dtype(torch::kFloat))
         .def("forward",
-             [](PlayerStateEmbeddingImpl& self, const pybind11::iterable& self_player_states,
-                const pybind11::iterable& opponent_player_states) {
+             [](PlayerStateEmbeddingImpl& self, const pybind11::handle& self_player_states,
+                const pybind11::handle& opponent_player_states) {
                  std::vector<serialization::ProtoBufPlayerState> self_parsed;
                  std::vector<serialization::ProtoBufPlayerState> opponent_parsed;
-                 for (auto item : self_player_states) {
+                 for (auto item : as_message_batch_iterable(self_player_states)) {
                      self_parsed.push_back(parse_serialized_message<serialization::ProtoBufPlayerState>(
                          item.cast<pybind11::object>(), "ProtoBufPlayerState"));
                  }
-                 for (auto item : opponent_player_states) {
+                 for (auto item : as_message_batch_iterable(opponent_player_states)) {
                      opponent_parsed.push_back(parse_serialized_message<serialization::ProtoBufPlayerState>(
                          item.cast<pybind11::object>(), "ProtoBufPlayerState"));
                  }
@@ -475,9 +483,9 @@ PYBIND11_MODULE(kumpel_embedding, m) {
         .def(pybind11::init<int64_t, torch::Device, torch::Dtype>(), pybind11::arg("dimension_out"),
              pybind11::arg("device") = torch::Device(torch::kCPU), pybind11::arg("dtype") = torch::Dtype(torch::kFloat))
         .def("embedGameState",
-             [](GameEmbeddingImpl& self, const pybind11::iterable& game_states) {
-                 auto [embedding, mask, card_indices] =
-                     self.embedGameState(parse_game_state_batch_serialized(game_states));
+             [](GameEmbeddingImpl& self, const pybind11::handle& game_states) {
+                 auto [embedding, mask, card_indices] = self.embedGameState(
+                     parse_game_state_batch_serialized(as_message_batch_iterable(game_states)));
                  return pybind11::make_tuple(embedding, mask, card_indices);
              })
         .def("embedGameInteraction",
