@@ -74,9 +74,12 @@ def test_game_embedding_embed_game_interaction_golden_case(
         )
         model.eval()
         with torch.inference_mode():
-            game_state_embedding, indices = model.embedGameState(game_state_bytes)
+            game_state_embedding, _mask, indices = model.embedGameState([game_state_bytes])
             cards = fixtures.extract_card_embeddings(game_state_embedding)
-            actual = model.embedGameInteraction(interaction_bytes, indices, cards)
+            actual, _interaction_mask = model.embedGameInteraction(
+                [interaction_bytes], indices, cards
+            )
+            actual = actual[0]
         if device.type == "cuda":
             torch.cuda.synchronize()
 

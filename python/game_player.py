@@ -7,8 +7,7 @@ import torch
 from game_logic_wrappers.game_controller_wrapper import GameControllerWrapper
 from game_logic_wrappers.interaction_wrapper import InteractionWrapper
 import json
-from network.kumpel_network import KumpelNetwork
-from network.selector import Selector
+from inference_service import DirectInferenceClient, InferenceClient
 from game_logic_wrappers.card_wrapper import CardWrapper
 from profiling import InferenceProfiler, profiling_enabled
 
@@ -25,25 +24,24 @@ class GamePlayer:
         player2_name: str,
         game_uuid: uuid.UUID,
         callback_on_game_end: Callable[[str], None],
-        network: KumpelNetwork,
-        selector: Selector,
+        inference: InferenceClient,
         compute_device: torch.device,
         enable_file_logging: bool = False,
         enable_profiling: bool | None = None,
     ):
         self.game_uuid = game_uuid
         self.enable_file_logging = enable_file_logging
-        self.network = network
-        self.selector = selector
+        self.inference = inference
         self.compute_device = compute_device
-        self.selector_device = compute_device
+        self.tensor_device = torch.device("cpu")
 
         if enable_profiling is None:
             enable_profiling = profiling_enabled()
         self.profiler: InferenceProfiler | None = (
             InferenceProfiler() if enable_profiling else None
         )
-        self.network.profiler = self.profiler
+        if isinstance(inference, DirectInferenceClient):
+            inference.network.profiler = self.profiler
 
         log_file_path = f"game_action_logs/log_{game_uuid}.txt"
         self.game_controller = GameControllerWrapper(log_file_path)
@@ -78,6 +76,7 @@ class GamePlayer:
         if interaction.is_game_over():
             if self.profiler is not None:
                 print(self.profiler.format_report())
+            self.inference.game_finished()
             self.callback_on_game_end(interaction.get_game_over_message())
             return
 
@@ -125,12 +124,12 @@ class GamePlayer:
             )
             self.profiler.sync_device(self.compute_device)
             self.profiler.cs_export_s += time.perf_counter() - t0
-            return self.network.forward(
+            return self.inference.evaluate_move(
                 game_state, [interaction.to_bytes() for interaction in interactions]
             )
 
         game_state = self.game_controller.export_game_state_as_byte_array(player_name)
-        return self.network.forward(
+        return self.inference.evaluate_move(
             game_state, [interaction.to_bytes() for interaction in interactions]
         )
 
@@ -172,10 +171,10 @@ class GamePlayer:
                 )
                 embedded_interaction = embedded_interactions[0]
 
-            if transformed_state.device != self.selector_device:
-                transformed_state = transformed_state.to(self.selector_device)
-                embedded_interaction = embedded_interaction.to(self.selector_device)
-                card_indices = card_indices.to(self.selector_device)
+            if transformed_state.device != self.tensor_device:
+                transformed_state = transformed_state.to(self.tensor_device)
+                embedded_interaction = embedded_interaction.to(self.tensor_device)
+                card_indices = card_indices.to(self.tensor_device)
 
             if interaction.is_with_condition_target():
                 targets = self._select_targets_with_condition(
@@ -210,7 +209,7 @@ class GamePlayer:
                 break
             candidates = torch.tensor(
                 self._cards_to_deck_ids(cadidate_cards),
-                device=self.selector_device,
+                device=self.tensor_device,
                 dtype=torch.long,
             )
             current_selection_tensor = self._deck_ids_tensor(
@@ -269,9 +268,7 @@ class GamePlayer:
         return current_selection
 
     def _deck_ids_tensor(self, deck_ids: list[int]) -> torch.Tensor:
-        return torch.tensor(
-            deck_ids, device=self.selector_device, dtype=torch.long
-        )
+        return torch.tensor(deck_ids, device=self.tensor_device, dtype=torch.long)
 
     def _score_targets(
         self,
@@ -283,8 +280,8 @@ class GamePlayer:
         include_stop_token: bool,
     ) -> torch.Tensor:
         if self.profiler is not None:
-            with self.profiler.timed(self.selector_device) as span:
-                scores = self.selector(
+            with self.profiler.timed(self.compute_device) as span:
+                scores = self.inference.score_targets(
                     candidates,
                     current_selection_tensor,
                     transformed_state,
@@ -296,7 +293,7 @@ class GamePlayer:
             self.profiler.selector_calls += 1
             return scores
 
-        return self.selector(
+        return self.inference.score_targets(
             candidates,
             current_selection_tensor,
             transformed_state,

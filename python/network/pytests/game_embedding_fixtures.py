@@ -77,10 +77,12 @@ def build_expected_game_state_card_indices(
     game_state = pb2.ProtoBufGameState()
     game_state.ParseFromString(game_state_bytes)
     rows = [card_state.SerializeToString() for card_state in game_state.card_states]
-    return build_expected_card_indices(rows, device)
+    return build_expected_card_indices(rows, device).unsqueeze(0)
 
 
 def extract_card_embeddings(game_state_embedding: torch.Tensor) -> torch.Tensor:
+    if game_state_embedding.dim() == 3:
+        return game_state_embedding[:, 2:, :]
     return game_state_embedding[2:]
 
 

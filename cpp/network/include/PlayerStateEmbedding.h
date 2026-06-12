@@ -17,8 +17,8 @@ struct PlayerStateEmbeddingImpl : torch::nn::Module, SaveLoadMixin<PlayerStateEm
     PlayerStateEmbeddingImpl(int64_t dimension_out, torch::Device device = torch::kCPU,
                              torch::Dtype dtype = torch::kFloat);
 
-    torch::Tensor forward(const ProtoBufPlayerState& self_player_state,
-                          const ProtoBufPlayerState& opponent_player_state);
+    torch::Tensor forward(const std::vector<ProtoBufPlayerState>& self_player_states,
+                          const std::vector<ProtoBufPlayerState>& opponent_player_states);
 
    private:
     struct PlayerStateFeatures {
@@ -46,8 +46,6 @@ struct PlayerStateEmbeddingImpl : torch::nn::Module, SaveLoadMixin<PlayerStateEm
     torch::Dtype dtype_;
     torch::TensorOptions index_options_;
     torch::TensorOptions float_options_;
-    torch::Tensor query_indices_;
-    torch::Tensor base_token_mask_;
     torch::nn::Embedding is_active_embedding_{nullptr};
     torch::nn::Embedding is_attacking_embedding_{nullptr};
     torch::nn::Embedding knows_his_prizes_embedding_{nullptr};
@@ -62,9 +60,9 @@ struct PlayerStateEmbeddingImpl : torch::nn::Module, SaveLoadMixin<PlayerStateEm
     torch::nn::Embedding queries_embedding_{nullptr};
     MultiHeadAttention multi_head_attention_{nullptr};
 
-    PlayerStateFeatures collect_features(const ProtoBufPlayerState& self_player_state,
-                                         const ProtoBufPlayerState& opponent_player_state) const;
-    PlayerStateStagedTensors stage_features(const PlayerStateFeatures& features) const;
+    PlayerStateFeatures collect_features(const std::vector<ProtoBufPlayerState>& self_player_states,
+                                         const std::vector<ProtoBufPlayerState>& opponent_player_states) const;
+    PlayerStateStagedTensors stage_features(const PlayerStateFeatures& features, int64_t batch_size) const;
     torch::Tensor embed_base_tokens(const PlayerStateStagedTensors& staged);
     PlayerTraitTokens embed_trait_tokens(const PlayerStateStagedTensors& staged, int64_t max_player_turn_traits);
 };

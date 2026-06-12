@@ -191,15 +191,28 @@ void flatten_game_interaction_data(
 
 }  // namespace
 
-FlatGameInteractionBatch flatten_game_interaction_batch(const std::vector<ProtoBufGameInteraction>& game_interactions) {
+FlatGameInteractionBatch flatten_game_interaction_batch(
+    const std::vector<std::vector<ProtoBufGameInteraction>>& game_interactions_per_game) {
     FlatGameInteractionBatch flat;
-    flat.game_interaction_types.reserve(game_interactions.size());
-    flat.game_interaction_data_type_offsets.reserve(game_interactions.size());
-    for (int64_t batch_index = 0; batch_index < game_interactions.size(); ++batch_index) {
-        const auto& game_interaction = game_interactions[batch_index];
-
-        flat.game_interaction_types.push_back(game_interaction.type());
-        flatten_game_interaction_data(game_interaction.data(), batch_index, flat);
+    const int64_t num_games = static_cast<int64_t>(game_interactions_per_game.size());
+    flat.interaction_segment_offsets.reserve(static_cast<size_t>(num_games + 1));
+    flat.interaction_segment_offsets.push_back(0);
+    int64_t total_interactions = 0;
+    for (int64_t game_index = 0; game_index < num_games; ++game_index) {
+        const auto& game_interactions = game_interactions_per_game[static_cast<size_t>(game_index)];
+        flat.game_interaction_types.reserve(flat.game_interaction_types.size() +
+                                            static_cast<size_t>(game_interactions.size()));
+        flat.game_interaction_data_type_offsets.reserve(flat.game_interaction_data_type_offsets.size() +
+                                                        static_cast<size_t>(game_interactions.size()));
+        for (int64_t local_index = 0; local_index < static_cast<int64_t>(game_interactions.size()); ++local_index) {
+            const int64_t batch_index = total_interactions + local_index;
+            const auto& game_interaction = game_interactions[static_cast<size_t>(local_index)];
+            flat.interaction_game_indices.push_back(game_index);
+            flat.game_interaction_types.push_back(game_interaction.type());
+            flatten_game_interaction_data(game_interaction.data(), batch_index, flat);
+        }
+        total_interactions += static_cast<int64_t>(game_interactions.size());
+        flat.interaction_segment_offsets.push_back(total_interactions);
     }
     finalize_flat_conditional_target_query(flat.flat_conditional_target_query);
     return flat;
@@ -209,6 +222,8 @@ FlatGameInteractionBatchTensors flat_game_interaction_batch_to_tensors(const Fla
                                                                        torch::Device device) {
     const auto& q = flat.flat_conditional_target_query;
 
+    const size_t n_interaction_game_indices = flat.interaction_game_indices.size();
+    const size_t n_interaction_segment_offsets = flat.interaction_segment_offsets.size();
     const size_t n_game_interaction_types = flat.game_interaction_types.size();
     const size_t n_game_interaction_data_types = flat.game_interaction_data_types.size();
     const size_t n_game_interaction_data_type_offsets = flat.game_interaction_data_type_offsets.size();
@@ -239,7 +254,8 @@ FlatGameInteractionBatchTensors flat_game_interaction_batch_to_tensors(const Fla
     const size_t n_root_target_data_index = q.root_target_data_index.size();
 
     const size_t total_int64 =
-        n_game_interaction_types + n_game_interaction_data_types + n_game_interaction_data_type_offsets +
+        n_interaction_game_indices + n_interaction_segment_offsets + n_game_interaction_types +
+        n_game_interaction_data_types + n_game_interaction_data_type_offsets +
         n_number_data_batch_index + n_number_data + n_target_data_batch_index +
         n_target_data_possible_targets_deck_ids + n_target_data_possible_targets_deck_ids_length +
         n_target_data_target_action + n_target_data_remainder_action + n_target_data_number_of_targets +
@@ -256,6 +272,12 @@ FlatGameInteractionBatchTensors flat_game_interaction_batch_to_tensors(const Fla
     };
 
     int64_t off = 0;
+    const int64_t off_interaction_game_indices = off;
+    push_block(flat.interaction_game_indices);
+    off += static_cast<int64_t>(n_interaction_game_indices);
+    const int64_t off_interaction_segment_offsets = off;
+    push_block(flat.interaction_segment_offsets);
+    off += static_cast<int64_t>(n_interaction_segment_offsets);
     const int64_t off_game_interaction_types = off;
     push_block(flat.game_interaction_types);
     off += static_cast<int64_t>(n_game_interaction_types);
@@ -340,6 +362,10 @@ FlatGameInteractionBatchTensors flat_game_interaction_batch_to_tensors(const Fla
     auto int64_buf = torch::tensor(int64_host, index_options);
 
     FlatGameInteractionBatchTensors out;
+    out.interaction_game_indices =
+        int64_buf.narrow(0, off_interaction_game_indices, static_cast<int64_t>(n_interaction_game_indices));
+    out.interaction_segment_offsets =
+        int64_buf.narrow(0, off_interaction_segment_offsets, static_cast<int64_t>(n_interaction_segment_offsets));
     out.game_interaction_types =
         int64_buf.narrow(0, off_game_interaction_types, static_cast<int64_t>(n_game_interaction_types));
     out.game_interaction_data_types =

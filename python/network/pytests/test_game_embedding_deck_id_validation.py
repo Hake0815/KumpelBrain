@@ -45,13 +45,13 @@ def test_embed_game_interaction_rejects_missing_deck_id() -> None:
     model.eval()
     game_state = fixtures.EMBED_GAME_STATE_CASES["three_cards"]
     with torch.inference_mode():
-        state_emb, indices = model.embedGameState(game_state)
+        state_emb, _mask, indices = model.embedGameState([game_state])
         cards = fixtures.extract_card_embeddings(state_emb)
 
     bad_interaction = [_make_target_interaction([99])]
     with pytest.raises((RuntimeError, ValueError), match="deck_id"):
         with torch.inference_mode():
-            model.embedGameInteraction(bad_interaction, indices, cards)
+            model.embedGameInteraction([bad_interaction], indices, cards)
 
 
 def test_embed_game_interaction_rejects_out_of_range_deck_id() -> None:
@@ -60,14 +60,14 @@ def test_embed_game_interaction_rejects_out_of_range_deck_id() -> None:
     model.eval()
     game_state = fixtures.EMBED_GAME_STATE_CASES["three_cards"]
     with torch.inference_mode():
-        state_emb, indices = model.embedGameState(game_state)
+        state_emb, _mask, indices = model.embedGameState([game_state])
         cards = fixtures.extract_card_embeddings(state_emb)
 
-    lookup_size = indices.size(0)
+    lookup_size = indices.size(1)
     bad_interaction = [_make_target_interaction([lookup_size + 10])]
     with pytest.raises((RuntimeError, ValueError), match="deck_id"):
         with torch.inference_mode():
-            model.embedGameInteraction(bad_interaction, indices, cards)
+            model.embedGameInteraction([bad_interaction], indices, cards)
 
 
 def test_embed_game_interaction_empty_batch_with_nonempty_state() -> None:
@@ -76,7 +76,8 @@ def test_embed_game_interaction_empty_batch_with_nonempty_state() -> None:
     model.eval()
     game_state = fixtures.EMBED_GAME_STATE_CASES["three_cards"]
     with torch.inference_mode():
-        state_emb, indices = model.embedGameState(game_state)
+        state_emb, _mask, indices = model.embedGameState([game_state])
         cards = fixtures.extract_card_embeddings(state_emb)
-        out = model.embedGameInteraction([], indices, cards)
-    assert out.shape == (0, DIM)
+        out, out_mask = model.embedGameInteraction([[]], indices, cards)
+    assert out.shape == (1, 0, DIM)
+    assert out_mask.shape == (1, 0)

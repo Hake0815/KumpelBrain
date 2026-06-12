@@ -108,11 +108,11 @@ def test_card_embedding_forward_golden_case(
         )
         model.eval()
         with torch.inference_mode():
-            actual, _adjacency, card_indices = model.forward(cards)
+            actual, _adjacency, card_indices, _segment_offsets = model.forward(cards)
         if device.type == "cuda":
             torch.cuda.synchronize()
 
-    expected_indices = fixtures.build_expected_card_indices(cards, device)
+    expected_indices = fixtures.build_expected_card_indices(cards, device).unsqueeze(0)
     assert card_indices.dtype == torch.long
     assert card_indices.device.type == device.type
     assert card_indices.shape == expected_indices.shape

@@ -420,7 +420,7 @@ bool tensor_device_matches_module(const torch::Tensor& tensor, const torch::Devi
 }
 
 torch::Tensor extract_card_embeddings(const torch::Tensor& game_state_embedding) {
-    return game_state_embedding.slice(0, 2, game_state_embedding.size(0));
+    return game_state_embedding.slice(1, 2, game_state_embedding.size(1));
 }
 
 const char* game_interaction_data_type_name(serialization::ProtoBufGameInteractionDataType type) {
@@ -539,7 +539,9 @@ GameInteractionBenchCase build_game_interaction_bench_case(GameEmbeddingImpl& ga
     GameInteractionBenchCase bench_case;
     bench_case.name = name;
     bench_case.game_state = make_game_state(card_count, seed);
-    const auto [game_state_embedding, card_indices] = game_embedding.embedGameState(bench_case.game_state);
+    const auto [game_state_embedding, mask, card_indices] =
+        game_embedding.embedGameState({bench_case.game_state});
+    (void)mask;
     bench_case.card_indices = card_indices;
     bench_case.cards = extract_card_embeddings(game_state_embedding);
     bench_case.interactions = make_game_interaction_batch(interaction_batch_size, excluded_type);
@@ -565,12 +567,16 @@ void verify_game_embedding_output_shape(GameEmbeddingImpl& game_embedding, const
                                         int64_t dimension_out, const std::string& label) {
     for (int64_t card_count : {0, 32, 128}) {
         auto game_state = make_game_state(card_count, card_count + 10);
-        auto [out, card_indices] = game_embedding.embedGameState(game_state);
+        auto [out, mask, card_indices] = game_embedding.embedGameState({game_state});
         (void)card_indices;
         const int64_t expected_rows = card_count + 2;
-        if (out.dim() != 2 || out.size(0) != expected_rows || out.size(1) != dimension_out) {
+        if (out.dim() != 3 || out.size(0) != 1 || out.size(1) != expected_rows || out.size(2) != dimension_out) {
             std::cerr << label << " GameEmbedding::embedGameState shape check failed for " << card_count
-                      << " cards: expected (" << expected_rows << ", " << dimension_out << ")\n";
+                      << " cards: expected (1, " << expected_rows << ", " << dimension_out << ")\n";
+            std::abort();
+        }
+        if (mask.dim() != 2 || mask.size(0) != 1 || mask.size(1) != expected_rows) {
+            std::cerr << label << " GameEmbedding::embedGameState mask shape check failed for " << card_count << "\n";
             std::abort();
         }
         if (!tensor_device_matches_module(out, device)) {
@@ -581,10 +587,11 @@ void verify_game_embedding_output_shape(GameEmbeddingImpl& game_embedding, const
     }
     {
         auto uneven = make_game_state(0, 500, 0, 4);
-        auto [out, card_indices] = game_embedding.embedGameState(uneven);
+        auto [out, mask, card_indices] = game_embedding.embedGameState({uneven});
         (void)card_indices;
-        if (out.dim() != 2 || out.size(0) != 2 || out.size(1) != dimension_out) {
-            std::cerr << label << " GameEmbedding::embedGameState uneven traits (0 cards): expected (2, "
+        (void)mask;
+        if (out.dim() != 3 || out.size(0) != 1 || out.size(1) != 2 || out.size(2) != dimension_out) {
+            std::cerr << label << " GameEmbedding::embedGameState uneven traits (0 cards): expected (1, 2, "
                       << dimension_out << ")\n";
             std::abort();
         }
@@ -596,12 +603,15 @@ void verify_game_embedding_output_shape(GameEmbeddingImpl& game_embedding, const
     }
 
     {
-        auto [empty_embedding, empty_indices] = game_embedding.embedGameState(make_game_state(0, 600));
+        auto [empty_embedding, empty_mask, empty_indices] = game_embedding.embedGameState({make_game_state(0, 600)});
         (void)empty_embedding;
-        auto empty_cards = torch::empty({0, dimension_out}, torch::TensorOptions().device(device).dtype(torch::kFloat));
-        auto out = game_embedding.embedGameInteraction({}, empty_indices, empty_cards);
-        if (out.dim() != 2 || out.size(0) != 0 || out.size(1) != dimension_out) {
-            std::cerr << label << " GameEmbedding::embedGameInteraction empty batch shape check failed: expected (0, "
+        (void)empty_mask;
+        auto empty_cards =
+            torch::empty({1, 0, dimension_out}, torch::TensorOptions().device(device).dtype(torch::kFloat));
+        auto [out, interaction_mask] = game_embedding.embedGameInteraction({{}}, empty_indices, empty_cards);
+        (void)interaction_mask;
+        if (out.dim() != 3 || out.size(0) != 1 || out.size(1) != 0 || out.size(2) != dimension_out) {
+            std::cerr << label << " GameEmbedding::embedGameInteraction empty batch shape check failed: expected (1, 0, "
                       << dimension_out << ")\n";
             std::abort();
         }
@@ -616,12 +626,13 @@ void verify_game_embedding_output_shape(GameEmbeddingImpl& game_embedding, const
         const auto cases = build_game_interaction_bench_cases(game_embedding, device, interaction_batch_size,
                                                               700 + interaction_batch_size, interaction_batch_size);
         for (const auto& bench_case : cases) {
-            auto out = game_embedding.embedGameInteraction(bench_case.interactions, bench_case.card_indices,
-                                                           bench_case.cards);
+            auto [out, interaction_mask] = game_embedding.embedGameInteraction({bench_case.interactions},
+                                                                             bench_case.card_indices, bench_case.cards);
+            (void)interaction_mask;
             const int64_t expected_rows = static_cast<int64_t>(bench_case.interactions.size());
-            if (out.dim() != 2 || out.size(0) != expected_rows || out.size(1) != dimension_out) {
+            if (out.dim() != 3 || out.size(0) != 1 || out.size(1) != expected_rows || out.size(2) != dimension_out) {
                 std::cerr << label << " GameEmbedding::embedGameInteraction shape check failed [" << bench_case.name
-                          << ", batch=" << interaction_batch_size << "]: expected (" << expected_rows << ", "
+                          << ", batch=" << interaction_batch_size << "]: expected (1, " << expected_rows << ", "
                           << dimension_out << ")\n";
                 std::abort();
             }
@@ -699,14 +710,16 @@ void run_embedding_benchmarks(const torch::Device& device, const std::string& la
 
     auto game_state_32 = make_game_state(32, 200);
     benchmark_ms(label + " game_embedding_embed_game_state_32", device, warmup_runs, measured_runs, [&]() {
-        auto [out, card_indices] = game_embedding->embedGameState(game_state_32);
+        auto [out, mask, card_indices] = game_embedding->embedGameState({game_state_32});
+        (void)mask;
         (void)card_indices;
         benchmark_sink += out.numel();
     });
 
     auto game_state_128 = make_game_state(128, 300);
     benchmark_ms(label + " game_embedding_embed_game_state_128", device, warmup_runs, measured_runs, [&]() {
-        auto [out, card_indices] = game_embedding->embedGameState(game_state_128);
+        auto [out, mask, card_indices] = game_embedding->embedGameState({game_state_128});
+        (void)mask;
         (void)card_indices;
         benchmark_sink += out.numel();
     });
@@ -714,7 +727,8 @@ void run_embedding_benchmarks(const torch::Device& device, const std::string& la
     auto game_state_32_uneven = make_game_state(32, 400, 0, 4);
     benchmark_ms(label + " game_embedding_embed_game_state_32_uneven_traits", device, warmup_runs, measured_runs,
                  [&]() {
-                     auto [out, card_indices] = game_embedding->embedGameState(game_state_32_uneven);
+                     auto [out, mask, card_indices] = game_embedding->embedGameState({game_state_32_uneven});
+                     (void)mask;
                      (void)card_indices;
                      benchmark_sink += out.numel();
                  });
@@ -722,7 +736,8 @@ void run_embedding_benchmarks(const torch::Device& device, const std::string& la
     auto game_state_128_uneven = make_game_state(128, 500, 4, 0);
     benchmark_ms(label + " game_embedding_embed_game_state_128_uneven_traits", device, warmup_runs, measured_runs,
                  [&]() {
-                     auto [out, card_indices] = game_embedding->embedGameState(game_state_128_uneven);
+                     auto [out, mask, card_indices] = game_embedding->embedGameState({game_state_128_uneven});
+                     (void)mask;
                      (void)card_indices;
                      benchmark_sink += out.numel();
                  });
@@ -734,8 +749,10 @@ void run_embedding_benchmarks(const torch::Device& device, const std::string& la
             const std::string bench_name = label + " game_embedding_embed_game_interaction_" +
                                            std::to_string(interaction_batch_size) + "_" + bench_case.name;
             benchmark_ms(bench_name, device, warmup_runs, measured_runs, [&]() {
-                auto out = game_embedding->embedGameInteraction(bench_case.interactions, bench_case.card_indices,
-                                                                bench_case.cards);
+                auto [out, interaction_mask] = game_embedding->embedGameInteraction({bench_case.interactions},
+                                                                                    bench_case.card_indices,
+                                                                                    bench_case.cards);
+                (void)interaction_mask;
                 benchmark_sink += out.numel();
             });
         }

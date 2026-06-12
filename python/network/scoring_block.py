@@ -45,6 +45,7 @@ class CrossAttentionScoringBlock(nn.Module, SaveLoadMixin):
         query: torch.Tensor,
         key: torch.Tensor,
         value: torch.Tensor,
+        attn_mask=None,
     ) -> torch.Tensor:
         # query: (N, L_q, D) — one row per item to score (e.g. interactions or target candidates)
         # key, value: (N, L_kv, D) — context attended over (e.g. full state, or state + selection context)
@@ -53,7 +54,7 @@ class CrossAttentionScoringBlock(nn.Module, SaveLoadMixin):
         if self.include_pre_ffn:
             x = x + self.first_feed_forward(self.norm_pre_ffn(x))  # (N, L_q, D)
         x = x + self.multi_head_attention(
-            self.norm_attention(x), key, value
+            self.norm_attention(x), key, value, attn_mask=attn_mask
         )  # (N, L_q, D)
         x = x + self.post_feed_forward(self.norm_post_ffn(x))  # (N, L_q, D)
         return self.linear_reduce(x).squeeze(-1)  # (N, L_q, 1) -> (N, L_q)

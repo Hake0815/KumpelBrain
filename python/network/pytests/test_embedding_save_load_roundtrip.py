@@ -53,7 +53,9 @@ def test_card_state_embedding_holder_save_load_roundtrip(device: torch.device, t
     model_a = kumpel_embedding.make_card_state_embedding(DIM, device=device, dtype=torch.float32)
     states = card_state_fixtures.FIXTURE_CASES["single_no_relations"]
     with torch.inference_mode():
-        out_a, idx_a = model_a.forward(states)
+        out_a, _mask_a, idx_a = model_a.forward(states)
+        out_a = out_a[0]
+        idx_a = idx_a[0]
 
     path = tmp_path / "card_state_embedding.weights"
     model_a.save_weights(str(path))
@@ -61,7 +63,9 @@ def test_card_state_embedding_holder_save_load_roundtrip(device: torch.device, t
     model_b = kumpel_embedding.make_card_state_embedding(DIM, device=device, dtype=torch.float32)
     model_b.load_weights(str(path))
     with torch.inference_mode():
-        out_b, idx_b = model_b.forward(states)
+        out_b, _mask_b, idx_b = model_b.forward(states)
+        out_b = out_b[0]
+        idx_b = idx_b[0]
 
     torch.testing.assert_close(out_a, out_b)
     torch.testing.assert_close(idx_a, idx_b)
@@ -76,9 +80,12 @@ def test_game_embedding_save_load_roundtrip(device: torch.device, tmp_path) -> N
         interactions = game_fixtures.EMBED_GAME_INTERACTION_CASES["all_types_one"][1]
 
         with torch.inference_mode():
-            state_a, idx_a = model_a.embedGameState(game_state)
+            state_a, _mask_a, idx_a = model_a.embedGameState([game_state])
             cards_a = game_fixtures.extract_card_embeddings(state_a)
-            inter_a = model_a.embedGameInteraction(interactions, idx_a, cards_a)
+            inter_a, _im_a = model_a.embedGameInteraction([interactions], idx_a, cards_a)
+            state_a = state_a[0]
+            idx_a = idx_a[0]
+            inter_a = inter_a[0]
 
         path = tmp_path / "game_embedding.weights"
         model_a.save_weights(str(path))
@@ -89,9 +96,12 @@ def test_game_embedding_save_load_roundtrip(device: torch.device, tmp_path) -> N
         model_b.eval()
 
         with torch.inference_mode():
-            state_b, idx_b = model_b.embedGameState(game_state)
+            state_b, _mask_b, idx_b = model_b.embedGameState([game_state])
             cards_b = game_fixtures.extract_card_embeddings(state_b)
-            inter_b = model_b.embedGameInteraction(interactions, idx_b, cards_b)
+            inter_b, _im_b = model_b.embedGameInteraction([interactions], idx_b, cards_b)
+            state_b = state_b[0]
+            idx_b = idx_b[0]
+            inter_b = inter_b[0]
 
     torch.testing.assert_close(state_a, state_b)
     torch.testing.assert_close(idx_a, idx_b)

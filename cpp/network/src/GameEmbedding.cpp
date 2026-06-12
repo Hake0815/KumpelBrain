@@ -24,11 +24,13 @@ GameEmbeddingImpl::GameEmbeddingImpl(int64_t dimension_out, torch::Device device
     to(device, dtype);
 }
 
-std::pair<torch::Tensor, torch::Tensor> GameEmbeddingImpl::embedGameState(const ProtoBufGameState& game_state) {
-    return game_state_embedding_(game_state);
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> GameEmbeddingImpl::embedGameState(
+    const std::vector<ProtoBufGameState>& game_states) {
+    return game_state_embedding_(game_states);
 }
 
-torch::Tensor GameEmbeddingImpl::embedGameInteraction(const std::vector<ProtoBufGameInteraction>& game_interactions,
-                                                    torch::Tensor card_indices, torch::Tensor cards) {
-    return game_interaction_embedding_(game_interactions, card_indices, cards);
+std::pair<torch::Tensor, torch::Tensor> GameEmbeddingImpl::embedGameInteraction(
+    const std::vector<std::vector<ProtoBufGameInteraction>>& game_interactions_per_game, torch::Tensor card_indices,
+    torch::Tensor cards) {
+    return game_interaction_embedding_(game_interactions_per_game, card_indices, cards);
 }

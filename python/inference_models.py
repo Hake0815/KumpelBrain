@@ -28,9 +28,12 @@ def resolve_compute_device(explicit: torch.device | str | None = None) -> torch.
 
 def create_self_play_models(
     compute_device: torch.device | str | None = None,
+    *,
+    embed_on_compute_device: bool = False,
 ) -> tuple[KumpelNetwork, Selector, torch.device]:
     """Build eval-ready network and selector; caller should reuse across games."""
     device = resolve_compute_device(compute_device)
+    embedding_device = device if embed_on_compute_device else torch.device("cpu")
     dimension_state_inner = DIMENSION_OUT * 4
     dimension_interaction_inner = DIMENSION_OUT * 4
     dimension_target_inner = DIMENSION_OUT * 4
@@ -52,6 +55,7 @@ def create_self_play_models(
         attention_args,
         NUM_LAYERS,
         device=device,
+        embedding_device=embedding_device,
     )
     network.eval()
 

@@ -37,6 +37,7 @@ set(KUMPEL_CORE_SOURCES
     network/src/GameEmbedding.cpp
     network/src/GameInteractionFlatten.cpp
     network/src/GameInteractionEmbedding.cpp
+    network/src/GameStateBatch.cpp
     network/src/GameStateEmbedding.cpp
     network/src/InstructionDataEmbedding.cpp
     network/src/InstructionEmbedding.cpp
