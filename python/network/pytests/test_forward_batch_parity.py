@@ -75,11 +75,13 @@ def test_forward_delegates_to_forward_batch(device: torch.device) -> None:
 
     valid_state = batch[5][0]
     valid_int = batch[4][0]
-    assert scores.shape == batch[0][0, valid_int].shape
+    assert scores.value_logits.shape == batch[0].value_logits[0, valid_int].shape
+    assert scores.policy_logits.shape == batch[0].policy_logits[0, valid_int].shape
     assert state_out.shape == batch[1][0, valid_state].shape
     assert emb_int.shape == batch[2][0, valid_int].shape
     assert card_idx.shape == batch[3][0].shape
-    assert torch.isfinite(scores).all()
+    assert torch.isfinite(scores.value_logits).all()
+    assert torch.isfinite(scores.policy_logits).all()
 
 
 def test_forward_batch_duplicate_games_same_transformed_state(device: torch.device) -> None:
@@ -96,7 +98,8 @@ def test_forward_batch_duplicate_games_same_transformed_state(device: torch.devi
     torch.testing.assert_close(
         batched[1][1, valid_state], batched[1][0, valid_state], rtol=1e-4, atol=1e-4
     )
-    assert torch.isfinite(batched[0][batched[4]]).all()
+    assert torch.isfinite(batched[0].value_logits[batched[4]]).all()
+    assert torch.isfinite(batched[0].policy_logits[batched[4]]).all()
 
 
 def test_forward_batch_mixed_interaction_counts(device: torch.device) -> None:
@@ -112,11 +115,12 @@ def test_forward_batch_mixed_interaction_counts(device: torch.device) -> None:
                 [pair1[0], pair2[0]], [pair1[1], pair2[1]]
             )
 
-    assert batch[0].shape[0] == 2
-    assert batch[0].shape[1] == len(pair2[1])
+    assert batch[0].value_logits.shape[0] == 2
+    assert batch[0].value_logits.shape[1] == len(pair2[1])
     assert batch[4][0].sum() == len(pair1[1])
     assert batch[4][1].sum() == len(pair2[1])
-    assert torch.isfinite(batch[0][batch[4]]).all()
+    assert torch.isfinite(batch[0].value_logits[batch[4]]).all()
+    assert torch.isfinite(batch[0].policy_logits[batch[4]]).all()
 
 
 def test_selector_forward_batch_parity(device: torch.device) -> None:
@@ -169,8 +173,14 @@ def test_selector_forward_batch_parity(device: torch.device) -> None:
     for i in range(2):
         n_scores = candidates[i].size(0) + (1 if include_stop[i] else 0)
         torch.testing.assert_close(
-            batched[i, :n_scores],
-            individual[i],
+            batched.value_logits[i, :n_scores],
+            individual[i].value_logits,
+            rtol=1e-5,
+            atol=1e-5,
+        )
+        torch.testing.assert_close(
+            batched.policy_logits[i, :n_scores],
+            individual[i].policy_logits,
             rtol=1e-5,
             atol=1e-5,
         )

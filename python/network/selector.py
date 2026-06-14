@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from action_scores import ActionScores
 from save_load_mixin import SaveLoadMixin
 from game_embedding import extract_card_embeddings
 from multi_head_attention import MultiHeadAttentionArgs
@@ -83,7 +84,7 @@ class Selector(nn.Module, SaveLoadMixin):
         embedded_interaction: torch.Tensor,
         card_indices: torch.Tensor,
         include_stop_token: bool,
-    ) -> torch.Tensor:
+    ) -> ActionScores:
         # candidates: (L_c,) int64 — deck_ids of rows to score
         # partial_selection: (L_p,) int64 — already chosen targets (may be empty)
         # transformed_state: (L_state, D) — player rows + card rows from state transformer
@@ -99,11 +100,15 @@ class Selector(nn.Module, SaveLoadMixin):
             include_stop_token,
         )
         key_values_batch = key_values.unsqueeze(0)
-        return self.scoring_block(
+        scores = self.scoring_block(
             candidate_cards.unsqueeze(0),
             key_values_batch,
             key_values_batch,
-        ).squeeze(0)
+        )
+        return ActionScores(
+            scores.value_logits.squeeze(0),
+            scores.policy_logits.squeeze(0),
+        )
 
     def forward_batch(
         self,
@@ -113,10 +118,11 @@ class Selector(nn.Module, SaveLoadMixin):
         embedded_interaction_per_game: list[torch.Tensor],
         card_indices_per_game: list[torch.Tensor],
         include_stop_token_per_game: list[bool],
-    ) -> torch.Tensor:
+    ) -> ActionScores:
         batch_size = len(candidates_per_game)
         if batch_size == 0:
-            return torch.empty(0, 0)
+            empty = torch.empty(0, 0)
+            return ActionScores(empty, empty)
 
         dim = transformed_state_per_game[0].size(-1)
         device = transformed_state_per_game[0].device

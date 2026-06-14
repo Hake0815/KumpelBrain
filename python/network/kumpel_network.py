@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 
 import torch
 import torch.nn as nn
+from action_scores import ActionScores
 from save_load_mixin import SaveLoadMixin
 
 if TYPE_CHECKING:
@@ -58,7 +59,7 @@ class KumpelNetwork(nn.Module, SaveLoadMixin):
         game_states: list[bytes],
         interactions_per_game: list[list[bytes]],
     ) -> tuple[
-        torch.Tensor,
+        ActionScores,
         torch.Tensor,
         torch.Tensor,
         torch.Tensor,
@@ -110,7 +111,9 @@ class KumpelNetwork(nn.Module, SaveLoadMixin):
                 interaction_scores = self.interaction_network(
                     embedded_interactions, transformed_state, key_mask=state_mask
                 )
-                interaction_scores = interaction_scores.masked_fill(~int_mask, float("-inf"))
+                interaction_scores = interaction_scores.masked_fill(
+                    ~int_mask, float("-inf")
+                )
             profiler.interaction_network_s += span.elapsed
         else:
             embedded_game_state, state_mask, card_indices = (
@@ -135,7 +138,9 @@ class KumpelNetwork(nn.Module, SaveLoadMixin):
             interaction_scores = self.interaction_network(
                 embedded_interactions, transformed_state, key_mask=state_mask
             )
-            interaction_scores = interaction_scores.masked_fill(~int_mask, float("-inf"))
+            interaction_scores = interaction_scores.masked_fill(
+                ~int_mask, float("-inf")
+            )
 
         return (
             interaction_scores,
@@ -148,7 +153,7 @@ class KumpelNetwork(nn.Module, SaveLoadMixin):
 
     def forward(
         self, game_state: bytes, game_interactions: list[bytes]
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> tuple[ActionScores, torch.Tensor, torch.Tensor, torch.Tensor]:
         (
             interaction_scores,
             transformed_state,
@@ -162,7 +167,10 @@ class KumpelNetwork(nn.Module, SaveLoadMixin):
         valid_int = int_mask[0]
 
         return (
-            interaction_scores[0, valid_int],
+            ActionScores(
+                interaction_scores.value_logits[0, valid_int],
+                interaction_scores.policy_logits[0, valid_int],
+            ),
             transformed_state[0, valid_state],
             embedded_interactions[0, valid_int],
             card_indices[0],

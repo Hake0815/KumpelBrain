@@ -1,7 +1,9 @@
 from typing import Callable
+
 import csharp_runtime
 from gamecore.game import IGameController
 from gamecore.common import GlobalLogger, LogLevel
+from gamecore.serialization import ProtoBufGameState
 from System.Collections.Generic import Dictionary
 
 from interaction_wrapper import InteractionWrapper
@@ -29,6 +31,28 @@ class GameControllerWrapper:
 
     def recreate_game_from_log(self):
         self.game_controller.RecreateGameFromLog()
+
+    def recreate_game_from_game_state(
+        self,
+        game_state: ProtoBufGameState | bytes,
+        deck_list1: dict[str, int],
+        deck_list2: dict[str, int],
+        player1_name: str,
+        player2_name: str,
+    ) -> None:
+        if isinstance(game_state, (bytes, bytearray)):
+            game_state = self._parse_game_state_bytes(bytes(game_state))
+        self.game_controller.RecreateGameFromGameState(
+            game_state,
+            self._convert_deck_list_to_dictionary(deck_list1),
+            self._convert_deck_list_to_dictionary(deck_list2),
+            player1_name,
+            player2_name,
+        )
+
+    @staticmethod
+    def _parse_game_state_bytes(state_bytes: bytes) -> ProtoBufGameState:
+        return ProtoBufGameState.Parser.ParseFrom(state_bytes)
 
     def start_game(self):
         self.game_controller.StartGame()

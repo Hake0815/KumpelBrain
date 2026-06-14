@@ -5,17 +5,35 @@ from __future__ import annotations
 import threading
 import time
 from abc import ABC, abstractmethod
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any
 
 import torch
 
+from network.action_scores import ActionScores
 from network.kumpel_network import KumpelNetwork
 from network.selector import Selector
 
 
-def _to_cpu_if_needed(tensor: torch.Tensor) -> torch.Tensor:
-    return tensor if tensor.device.type == "cpu" else tensor.cpu()
+@contextmanager
+def inference_eval_mode(inference: InferenceClient):
+    modules = [
+        module
+        for module in (
+            getattr(inference, "network", None),
+            getattr(inference, "selector", None),
+        )
+        if module is not None
+    ]
+    previous_modes = [module.training for module in modules]
+    for module in modules:
+        module.eval()
+    try:
+        yield
+    finally:
+        for module, was_training in zip(modules, previous_modes, strict=True):
+            module.train(was_training)
 
 
 @dataclass
@@ -43,13 +61,36 @@ class _TargetScoreRequest(_PendingRequest):
     include_stop_token: bool = False
 
 
+@dataclass(frozen=True)
+class InferenceBatchStats:
+    move_requests: int
+    move_batches: int
+    move_max_batch: int
+    target_requests: int
+    target_batches: int
+    target_max_batch: int
+
+    @property
+    def move_average_batch(self) -> float:
+        return self.move_requests / self.move_batches if self.move_batches else 0.0
+
+    @property
+    def target_average_batch(self) -> float:
+        return self.target_requests / self.target_batches if self.target_batches else 0.0
+
+
 class InferenceClient(ABC):
+    @property
+    @abstractmethod
+    def tensor_device(self) -> torch.device:
+        ...
+
     @abstractmethod
     def evaluate_move(
         self,
         state_bytes: bytes,
         interactions_bytes: list[bytes],
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> tuple[ActionScores, torch.Tensor, torch.Tensor, torch.Tensor]:
         ...
 
     @abstractmethod
@@ -61,7 +102,7 @@ class InferenceClient(ABC):
         embedded_interaction: torch.Tensor,
         card_indices: torch.Tensor,
         include_stop_token: bool,
-    ) -> torch.Tensor:
+    ) -> ActionScores:
         ...
 
     def game_finished(self) -> None:
@@ -79,11 +120,15 @@ class DirectInferenceClient(InferenceClient):
         self.selector = selector
         self.compute_device = compute_device
 
+    @property
+    def tensor_device(self) -> torch.device:
+        return self.compute_device
+
     def evaluate_move(
         self,
         state_bytes: bytes,
         interactions_bytes: list[bytes],
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> tuple[ActionScores, torch.Tensor, torch.Tensor, torch.Tensor]:
         return self.network.forward(state_bytes, interactions_bytes)
 
     def score_targets(
@@ -94,7 +139,7 @@ class DirectInferenceClient(InferenceClient):
         embedded_interaction: torch.Tensor,
         card_indices: torch.Tensor,
         include_stop_token: bool,
-    ) -> torch.Tensor:
+    ) -> ActionScores:
         if candidates.device != self.compute_device:
             candidates = candidates.to(self.compute_device)
             partial_selection = partial_selection.to(self.compute_device)
@@ -115,11 +160,15 @@ class BatchedInferenceClient(InferenceClient):
     def __init__(self, service: BatchedInferenceService):
         self._service = service
 
+    @property
+    def tensor_device(self) -> torch.device:
+        return self._service.compute_device
+
     def evaluate_move(
         self,
         state_bytes: bytes,
         interactions_bytes: list[bytes],
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> tuple[ActionScores, torch.Tensor, torch.Tensor, torch.Tensor]:
         return self._service.submit_move_eval(state_bytes, interactions_bytes)
 
     def score_targets(
@@ -130,13 +179,13 @@ class BatchedInferenceClient(InferenceClient):
         embedded_interaction: torch.Tensor,
         card_indices: torch.Tensor,
         include_stop_token: bool,
-    ) -> torch.Tensor:
+    ) -> ActionScores:
         return self._service.submit_target_score(
-            _to_cpu_if_needed(candidates),
-            _to_cpu_if_needed(partial_selection),
-            _to_cpu_if_needed(transformed_state),
-            _to_cpu_if_needed(embedded_interaction),
-            _to_cpu_if_needed(card_indices),
+            candidates,
+            partial_selection,
+            transformed_state,
+            embedded_interaction,
+            card_indices,
             include_stop_token,
         )
 
@@ -168,6 +217,13 @@ class BatchedInferenceService:
         self._move_pending: list[_MoveEvalRequest] = []
         self._target_pending: list[_TargetScoreRequest] = []
         self._shutdown = False
+        self._stats_lock = threading.Lock()
+        self._move_requests = 0
+        self._move_batches = 0
+        self._move_max_batch = 0
+        self._target_requests = 0
+        self._target_batches = 0
+        self._target_max_batch = 0
 
         self._move_worker = threading.Thread(
             target=self._move_eval_worker, name="move-eval-worker", daemon=True
@@ -177,6 +233,28 @@ class BatchedInferenceService:
         )
         self._move_worker.start()
         self._target_worker.start()
+
+    def batch_stats(self) -> InferenceBatchStats:
+        with self._stats_lock:
+            return InferenceBatchStats(
+                move_requests=self._move_requests,
+                move_batches=self._move_batches,
+                move_max_batch=self._move_max_batch,
+                target_requests=self._target_requests,
+                target_batches=self._target_batches,
+                target_max_batch=self._target_max_batch,
+            )
+
+    def _record_batch(self, *, target: bool, batch_size: int) -> None:
+        with self._stats_lock:
+            if target:
+                self._target_requests += batch_size
+                self._target_batches += 1
+                self._target_max_batch = max(self._target_max_batch, batch_size)
+            else:
+                self._move_requests += batch_size
+                self._move_batches += 1
+                self._move_max_batch = max(self._move_max_batch, batch_size)
 
     def register_game(self) -> None:
         with self._lock:
@@ -221,11 +299,14 @@ class BatchedInferenceService:
                 return True
         return False
 
+    def _batch_wait_timeout(self, first_submit_time: float) -> float:
+        return max(0.0, self.linger_s - (time.monotonic() - first_submit_time))
+
     def submit_move_eval(
         self,
         state_bytes: bytes,
         interactions_bytes: list[bytes],
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> tuple[ActionScores, torch.Tensor, torch.Tensor, torch.Tensor]:
         request = _MoveEvalRequest(
             state_bytes=state_bytes,
             interactions_bytes=interactions_bytes,
@@ -248,7 +329,7 @@ class BatchedInferenceService:
         embedded_interaction: torch.Tensor,
         card_indices: torch.Tensor,
         include_stop_token: bool,
-    ) -> torch.Tensor:
+    ) -> ActionScores:
         request = _TargetScoreRequest(
             candidates=candidates,
             partial_selection=partial_selection,
@@ -284,7 +365,10 @@ class BatchedInferenceService:
                 while not self._should_flush(len(pending), first_submit_time):
                     if self._shutdown:
                         break
-                    self._move_cond.wait(timeout=0.05)
+                    wait_timeout = self._batch_wait_timeout(first_submit_time)
+                    if wait_timeout <= 0.0:
+                        break
+                    self._move_cond.wait(timeout=wait_timeout)
                     if self._move_pending:
                         pending.extend(self._move_pending)
                         self._move_pending = []
@@ -298,6 +382,7 @@ class BatchedInferenceService:
                 continue
 
             try:
+                self._record_batch(target=False, batch_size=len(batch))
                 with torch.inference_mode():
                     results = self._run_move_eval_batch(batch)
                 for request, result in zip(batch, results):
@@ -325,7 +410,10 @@ class BatchedInferenceService:
                 while not self._should_flush(len(pending), first_submit_time):
                     if self._shutdown:
                         break
-                    self._target_cond.wait(timeout=0.05)
+                    wait_timeout = self._batch_wait_timeout(first_submit_time)
+                    if wait_timeout <= 0.0:
+                        break
+                    self._target_cond.wait(timeout=wait_timeout)
                     if self._target_pending:
                         pending.extend(self._target_pending)
                         self._target_pending = []
@@ -339,6 +427,7 @@ class BatchedInferenceService:
                 continue
 
             try:
+                self._record_batch(target=True, batch_size=len(batch))
                 with torch.inference_mode():
                     results = self._run_target_score_batch(batch)
                 for request, result in zip(batch, results):
@@ -351,7 +440,7 @@ class BatchedInferenceService:
 
     def _run_move_eval_batch(
         self, batch: list[_MoveEvalRequest]
-    ) -> list[tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]]:
+    ) -> list[tuple[ActionScores, torch.Tensor, torch.Tensor, torch.Tensor]]:
         game_states = [r.state_bytes for r in batch]
         interactions_per_game = [r.interactions_bytes for r in batch]
 
@@ -364,13 +453,18 @@ class BatchedInferenceService:
             state_mask,
         ) = self.network.forward_batch(game_states, interactions_per_game)
 
-        results: list[tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]] = []
+        results: list[
+            tuple[ActionScores, torch.Tensor, torch.Tensor, torch.Tensor]
+        ] = []
         for i in range(len(batch)):
             valid_state = state_mask[i]
             valid_int = int_mask[i]
             results.append(
                 (
-                    scores[i, valid_int],
+                    ActionScores(
+                        scores.value_logits[i, valid_int],
+                        scores.policy_logits[i, valid_int],
+                    ),
                     transformed_state[i, valid_state],
                     embedded_interactions[i, valid_int],
                     card_indices[i],
@@ -380,7 +474,7 @@ class BatchedInferenceService:
 
     def _run_target_score_batch(
         self, batch: list[_TargetScoreRequest]
-    ) -> list[torch.Tensor]:
+    ) -> list[ActionScores]:
         device = self.compute_device
         candidates_per_game = [r.candidates.to(device) for r in batch]
         partial_per_game = [r.partial_selection.to(device) for r in batch]
@@ -398,9 +492,14 @@ class BatchedInferenceService:
             include_stop,
         )
 
-        results: list[torch.Tensor] = []
+        results: list[ActionScores] = []
         for i, request in enumerate(batch):
             n_candidates = request.candidates.size(0)
             n_scores = n_candidates + (1 if request.include_stop_token else 0)
-            results.append(batched_scores[i, :n_scores])
+            results.append(
+                ActionScores(
+                    batched_scores.value_logits[i, :n_scores],
+                    batched_scores.policy_logits[i, :n_scores],
+                )
+            )
         return results

@@ -1,8 +1,9 @@
-# Self-play
+# Self-play and training
 
 Run KumpelBrain games where both players are driven by the neural network. Games are played through the C# game engine (pythonnet); inference uses the C++ embedding pipeline plus PyTorch transformer/selector heads.
 
-Entry point: [`main.py`](main.py)
+- **Self-play (inference only):** [`main.py`](main.py)
+- **Training (rollout policy iteration):** [`train_self_play.py`](train_self_play.py)
 
 ```bash
 # From the repository root (with venv activated and C++ extension built)
@@ -19,7 +20,7 @@ python python/main.py
 
 2. **C++ embedding extension** — build the `kumpel_embedding` module (see `cpp/CMakeLists.txt`). The build output must be on the path; `main.py` adds `cpp/build` automatically.
 
-3. **Game logic** — the C# game engine must be available to pythonnet (built as part of the KumpelTCG project).
+3. **Game logic** — the C# game engine must be available to pythonnet (built as part of the KumpelTCG project). Entry points that use both PyTorch and the game engine (`main.py`, `train_self_play.py`) load CoreCLR via `csharp_runtime` **before** importing `torch`. Reversing that order can make pythonnet fall back to Mono and crash when loading .NET 10 assemblies.
 
 ## Parallel modes
 
@@ -207,6 +208,68 @@ python python/main.py
 
 Use `KUMPEL_PROFILE=1` on a single serial game to see whether embedding or transformer dominates before choosing a mode.
 
+## Training
+
+Training uses rollout-based approximate policy iteration. It evaluates multiple
+legal actions from the same recreated state, estimates soft win probabilities
+from repeated continuations, trains separate value and policy heads, and only
+promotes candidates that beat the current champion.
+
+Entry point: [`train_self_play.py`](train_self_play.py)
+
+The complete algorithm and mathematics are documented in
+[`training-algorithm.md`](../training-algorithm.md).
+
+### Quick start
+
+```bash
+KUMPEL_DEVICE=cuda .venv/bin/python python/train_self_play.py
+```
+
+One invocation performs a complete iteration:
+
+1. collect 100 stochastic seed games;
+2. sample 256 phase-balanced root states;
+3. evaluate forced interaction and target branches;
+4. train for 1,000 optimizer steps from five recent rollout shards;
+5. gate the candidate against the champion for 200–800 games.
+
+Rollouts are stored in `training_data/rollouts`. The champion, rejected
+candidate, history, and manifest are stored in `training_data/models`.
+Existing trajectory shards and old checkpoints are intentionally unsupported.
+
+Useful overrides:
+
+```bash
+KUMPEL_DEVICE=cuda .venv/bin/python python/train_self_play.py \
+  --seed-games 200 \
+  --root-states 512 \
+  --train-steps 1500 \
+  --batch-size 128 \
+  --concurrent-games 32 \
+  --inference-batch-size 16
+```
+
+### Automated training cycles
+
+Run complete iterations until the iteration or runtime limit is reached:
+
+```bash
+KUMPEL_DEVICE=cuda .venv/bin/python python/automate_training.py \
+  --max-runtime-hours 8
+```
+
+The runtime budget is checked only before starting another complete iteration.
+An active iteration is never interrupted by the automation wrapper.
+
+### Training tests
+
+```bash
+python -m pytest python/pytests python/network/pytests
+
+KUMPEL_ENABLE_CSHARP_TESTS=1 python -m pytest python/pytests/test_recreate_wrapper.py
+```
+
 ## Output
 
 At the end of a run, `main.py` prints:
@@ -249,4 +312,11 @@ python -m pytest python/network/pytests/
 
 # Coordinator smoke tests
 python -m pytest python/pytests/
+
+# Rollout training tests
+python -m pytest \
+  python/pytests/test_rollout_data.py \
+  python/pytests/test_rollout_trainer.py \
+  python/pytests/test_policy_iteration.py \
+  python/pytests/test_forced_rollout.py
 ```

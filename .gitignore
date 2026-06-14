@@ -221,3 +221,4 @@ clear_log_dirs.zsh
 .vscode/launch.json
 .vscode/tasks.json
 .cursor/
+training_data/

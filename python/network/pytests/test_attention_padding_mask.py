@@ -100,8 +100,30 @@ def test_interaction_network_padding_mask_parity(device: torch.device) -> None:
         key_mask[1, :14] = True
         batched = network(queries, state, key_mask=key_mask)
 
-    torch.testing.assert_close(batched[0, :3], out1[0], rtol=1e-5, atol=1e-5)
-    torch.testing.assert_close(batched[1, :5], out2[0], rtol=1e-5, atol=1e-5)
+    torch.testing.assert_close(
+        batched.value_logits[0, :3],
+        out1.value_logits[0],
+        rtol=1e-5,
+        atol=1e-5,
+    )
+    torch.testing.assert_close(
+        batched.value_logits[1, :5],
+        out2.value_logits[0],
+        rtol=1e-5,
+        atol=1e-5,
+    )
+    torch.testing.assert_close(
+        batched.policy_logits[0, :3],
+        out1.policy_logits[0],
+        rtol=1e-5,
+        atol=1e-5,
+    )
+    torch.testing.assert_close(
+        batched.policy_logits[1, :5],
+        out2.policy_logits[0],
+        rtol=1e-5,
+        atol=1e-5,
+    )
 
 
 def test_all_true_mask_matches_no_mask(device: torch.device) -> None:

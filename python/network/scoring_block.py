@@ -2,6 +2,7 @@
 
 import torch
 import torch.nn as nn
+from action_scores import ActionScores
 from save_load_mixin import SaveLoadMixin
 from feed_forward import FeedForward
 from multi_head_attention import MultiHeadAttention, MultiHeadAttentionArgs
@@ -38,7 +39,8 @@ class CrossAttentionScoringBlock(nn.Module, SaveLoadMixin):
         self.post_feed_forward = FeedForward(
             dimension_out, dimension_inner, **factory_kwargs
         )
-        self.linear_reduce = nn.Linear(dimension_out, 1, **factory_kwargs)
+        self.value_head = nn.Linear(dimension_out, 1, **factory_kwargs)
+        self.policy_head = nn.Linear(dimension_out, 1, **factory_kwargs)
 
     def forward(
         self,
@@ -46,10 +48,10 @@ class CrossAttentionScoringBlock(nn.Module, SaveLoadMixin):
         key: torch.Tensor,
         value: torch.Tensor,
         attn_mask=None,
-    ) -> torch.Tensor:
+    ) -> ActionScores:
         # query: (N, L_q, D) — one row per item to score (e.g. interactions or target candidates)
         # key, value: (N, L_kv, D) — context attended over (e.g. full state, or state + selection context)
-        # Returns: (N, L_q) — one scalar score per query row
+        # Returns two (N, L_q) logits: calibrated value and action policy.
         x = query  # (N, L_q, D)
         if self.include_pre_ffn:
             x = x + self.first_feed_forward(self.norm_pre_ffn(x))  # (N, L_q, D)
@@ -57,4 +59,7 @@ class CrossAttentionScoringBlock(nn.Module, SaveLoadMixin):
             self.norm_attention(x), key, value, attn_mask=attn_mask
         )  # (N, L_q, D)
         x = x + self.post_feed_forward(self.norm_post_ffn(x))  # (N, L_q, D)
-        return self.linear_reduce(x).squeeze(-1)  # (N, L_q, 1) -> (N, L_q)
+        return ActionScores(
+            value_logits=self.value_head(x).squeeze(-1),
+            policy_logits=self.policy_head(x).squeeze(-1),
+        )

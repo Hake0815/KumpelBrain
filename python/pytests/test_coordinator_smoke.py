@@ -60,11 +60,17 @@ def test_batched_service_matches_direct_client(device: torch.device) -> None:
         direct_scores, direct_state, direct_emb, direct_indices = direct_out
         batched_scores, batched_state, batched_emb, batched_indices = batched_out
 
-        assert direct_scores.shape == batched_scores.shape
+        assert direct_scores.value_logits.shape == batched_scores.value_logits.shape
+        assert direct_scores.policy_logits.shape == batched_scores.policy_logits.shape
         assert direct_state.shape == batched_state.shape
         assert direct_emb.shape == batched_emb.shape
         assert direct_indices.shape == batched_indices.shape
-        assert direct_scores.argmax() == batched_scores.argmax()
+        assert (
+            direct_scores.policy_logits.argmax()
+            == batched_scores.policy_logits.argmax()
+        )
+        assert torch.isfinite(batched_scores.value_logits).all()
+        assert torch.isfinite(batched_scores.policy_logits).all()
         torch.testing.assert_close(direct_state, batched_state, rtol=1e-5, atol=1e-5)
         torch.testing.assert_close(direct_indices, batched_indices, rtol=0, atol=0)
 
@@ -83,6 +89,7 @@ def test_batched_service_concurrent_two_requests(device: torch.device) -> None:
         service.register_game()
 
         state, interactions = fixtures.EMBED_GAME_INTERACTION_CASES["all_types_one"]
+        assert client.tensor_device == device
         barrier = threading.Barrier(2)
         results: list = []
         errors: list[BaseException] = []
@@ -103,8 +110,15 @@ def test_batched_service_concurrent_two_requests(device: torch.device) -> None:
 
         assert not errors
         assert len(results) == 2
-        assert results[0][0].argmax() == results[1][0].argmax()
+        assert (
+            results[0][0].policy_logits.argmax()
+            == results[1][0].policy_logits.argmax()
+        )
         torch.testing.assert_close(results[0][1], results[1][1], rtol=1e-5, atol=1e-5)
+        stats = service.batch_stats()
+        assert stats.move_requests == 2
+        assert stats.move_batches == 1
+        assert stats.move_max_batch == 2
 
         service.shutdown()
 
@@ -143,14 +157,28 @@ def test_batched_service_target_score_matches_direct(device: torch.device) -> No
             batched_scores = client.score_targets(
                 candidates,
                 partial,
-                transformed_state.cpu(),
-                embedded_interactions[0].cpu(),
-                card_indices.cpu(),
+                transformed_state,
+                embedded_interactions[0],
+                card_indices,
                 include_stop_token=False,
             )
 
-        assert batched_scores.shape == direct_scores.shape
-        torch.testing.assert_close(direct_scores, batched_scores, rtol=1e-5, atol=1e-5)
+        assert (
+            batched_scores.value_logits.shape == direct_scores.value_logits.shape
+        )
+        assert batched_scores.value_logits.device == device
+        torch.testing.assert_close(
+            direct_scores.value_logits,
+            batched_scores.value_logits,
+            rtol=1e-5,
+            atol=1e-5,
+        )
+        torch.testing.assert_close(
+            direct_scores.policy_logits,
+            batched_scores.policy_logits,
+            rtol=1e-5,
+            atol=1e-5,
+        )
         service.shutdown()
 
 

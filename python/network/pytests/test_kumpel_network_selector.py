@@ -101,7 +101,8 @@ def test_forward_returns_2d_transformed_state(device: torch.device) -> None:
             game_state_bytes, interaction_bytes
         )
 
-    assert scores.shape == torch.Size([len(interaction_bytes)])
+    assert scores.value_logits.shape == torch.Size([len(interaction_bytes)])
+    assert scores.policy_logits.shape == torch.Size([len(interaction_bytes)])
     assert transformed_state.dim() == 2
     assert embedded_interactions.dim() == 2
     assert card_indices.dim() == 1
@@ -129,8 +130,10 @@ def test_selector_accepts_forward_output(device: torch.device) -> None:
             include_stop_token=False,
         )
 
-    assert target_scores.shape == torch.Size([candidates.numel()])
-    assert torch.isfinite(target_scores).all()
+    assert target_scores.value_logits.shape == torch.Size([candidates.numel()])
+    assert target_scores.policy_logits.shape == torch.Size([candidates.numel()])
+    assert torch.isfinite(target_scores.value_logits).all()
+    assert torch.isfinite(target_scores.policy_logits).all()
 
 
 @pytest.mark.parametrize("include_stop_token", [False, True])
@@ -155,8 +158,10 @@ def test_selector_synthetic_shapes(
         )
 
     expected_len = candidates.numel() + (1 if include_stop_token else 0)
-    assert scores.shape == torch.Size([expected_len])
-    assert torch.isfinite(scores).all()
+    assert scores.value_logits.shape == torch.Size([expected_len])
+    assert scores.policy_logits.shape == torch.Size([expected_len])
+    assert torch.isfinite(scores.value_logits).all()
+    assert torch.isfinite(scores.policy_logits).all()
 
 
 def test_selector_empty_partial_selection(device: torch.device) -> None:
@@ -177,4 +182,5 @@ def test_selector_empty_partial_selection(device: torch.device) -> None:
             include_stop_token=True,
         )
 
-    assert scores.shape == torch.Size([3])
+    assert scores.value_logits.shape == torch.Size([3])
+    assert scores.policy_logits.shape == torch.Size([3])

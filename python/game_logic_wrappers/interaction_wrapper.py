@@ -1,7 +1,5 @@
 import csharp_runtime
 import clr
-
-clr.AddReference("Google.Protobuf")
 from Google.Protobuf import JsonFormatter
 
 from card_wrapper import CardWrapper, convert_card_wrapper_list
@@ -96,6 +94,13 @@ class InteractionWrapper:
 
     def get_game_over_message(self) -> str:
         return WinnerData(self.interaction.Data[GameInteractionDataType.WinnerData]).Message
+
+    def get_winner_name(self) -> str | None:
+        if not self.is_game_over():
+            return None
+        return WinnerData(
+            self.interaction.Data[GameInteractionDataType.WinnerData]
+        ).Winner.Name
 
     def try_cast(self, T, obj):
         return T(obj) if clr.GetClrType(T).IsInstanceOfType(obj) else None

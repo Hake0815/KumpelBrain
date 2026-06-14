@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from action_scores import ActionScores
 from save_load_mixin import SaveLoadMixin
 from multi_head_attention import MultiHeadAttentionArgs
 from scoring_block import CrossAttentionScoringBlock
@@ -29,7 +30,7 @@ class InteractionNetwork(nn.Module, SaveLoadMixin):
         embedded_interactions: torch.Tensor,
         state: torch.Tensor,
         key_mask: torch.Tensor | None = None,
-    ) -> torch.Tensor:
+    ) -> ActionScores:
         attn_mask = None
         if key_mask is not None:
             attn_mask = key_mask.unsqueeze(1).expand(

@@ -27,6 +27,10 @@ if multiprocessing.parent_process() is not None:
     os.environ.setdefault("OMP_NUM_THREADS", "1")
     os.environ.setdefault("MKL_NUM_THREADS", "1")
 
+# CoreCLR must initialize before torch, or pythonnet falls back to Mono and crashes
+# when loading .NET 10 game assemblies.
+import csharp_runtime  # noqa: F401
+
 import torch
 
 from game_player import GamePlayer
@@ -90,6 +94,8 @@ _WORKER_DEVICE: torch.device | None = None
 
 def _init_worker_process() -> None:
     global _WORKER_INFERENCE, _WORKER_DEVICE
+    import csharp_runtime  # noqa: F401
+
     torch.set_num_threads(1)
     try:
         torch.set_num_interop_threads(1)

@@ -33,7 +33,7 @@ class GamePlayer:
         self.enable_file_logging = enable_file_logging
         self.inference = inference
         self.compute_device = compute_device
-        self.tensor_device = torch.device("cpu")
+        self.tensor_device = inference.tensor_device
 
         if enable_profiling is None:
             enable_profiling = profiling_enabled()
@@ -63,13 +63,27 @@ class GamePlayer:
         self.callback_on_game_end = callback_on_game_end
 
     def play_game(self) -> None:
-        self.game_controller.subscribe_to_general_updates(self._on_general_update)
-        self.game_controller.subscribe_to_player1_updates(self._on_player_1_update)
-        self.game_controller.subscribe_to_player2_updates(self._on_player_2_update)
+        self._subscribe_callbacks()
         self.game_controller.create_game(
             self.deck_list1, self.deck_list2, self.player1_name, self.player2_name
         )
         self.game_controller.start_game()
+
+    def play_from_state(self, state_bytes: bytes) -> None:
+        self._subscribe_callbacks()
+        self.game_controller.recreate_game_from_game_state(
+            state_bytes,
+            self.deck_list1,
+            self.deck_list2,
+            self.player1_name,
+            self.player2_name,
+        )
+        self.game_controller.start_game()
+
+    def _subscribe_callbacks(self) -> None:
+        self.game_controller.subscribe_to_general_updates(self._on_general_update)
+        self.game_controller.subscribe_to_player1_updates(self._on_player_1_update)
+        self.game_controller.subscribe_to_player2_updates(self._on_player_2_update)
 
     def _on_general_update(self, interactions: list[InteractionWrapper]) -> None:
         interaction = interactions[0]
@@ -99,12 +113,14 @@ class GamePlayer:
             self._log_interactions(interactions)
             with torch.inference_mode():
                 (
-                    interaction_scores,
+                    action_scores,
                     transformed_state,
                     embedded_interactions,
                     card_indices,
                 ) = self._evaluate_game_state(player_name, interactions)
-                chosen_interaction_index = int(interaction_scores.argmax().item())
+                chosen_interaction_index = self._choose_action_index(
+                    action_scores.policy_logits
+                )
             self._perform_interaction(
                 interactions[chosen_interaction_index],
                 transformed_state,
@@ -115,7 +131,7 @@ class GamePlayer:
 
     def _evaluate_game_state(
         self, player_name: str, interactions: list[InteractionWrapper]
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    ):
         if self.profiler is not None:
             self.profiler.sync_device(self.compute_device)
             t0 = time.perf_counter()
@@ -207,14 +223,14 @@ class GamePlayer:
             )
             if len(cadidate_cards) == 0:
                 break
+            candidate_deck_ids = self._cards_to_deck_ids(cadidate_cards)
             candidates = torch.tensor(
-                self._cards_to_deck_ids(cadidate_cards),
+                candidate_deck_ids,
                 device=self.tensor_device,
                 dtype=torch.long,
             )
-            current_selection_tensor = self._deck_ids_tensor(
-                self._cards_to_deck_ids(current_selection)
-            )
+            partial_selection_deck_ids = self._cards_to_deck_ids(current_selection)
+            current_selection_tensor = self._deck_ids_tensor(partial_selection_deck_ids)
             condition_fulfilled = interaction.is_target_condition_fulfilled(
                 current_selection
             )
@@ -226,7 +242,18 @@ class GamePlayer:
                 card_indices,
                 include_stop_token=condition_fulfilled,
             )
-            chosen_target_index = int(target_scores.argmax().item())
+            chosen_target_index = self._choose_target_for_context(
+                target_scores.policy_logits,
+                candidate_deck_ids,
+                partial_selection_deck_ids,
+                include_stop_token=condition_fulfilled,
+            )
+            self._on_target_selected(
+                candidate_deck_ids,
+                partial_selection_deck_ids,
+                chosen_target_index,
+                include_stop_token=condition_fulfilled,
+            )
             if chosen_target_index == len(cadidate_cards):
                 break
             current_selection.append(cadidate_cards[chosen_target_index])
@@ -241,13 +268,15 @@ class GamePlayer:
     ) -> list[CardWrapper]:
         possible_targets = interaction.get_targets()
         current_selection = []
-        candidates = self._deck_ids_tensor(self._cards_to_deck_ids(possible_targets))
+        candidate_deck_ids = self._cards_to_deck_ids(possible_targets)
+        candidates = self._deck_ids_tensor(candidate_deck_ids)
         empty_selection = self._deck_ids_tensor([])
         for _ in range(interaction.get_number_of_targets()):
+            partial_selection_deck_ids = self._cards_to_deck_ids(current_selection)
             current_selection_tensor = (
                 empty_selection
                 if not current_selection
-                else self._deck_ids_tensor(self._cards_to_deck_ids(current_selection))
+                else self._deck_ids_tensor(partial_selection_deck_ids)
             )
             target_scores = self._score_targets(
                 candidates,
@@ -257,13 +286,23 @@ class GamePlayer:
                 card_indices,
                 include_stop_token=False,
             )
-            chosen_target_index = int(target_scores.argmax().item())
+            chosen_target_index = self._choose_target_for_context(
+                target_scores.policy_logits,
+                candidate_deck_ids,
+                partial_selection_deck_ids,
+                include_stop_token=False,
+            )
+            self._on_target_selected(
+                candidate_deck_ids,
+                partial_selection_deck_ids,
+                chosen_target_index,
+                include_stop_token=False,
+            )
             current_selection.append(possible_targets[chosen_target_index])
             if not interaction.is_multi_select():
                 possible_targets.remove(current_selection[-1])
-                candidates = self._deck_ids_tensor(
-                    self._cards_to_deck_ids(possible_targets)
-                )
+                candidate_deck_ids = self._cards_to_deck_ids(possible_targets)
+                candidates = self._deck_ids_tensor(candidate_deck_ids)
 
         return current_selection
 
@@ -278,7 +317,7 @@ class GamePlayer:
         embedded_interaction: torch.Tensor,
         card_indices: torch.Tensor,
         include_stop_token: bool,
-    ) -> torch.Tensor:
+    ):
         if self.profiler is not None:
             with self.profiler.timed(self.compute_device) as span:
                 scores = self.inference.score_targets(
@@ -301,6 +340,32 @@ class GamePlayer:
             card_indices,
             include_stop_token=include_stop_token,
         )
+
+    def _on_target_selected(
+        self,
+        candidate_deck_ids: list[int],
+        partial_selection_deck_ids: list[int],
+        chosen_index: int,
+        *,
+        include_stop_token: bool,
+    ) -> None:
+        pass
+
+    def _choose_action_index(self, policy_logits: torch.Tensor) -> int:
+        return int(policy_logits.argmax().item())
+
+    def _choose_target_index(self, policy_logits: torch.Tensor) -> int:
+        return int(policy_logits.argmax().item())
+
+    def _choose_target_for_context(
+        self,
+        policy_logits: torch.Tensor,
+        candidate_deck_ids: list[int],
+        partial_selection_deck_ids: list[int],
+        *,
+        include_stop_token: bool,
+    ) -> int:
+        return self._choose_target_index(policy_logits)
 
     def _cards_to_deck_ids(self, cards: list[CardWrapper]) -> list[int]:
         return [card.get_deck_id() for card in cards]

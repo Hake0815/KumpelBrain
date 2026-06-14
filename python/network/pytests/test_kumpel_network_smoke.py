@@ -68,6 +68,9 @@ def test_kumpel_network_smoke_forward(device: torch.device) -> None:
     with torch.inference_mode():
         scores, _, _, _ = model(game_state_bytes, interaction_bytes)
 
-    assert scores.shape == torch.Size([len(interaction_bytes)])
-    assert scores.dtype == torch.float32
-    assert torch.isfinite(scores).all()
+    assert scores.value_logits.shape == torch.Size([len(interaction_bytes)])
+    assert scores.policy_logits.shape == torch.Size([len(interaction_bytes)])
+    assert scores.value_logits.dtype == torch.float32
+    assert scores.policy_logits.dtype == torch.float32
+    assert torch.isfinite(scores.value_logits).all()
+    assert torch.isfinite(scores.policy_logits).all()

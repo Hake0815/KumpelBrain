@@ -87,11 +87,12 @@ def test_embedding_device_cuda_forward_batch_runs() -> None:
                 model.forward_batch(game_states, interactions)
             )
 
-    assert scores.shape[0] == 2
-    assert scores.shape[1] == len(pair2[1])
+    assert scores.value_logits.shape[0] == 2
+    assert scores.value_logits.shape[1] == len(pair2[1])
     assert int_mask[0].sum() == len(pair1[1])
     assert int_mask[1].sum() == len(pair2[1])
-    assert torch.isfinite(scores[int_mask]).all()
+    assert torch.isfinite(scores.value_logits[int_mask]).all()
+    assert torch.isfinite(scores.policy_logits[int_mask]).all()
     assert torch.isfinite(state[state_mask]).all()
     assert torch.isfinite(emb_int[int_mask]).all()
     assert card_idx.device.type == "cuda"
