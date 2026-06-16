@@ -368,15 +368,15 @@ def main() -> None:
                 evaluated_roots.append(evaluated)
 
     if not evaluated_roots:
-        representative_errors = evaluator.stats.errors[:5]
+        representative_mismatches = evaluator.stats.mismatches[:5]
         details = (
-            "; ".join(representative_errors)
-            if representative_errors
-            else "no rollout error details were recorded"
+            "; ".join(representative_mismatches)
+            if representative_mismatches
+            else "no replay mismatch details were recorded"
         )
         raise RuntimeError(
-            "All forced continuations failed; no rollout shard was written. "
-            f"Representative errors: {details}"
+            "All forced continuations were incompatible with their recreated "
+            f"determinizations; no rollout shard was written. Mismatches: {details}"
         )
 
     shard = RolloutShard(
@@ -386,8 +386,8 @@ def main() -> None:
         metadata={
             "attempted_rollouts": evaluator.stats.attempted,
             "successful_rollouts": evaluator.stats.succeeded,
-            "failed_rollouts": evaluator.stats.failed,
-            "representative_errors": evaluator.stats.errors[:10],
+            "mismatched_rollouts": evaluator.stats.mismatched,
+            "representative_mismatches": evaluator.stats.mismatches[:10],
             "seed_games": args.seed_games,
         },
     )

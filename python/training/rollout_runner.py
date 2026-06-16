@@ -185,7 +185,7 @@ class ObservedTargetContext:
 class ForcedRolloutResult:
     score: float | None
     success: bool
-    error: str | None = None
+    mismatch: str | None = None
     target_contexts: list[ObservedTargetContext] = field(default_factory=list)
 
 
@@ -274,9 +274,7 @@ class ForcedRolloutPlayer(StochasticGamePlayer):
     def _perform_interaction(self, *args, **kwargs) -> None:
         self.actions_taken += 1
         if self.actions_taken > self.max_actions:
-            self._record_mismatch("Continuation exceeded maximum action count")
-            self.callback_on_game_end("Continuation action limit reached")
-            return
+            raise TimeoutError("Continuation exceeded maximum action count")
         super()._perform_interaction(*args, **kwargs)
 
     def _choose_target_for_context(
@@ -442,7 +440,12 @@ class ContinuationRolloutRunner:
             if error_holder:
                 raise error_holder[0]
             if player.mismatch_error is not None:
-                raise RolloutMismatch(player.mismatch_error)
+                return ForcedRolloutResult(
+                    score=None,
+                    success=False,
+                    mismatch=player.mismatch_error,
+                    target_contexts=player.target_contexts,
+                )
             if player.winner_name is None:
                 score = 0.5
             else:
@@ -452,13 +455,8 @@ class ContinuationRolloutRunner:
                 success=True,
                 target_contexts=player.target_contexts,
             )
-        except Exception as exc:  # noqa: BLE001 - rollout quarantine boundary
+        except BaseException:
             self.champion.game_finished()
             if opponent is not self.champion:
                 opponent.game_finished()
-            return ForcedRolloutResult(
-                score=None,
-                success=False,
-                error=str(exc),
-                target_contexts=player.target_contexts,
-            )
+            raise

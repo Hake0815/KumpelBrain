@@ -122,7 +122,10 @@ top 4 plus 2 random. They use at most four rollouts per choice.
 
 Top and random branches are deduplicated. Any mismatch between stored and
 recreated legal interactions, target prefixes, candidate sets, or stop-token
-availability quarantines the rollout instead of producing a label.
+availability is recorded as a missing observation instead of producing a label.
+These mismatches are expected when hidden-card reshuffling changes a
+determination. Engine, inference, timeout, and other runtime exceptions remain
+fatal and stop the iteration immediately.
 
 ## Opponents And Promotion
 

@@ -169,3 +169,93 @@ def test_continuation_waits_for_terminal_callback(monkeypatch) -> None:
     assert time.monotonic() - started >= 0.08
     assert result.success
     assert result.score == 1.0
+
+
+def test_continuation_propagates_player_exceptions(monkeypatch) -> None:
+    class FakeInference:
+        def game_finished(self) -> None:
+            pass
+
+    class FailingFakePlayer:
+        def __init__(self, *args, **kwargs):
+            self.winner_name = None
+            self.mismatch_error = None
+            self.target_contexts = []
+
+        def play_from_state(self, state_bytes: bytes) -> None:
+            raise RuntimeError("engine invariant violated")
+
+    monkeypatch.setattr(
+        "training.rollout_runner.ForcedRolloutPlayer",
+        FailingFakePlayer,
+    )
+    inference = FakeInference()
+    root = RootState(
+        root_id="root",
+        state_bytes=b"state",
+        deck_list1={},
+        deck_list2={},
+        player1_name="player1",
+        player2_name="player2",
+        player_name="player1",
+        interaction_bytes=[b"interaction"],
+        ply_from_end=0,
+        phase="terminal",
+    )
+    runner = ContinuationRolloutRunner(
+        inference,
+        lambda: inference,
+        torch.device("cpu"),
+        timeout_s=1.0,
+    )
+
+    with pytest.raises(RuntimeError, match="engine invariant violated"):
+        runner.run(root, 0)
+
+
+def test_continuation_returns_replay_mismatch_as_missing_observation(
+    monkeypatch,
+) -> None:
+    class FakeInference:
+        def game_finished(self) -> None:
+            pass
+
+    class MismatchedFakePlayer:
+        def __init__(self, *args, callback_on_game_end, **kwargs):
+            self.callback_on_game_end = callback_on_game_end
+            self.winner_name = "player1"
+            self.mismatch_error = "Forced target candidate set differs"
+            self.target_contexts = []
+
+        def play_from_state(self, state_bytes: bytes) -> None:
+            self.callback_on_game_end("finished")
+
+    monkeypatch.setattr(
+        "training.rollout_runner.ForcedRolloutPlayer",
+        MismatchedFakePlayer,
+    )
+    inference = FakeInference()
+    root = RootState(
+        root_id="root",
+        state_bytes=b"state",
+        deck_list1={},
+        deck_list2={},
+        player1_name="player1",
+        player2_name="player2",
+        player_name="player1",
+        interaction_bytes=[b"interaction"],
+        ply_from_end=0,
+        phase="terminal",
+    )
+    runner = ContinuationRolloutRunner(
+        inference,
+        lambda: inference,
+        torch.device("cpu"),
+        timeout_s=1.0,
+    )
+
+    result = runner.run(root, 0)
+
+    assert not result.success
+    assert result.score is None
+    assert result.mismatch == "Forced target candidate set differs"

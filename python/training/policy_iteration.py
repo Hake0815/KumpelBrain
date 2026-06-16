@@ -66,17 +66,17 @@ def sample_phase_balanced_roots(
 class RolloutEvaluationStats:
     attempted: int = 0
     succeeded: int = 0
-    failed: int = 0
-    errors: list[str] = field(default_factory=list)
+    mismatched: int = 0
+    mismatches: list[str] = field(default_factory=list)
 
-    def record(self, success: bool, error: str | None) -> None:
+    def record(self, success: bool, mismatch: str | None) -> None:
         self.attempted += 1
         if success:
             self.succeeded += 1
         else:
-            self.failed += 1
-            if error:
-                self.errors.append(error)
+            self.mismatched += 1
+            if mismatch:
+                self.mismatches.append(mismatch)
 
 
 class RolloutEvaluator:
@@ -119,7 +119,7 @@ class RolloutEvaluator:
             estimate = ActionEstimate(interaction_index)
             for _ in range(budget.rollouts_per_action):
                 result = self.runner.run(root, interaction_index)
-                self.stats.record(result.success, result.error)
+                self.stats.record(result.success, result.mismatch)
                 if result.success and result.score is not None:
                     estimate.outcomes.add(result.score)
                 for context in result.target_contexts:
@@ -181,7 +181,7 @@ class RolloutEvaluator:
                         interaction_index,
                         forced_target=forced_target,
                     )
-                    self.stats.record(result.success, result.error)
+                    self.stats.record(result.success, result.mismatch)
                     if result.success and result.score is not None:
                         choice.outcomes.add(result.score)
                     if progress is not None:
