@@ -28,6 +28,11 @@ def test_iteration_command_contains_rollout_schedule(tmp_path: Path) -> None:
         concurrent_games=32,
         inference_batch_size=16,
         batch_linger_ms=1.0,
+        root_action_rollouts=10,
+        root_action_temperature=1.0,
+        target_contexts_per_action=2,
+        target_choices_per_context=3,
+        target_rollouts_per_choice=1,
     )
 
     command = build_iteration_command(args)
@@ -35,6 +40,7 @@ def test_iteration_command_contains_rollout_schedule(tmp_path: Path) -> None:
     assert command[command.index("--seed-games") + 1] == "100"
     assert command[command.index("--root-states") + 1] == "256"
     assert command[command.index("--train-steps") + 1] == "1000"
+    assert command[command.index("--root-action-rollouts") + 1] == "10"
     assert "--resume" not in command
     assert "--start-stage" not in command
 

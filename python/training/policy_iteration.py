@@ -17,9 +17,10 @@ from training.rollout_data import (
     RootState,
     TargetChoiceEstimate,
     TargetContextEstimate,
+    candidate_action_indices,
     phase_budget,
-    select_branches,
-    select_target_branches,
+    sample_root_action_index,
+    select_sampled_target_branches,
 )
 from training.rollout_runner import (
     ContinuationRolloutRunner,
@@ -85,10 +86,20 @@ class RolloutEvaluator:
         inference: InferenceClient,
         runner: ContinuationRolloutRunner,
         *,
+        root_action_rollouts: int = 10,
+        root_action_temperature: float = 1.0,
+        target_contexts_per_action: int = 2,
+        target_choices_per_context: int = 3,
+        target_rollouts_per_choice: int = 1,
         seed: int = 0,
     ):
         self.inference = inference
         self.runner = runner
+        self.root_action_rollouts = root_action_rollouts
+        self.root_action_temperature = root_action_temperature
+        self.target_contexts_per_action = target_contexts_per_action
+        self.target_choices_per_context = target_choices_per_context
+        self.target_rollouts_per_choice = target_rollouts_per_choice
         self.rng = random.Random(seed)
         self.stats = RolloutEvaluationStats()
 
@@ -102,94 +113,119 @@ class RolloutEvaluator:
             scores, transformed_state, embedded_interactions, card_indices = (
                 self.inference.evaluate_move(root.state_bytes, root.interaction_bytes)
             )
+        policy_logits = scores.policy_logits.detach().cpu()
         budget = phase_budget(root.ply_from_end)
-        action_indices = select_branches(
-            scores.policy_logits.detach().cpu(),
+        candidate_indices = candidate_action_indices(
+            policy_logits,
             budget,
             rng=self.rng,
         )
-        observed_contexts: dict[
-            tuple[int, tuple[int, ...], tuple[int, ...], bool],
-            ObservedTargetContext,
+        action_outcomes: dict[int, ActionEstimate] = {}
+        observed_contexts_by_action: dict[
+            int,
+            dict[tuple[tuple[int, ...], tuple[int, ...], bool], ObservedTargetContext],
         ] = {}
         root.action_estimates = []
         root.target_contexts = []
 
-        for interaction_index in action_indices:
-            estimate = ActionEstimate(interaction_index)
-            for _ in range(budget.rollouts_per_action):
-                result = self.runner.run(root, interaction_index)
-                self.stats.record(result.success, result.mismatch)
-                if result.success and result.score is not None:
-                    estimate.outcomes.add(result.score)
-                for context in result.target_contexts:
-                    key = (
-                        interaction_index,
-                        tuple(context.prefix_deck_ids),
-                        tuple(context.candidate_deck_ids),
-                        context.include_stop_token,
-                    )
-                    observed_contexts[key] = context
-                if progress is not None:
-                    progress(1)
-            if estimate.outcomes.total:
-                root.action_estimates.append(estimate)
+        if not candidate_indices:
+            return root
 
-        for key, context in observed_contexts.items():
-            interaction_index = key[0]
-            candidates = torch.tensor(
-                context.candidate_deck_ids,
-                device=transformed_state.device,
-                dtype=torch.long,
-            )
-            prefix = torch.tensor(
-                context.prefix_deck_ids,
-                device=transformed_state.device,
-                dtype=torch.long,
-            )
-            with torch.inference_mode():
-                target_scores = self.inference.score_targets(
-                    candidates,
-                    prefix,
-                    transformed_state,
-                    embedded_interactions[interaction_index],
-                    card_indices,
-                    context.include_stop_token,
-                )
-            choice_indices = select_target_branches(
-                target_scores.policy_logits.detach().cpu(),
+        for _ in range(self.root_action_rollouts):
+            interaction_index = sample_root_action_index(
+                policy_logits,
+                candidate_indices,
+                temperature=self.root_action_temperature,
                 rng=self.rng,
             )
-            target_context = TargetContextEstimate(
-                interaction_index=interaction_index,
-                forced_prefix_deck_ids=list(context.prefix_deck_ids),
-                candidate_deck_ids=list(context.candidate_deck_ids),
-                include_stop_token=context.include_stop_token,
-            )
-            target_rollouts = min(budget.rollouts_per_action, 4)
-            for choice_index in choice_indices:
-                choice = TargetChoiceEstimate(choice_index)
-                forced_target = ForcedTargetChoice(
-                    prefix_deck_ids=tuple(context.prefix_deck_ids),
-                    candidate_deck_ids=tuple(context.candidate_deck_ids),
-                    include_stop_token=context.include_stop_token,
-                    choice_index=choice_index,
+            result = self.runner.run(root, interaction_index)
+            self.stats.record(result.success, result.mismatch)
+            if result.success and result.score is not None:
+                estimate = action_outcomes.setdefault(
+                    interaction_index,
+                    ActionEstimate(interaction_index),
                 )
-                for _ in range(target_rollouts):
-                    result = self.runner.run(
-                        root,
-                        interaction_index,
-                        forced_target=forced_target,
+                estimate.outcomes.add(result.score)
+            for context in result.target_contexts:
+                action_contexts = observed_contexts_by_action.setdefault(
+                    interaction_index,
+                    {},
+                )
+                key = (
+                    tuple(context.prefix_deck_ids),
+                    tuple(context.candidate_deck_ids),
+                    context.include_stop_token,
+                )
+                action_contexts[key] = context
+            if progress is not None:
+                progress(1)
+
+        root.action_estimates = [
+            estimate
+            for estimate in action_outcomes.values()
+            if estimate.outcomes.total
+        ]
+
+        for interaction_index, contexts in observed_contexts_by_action.items():
+            selected_contexts = list(contexts.values())[
+                : self.target_contexts_per_action
+            ]
+            for context in selected_contexts:
+                candidates = torch.tensor(
+                    context.candidate_deck_ids,
+                    device=transformed_state.device,
+                    dtype=torch.long,
+                )
+                prefix = torch.tensor(
+                    context.prefix_deck_ids,
+                    device=transformed_state.device,
+                    dtype=torch.long,
+                )
+                with torch.inference_mode():
+                    target_scores = self.inference.score_targets(
+                        candidates,
+                        prefix,
+                        transformed_state,
+                        embedded_interactions[interaction_index],
+                        card_indices,
+                        context.include_stop_token,
                     )
-                    self.stats.record(result.success, result.mismatch)
-                    if result.success and result.score is not None:
-                        choice.outcomes.add(result.score)
-                    if progress is not None:
-                        progress(1)
-                if choice.outcomes.total:
-                    target_context.choices.append(choice)
-            if target_context.choices:
-                root.target_contexts.append(target_context)
+                choice_indices = select_sampled_target_branches(
+                    target_scores.policy_logits.detach().cpu(),
+                    rng=self.rng,
+                    top_count=2,
+                    random_count=max(0, self.target_choices_per_context - 2),
+                    max_choices=self.target_choices_per_context,
+                )
+                target_context = TargetContextEstimate(
+                    interaction_index=interaction_index,
+                    forced_prefix_deck_ids=list(context.prefix_deck_ids),
+                    candidate_deck_ids=list(context.candidate_deck_ids),
+                    include_stop_token=context.include_stop_token,
+                )
+                for choice_index in choice_indices:
+                    choice = TargetChoiceEstimate(choice_index)
+                    forced_target = ForcedTargetChoice(
+                        prefix_deck_ids=tuple(context.prefix_deck_ids),
+                        candidate_deck_ids=tuple(context.candidate_deck_ids),
+                        include_stop_token=context.include_stop_token,
+                        choice_index=choice_index,
+                    )
+                    for _ in range(self.target_rollouts_per_choice):
+                        result = self.runner.run(
+                            root,
+                            interaction_index,
+                            forced_target=forced_target,
+                        )
+                        self.stats.record(result.success, result.mismatch)
+                        if result.success and result.score is not None:
+                            choice.outcomes.add(result.score)
+                        if progress is not None:
+                            progress(1)
+                    if choice.outcomes.total:
+                        target_context.choices.append(choice)
+                if target_context.choices:
+                    root.target_contexts.append(target_context)
         return root
 
 

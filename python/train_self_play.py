@@ -309,6 +309,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--gate-min-games", type=int, default=200)
     parser.add_argument("--gate-max-games", type=int, default=800)
     parser.add_argument("--gate-block-size", type=int, default=100)
+    parser.add_argument("--root-action-rollouts", type=int, default=10)
+    parser.add_argument("--root-action-temperature", type=float, default=1.0)
+    parser.add_argument("--target-contexts-per-action", type=int, default=2)
+    parser.add_argument("--target-choices-per-context", type=int, default=3)
+    parser.add_argument("--target-rollouts-per-choice", type=int, default=1)
     return parser.parse_args()
 
 
@@ -358,6 +363,11 @@ def main() -> None:
     evaluator = RolloutEvaluator(
         champion,
         runner,
+        root_action_rollouts=args.root_action_rollouts,
+        root_action_temperature=args.root_action_temperature,
+        target_contexts_per_action=args.target_contexts_per_action,
+        target_choices_per_context=args.target_choices_per_context,
+        target_rollouts_per_choice=args.target_rollouts_per_choice,
         seed=args.seed + iteration,
     )
     evaluated_roots = []
@@ -389,6 +399,11 @@ def main() -> None:
             "mismatched_rollouts": evaluator.stats.mismatched,
             "representative_mismatches": evaluator.stats.mismatches[:10],
             "seed_games": args.seed_games,
+            "root_action_rollouts": args.root_action_rollouts,
+            "root_action_temperature": args.root_action_temperature,
+            "target_contexts_per_action": args.target_contexts_per_action,
+            "target_choices_per_context": args.target_choices_per_context,
+            "target_rollouts_per_choice": args.target_rollouts_per_choice,
         },
     )
     rollout_store.save(shard)

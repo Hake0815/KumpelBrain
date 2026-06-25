@@ -52,6 +52,16 @@ def build_iteration_command(args: argparse.Namespace) -> list[str]:
         str(args.inference_batch_size),
         "--batch-linger-ms",
         str(args.batch_linger_ms),
+        "--root-action-rollouts",
+        str(args.root_action_rollouts),
+        "--root-action-temperature",
+        str(args.root_action_temperature),
+        "--target-contexts-per-action",
+        str(args.target_contexts_per_action),
+        "--target-choices-per-context",
+        str(args.target_choices_per_context),
+        "--target-rollouts-per-choice",
+        str(args.target_rollouts_per_choice),
     ]
 
 
@@ -75,6 +85,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--concurrent-games", type=int, default=32)
     parser.add_argument("--inference-batch-size", type=int, default=16)
     parser.add_argument("--batch-linger-ms", type=float, default=1.0)
+    parser.add_argument("--root-action-rollouts", type=int, default=10)
+    parser.add_argument("--root-action-temperature", type=float, default=1.0)
+    parser.add_argument("--target-contexts-per-action", type=int, default=2)
+    parser.add_argument("--target-choices-per-context", type=int, default=3)
+    parser.add_argument("--target-rollouts-per-choice", type=int, default=1)
     parser.add_argument(
         "--rollout-dir",
         type=Path,

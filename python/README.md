@@ -210,10 +210,10 @@ Use `KUMPEL_PROFILE=1` on a single serial game to see whether embedding or trans
 
 ## Training
 
-Training uses rollout-based approximate policy iteration. It evaluates multiple
-legal actions from the same recreated state, estimates soft win probabilities
-from repeated continuations, trains separate value and policy heads, and only
-promotes candidates that beat the current champion.
+Training uses rollout-based approximate policy iteration. It samples forced root
+actions from the champion policy, estimates soft win probabilities from repeated
+continuations, trains separate value and policy heads, and only promotes
+candidates that beat the current champion.
 
 Entry point: [`train_self_play.py`](train_self_play.py)
 
@@ -230,7 +230,7 @@ One invocation performs a complete iteration:
 
 1. collect 100 stochastic seed games;
 2. sample 256 phase-balanced root states;
-3. evaluate forced interaction and target branches;
+3. run 10 sampled forced root-action rollouts per root, plus capped target evaluation;
 4. train for 1,000 optimizer steps from five recent rollout shards;
 5. gate the candidate against the champion for 200–800 games.
 
@@ -247,7 +247,12 @@ KUMPEL_DEVICE=cuda .venv/bin/python python/train_self_play.py \
   --train-steps 1500 \
   --batch-size 128 \
   --concurrent-games 32 \
-  --inference-batch-size 16
+  --inference-batch-size 16 \
+  --root-action-rollouts 10 \
+  --root-action-temperature 1.0 \
+  --target-contexts-per-action 2 \
+  --target-choices-per-context 3 \
+  --target-rollouts-per-choice 1
 ```
 
 ### Automated training cycles

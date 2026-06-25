@@ -174,6 +174,59 @@ def select_target_branches(
     return select_branches(policy_logits, budget, rng=rng)
 
 
+def candidate_action_indices(
+    policy_logits: torch.Tensor,
+    budget: PhaseBudget,
+    *,
+    rng: random.Random,
+) -> list[int]:
+    """Return phase-capped legal interaction indices used as a sampling mask."""
+    return select_branches(policy_logits, budget, rng=rng)
+
+
+def sample_root_action_index(
+    policy_logits: torch.Tensor,
+    candidate_indices: list[int],
+    *,
+    temperature: float,
+    rng: random.Random,
+) -> int:
+    if not candidate_indices:
+        raise ValueError("At least one candidate action is required")
+    if len(candidate_indices) == 1:
+        return candidate_indices[0]
+    candidate_logits = policy_logits[candidate_indices] / max(temperature, 1e-6)
+    probabilities = torch.softmax(candidate_logits, dim=0).tolist()
+    sampled = rng.choices(range(len(candidate_indices)), weights=probabilities, k=1)[0]
+    return candidate_indices[sampled]
+
+
+def select_sampled_target_branches(
+    policy_logits: torch.Tensor,
+    *,
+    rng: random.Random,
+    top_count: int = 2,
+    random_count: int = 1,
+    max_choices: int | None = None,
+) -> list[int]:
+    count = int(policy_logits.numel())
+    if count == 0:
+        return []
+    limit = count if max_choices is None else min(max_choices, count)
+    if count <= limit:
+        return list(range(count))
+    ranked = [
+        int(index)
+        for index in torch.argsort(policy_logits, descending=True).tolist()
+    ]
+    selected = ranked[: min(top_count, limit)]
+    remaining = [index for index in range(count) if index not in selected]
+    selected.extend(
+        rng.sample(remaining, k=min(random_count, limit - len(selected), len(remaining)))
+    )
+    return selected[:limit]
+
+
 def improved_policy(
     estimates: list[ActionEstimate] | list[TargetChoiceEstimate],
 ) -> torch.Tensor:

@@ -107,23 +107,48 @@ gradient norm clipping at `1.0`.
 
 ## Branch Budgets
 
-States from all game phases are sampled every iteration.
+States from all game phases are sampled every iteration. Root-action labels are
+sampled-policy estimates, not exhaustive branch comparisons.
 
-| Phase | Plies from end | Interaction branches | Rollouts |
-|---|---:|---:|---:|
-| terminal | 0–2 | all | 16 |
-| late | 3–7 | all, capped at 8 | 8 |
-| mid-late | 8–15 | policy top 4 + 2 random | 4 |
-| mid | 16–31 | policy top 3 + 1 random | 2 |
-| early | 32+ | policy top 3 + 1 random | 2 |
+For each sampled root state:
 
-Target contexts evaluate all choices up to eight candidates, otherwise policy
-top 4 plus 2 random. They use at most four rollouts per choice.
+1. apply the phase-based candidate mask below;
+2. sample `root_action_rollouts` forced root interactions from
+   `softmax(policy_logits / root_action_temperature)` over that mask;
+3. force the sampled interaction and continue the game with the existing
+   stochastic continuation policy;
+4. aggregate successful outcomes by interaction index;
+5. leave actions that were never sampled without a label for that root.
 
-Top and random branches are deduplicated. Any mismatch between stored and
-recreated legal interactions, target prefixes, candidate sets, or stop-token
-availability is recorded as a missing observation instead of producing a label.
-These mismatches are expected when hidden-card reshuffling changes a
+Default rollout budgets:
+
+| Setting | Default |
+|---|---:|
+| `root_action_rollouts` | 10 |
+| `root_action_temperature` | 1.0 |
+| `target_contexts_per_action` | 2 |
+| `target_choices_per_context` | 3 |
+| `target_rollouts_per_choice` | 1 |
+
+Phase-based action caps are used only as the candidate mask before softmax
+sampling:
+
+| Phase | Plies from end | Candidate mask |
+|---|---:|---|
+| terminal | 0–2 | all legal actions |
+| late | 3–7 | all legal actions, capped at 8 |
+| mid-late | 8–15 | policy top 4 + 2 random |
+| mid | 16–31 | policy top 3 + 1 random |
+| early | 32+ | policy top 3 + 1 random |
+
+Target learning is lightweight and non-recursive. During the root-action
+rollouts, the evaluator records observed target contexts. Per root action it
+keeps at most `target_contexts_per_action` distinct contexts, evaluates policy
+top 2 plus sampled candidates up to `target_choices_per_context`, and runs each forced target choice
+`target_rollouts_per_choice` time.
+
+Replay mismatches are recorded as missing observations instead of producing a
+label. These mismatches are expected when hidden-card reshuffling changes a
 determination. Engine, inference, timeout, and other runtime exceptions remain
 fatal and stop the iteration immediately.
 
@@ -155,7 +180,7 @@ One `train_self_play.py` invocation:
 
 1. generates stochastic seed games;
 2. samples phase-balanced recreatable roots;
-3. evaluates forced rollout branches;
+3. evaluates sampled forced root-action rollouts and capped target branches;
 4. writes one aggregated rollout shard;
 5. trains a fresh candidate;
 6. gates it against the champion;
